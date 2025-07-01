@@ -94,9 +94,9 @@ export async function createPixel({ client, website }: { client: string, website
     if (!AUDLAB_USERNAME || !AUDLAB_PASSWORD) {
         throw new Error("Missing AudienceLab credentials in environment variables");
     }
-    // Chrome options: headless mode disabled for optimization testing
+    // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
-        // .addArguments('--headless=new') // HEADLESS MODE DISABLED FOR TESTING
+        .addArguments('--headless=new') // Enable headless mode for production
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
@@ -107,9 +107,21 @@ export async function createPixel({ client, website }: { client: string, website
         .addArguments('--disable-background-timer-throttling')
         .addArguments('--disable-backgrounding-occluded-windows')
         .addArguments('--disable-renderer-backgrounding')
-        .addArguments('--disable-features=VizDisplayCompositor');
-    const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
-    options.setBinaryPath(chromePath);
+        .addArguments('--disable-features=VizDisplayCompositor')
+        .addArguments(`--user-data-dir=/tmp/chrome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`) // Unique user data directory
+        .addArguments('--disable-background-networking')
+        .addArguments('--disable-default-apps')
+        .addArguments('--disable-sync')
+        .addArguments('--metrics-recording-only')
+        .addArguments('--no-first-run')
+        .addArguments('--safebrowsing-disable-auto-update')
+        .addArguments('--disable-component-update');
+
+    // Only set Chrome path on macOS (development)
+    if (process.platform === 'darwin') {
+        const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+        options.setBinaryPath(chromePath);
+    }
 
     log("🚀 Initializing Chrome WebDriver...");
     const driver = await new Builder()
