@@ -94,9 +94,9 @@ export async function createPixel({ client, website }: { client: string, website
     if (!AUDLAB_USERNAME || !AUDLAB_PASSWORD) {
         throw new Error("Missing AudienceLab credentials in environment variables");
     }
-    // Chrome options: headless mode enabled for production
+    // Chrome options: headless mode disabled for optimization testing
     const options = new chrome.Options()
-        .addArguments('--headless=new') // HEADLESS MODE ENABLED
+        // .addArguments('--headless=new') // HEADLESS MODE DISABLED FOR TESTING
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
@@ -125,12 +125,12 @@ export async function createPixel({ client, website }: { client: string, website
         log("🌐 Navigating to AudienceLab login page...");
         await driver.get("https://build.audiencelab.io/auth/sign-in");
         log("✅ Reached login page");
-        await delay(500); // Wait 3 seconds to see the page load
+        await delay(200); // Wait for page load
 
         log("⏳ Waiting for username field...");
         await driver.wait(until.elementLocated(By.xpath("/html/body/div/div/form/div[1]/input")), 10000);
         log("✅ Username field found");
-        await delay(500); // Wait 1 second
+        await delay(100); // Brief wait
 
         // Step 2: Enter credentials
         log("🔐 Entering login credentials...");
@@ -156,17 +156,17 @@ export async function createPixel({ client, website }: { client: string, website
 
         log("📝 Typing username...");
         await usernameField.clear();
-        await delay(500); // Wait 0.5 seconds
+        await delay(100); // Brief wait
         await usernameField.sendKeys(AUDLAB_USERNAME as string);
         log(`🔍 VERBOSE: Username entered successfully`);
-        await delay(500); // Wait 1 second
+        await delay(100); // Brief wait
 
         log("📝 Typing password...");
         await passwordField.clear();
-        await delay(500); // Wait 0.5 seconds
+        await delay(100); // Brief wait
         await passwordField.sendKeys(AUDLAB_PASSWORD as string);
         log(`🔍 VERBOSE: Password entered successfully`);
-        await delay(500); // Wait 1 second
+        await delay(200); // Wait before clicking
 
         // Click the "Sign in with Email" button
         log("🖱️  Clicking sign in button...");
@@ -182,14 +182,14 @@ export async function createPixel({ client, website }: { client: string, website
 
         await signInButton.click();
         log("✅ Sign in button clicked");
-        await delay(500); // Wait 3 seconds for login to complete
+        await delay(1000); // Wait for login to complete
 
         // Step 3: Select the simple|Audience option
         log("🎯 Waiting for audience selection page...");
         const audienceXPath = "/html/body/div/div/div[2]/div[2]/div[2]/div/div/a/div";
         await driver.wait(until.elementLocated(By.xpath(audienceXPath)), 15000);
         log("✅ Audience selection page loaded");
-        await delay(500); // Wait 0. seconds
+        await delay(200); // Brief wait
 
         log("🖱️  Clicking simple|Audience option...");
         const audienceOption = await driver.findElement(By.xpath(audienceXPath));
@@ -202,14 +202,14 @@ export async function createPixel({ client, website }: { client: string, website
 
         await audienceOption.click();
         log("✅ Audience option selected");
-        await delay(500); // Wait 3 seconds for dashboard to load
+        await delay(800); // Wait for dashboard to load
 
         // Step 4: Click the pixel menu item
         log("📊 Waiting for dashboard to load...");
         const pixelMenuXPath = "/html/body/div[1]/div/div[1]/div/div[2]/div/div[2]/div[2]/div[2]/ul/li[1]/a";
         await driver.wait(until.elementLocated(By.xpath(pixelMenuXPath)), 15000);
         log("✅ Dashboard loaded");
-        await delay(500); // Wait 2 seconds
+        await delay(200); // Brief wait
 
         log("🖱️  Clicking pixels menu item...");
         const pixelMenuItem = await driver.findElement(By.xpath(pixelMenuXPath));
@@ -223,14 +223,14 @@ export async function createPixel({ client, website }: { client: string, website
 
         await pixelMenuItem.click();
         log("✅ Pixels section opened");
-        await delay(500); // Wait 3 seconds
+        await delay(600); // Wait for pixels page to load
 
         // Step 5: Click the "create" button
         log("⏳ Waiting for create button...");
         const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
         await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 10000);
         log("✅ Create button found");
-        await delay(500); // Wait 1 second
+        await delay(200); // Brief wait
 
         log("🖱️  Clicking create pixel button...");
         const createButton = await driver.findElement(By.xpath(createBtnXPath));
@@ -244,7 +244,7 @@ export async function createPixel({ client, website }: { client: string, website
 
         await createButton.click();
         log("✅ Create button clicked");
-        await delay(500); // Wait 3 seconds for modal to load
+        await delay(500); // Wait for modal to load
 
         // Wait for modal to appear - try multiple selectors
         log("⏳ Waiting for modal to appear...");
@@ -301,17 +301,38 @@ export async function createPixel({ client, website }: { client: string, website
             log("✅ Website name field found with xpath");
         } catch (e) {
             try {
-                // Try CSS selector approach
-                const nameFieldCSS = 'input[placeholder*="name"], input[name*="name"], form input:first-of-type';
+                // Try finding the proper website name field (not search field)
+                const nameFieldCSS = 'input[name="websiteName"], input[name*="name"]:not([placeholder*="Search"]), form input[type="text"]:not([placeholder*="Search"])';
                 websiteNameField = await driver.findElement(By.css(nameFieldCSS));
                 websiteNameSelector = nameFieldCSS;
-                log("✅ Website name field found with CSS selector");
+                log("✅ Website name field found with proper CSS selector");
             } catch (e2) {
-                // Try finding any input in the modal
-                const nameFieldGeneric = 'form input';
-                websiteNameField = await driver.findElement(By.css(nameFieldGeneric));
-                websiteNameSelector = nameFieldGeneric;
-                log("✅ Website name field found with generic input selector");
+                try {
+                    // Try finding form inputs but skip search inputs
+                    const inputs = await driver.findElements(By.css('form input[type="text"]'));
+                    for (const input of inputs) {
+                        const placeholder = await input.getAttribute('placeholder') || '';
+                        if (!placeholder.toLowerCase().includes('search')) {
+                            websiteNameField = input;
+                            websiteNameSelector = 'form input[type="text"]:not([placeholder*="Search"])';
+                            log("✅ Website name field found by excluding search inputs");
+                            break;
+                        }
+                    }
+                    if (!websiteNameField) {
+                        throw new Error("No suitable input found");
+                    }
+                } catch (e3) {
+                    // Fallback: use the second input if first is search
+                    const inputs = await driver.findElements(By.css('form input'));
+                    if (inputs.length >= 2) {
+                        websiteNameField = inputs[1];
+                        websiteNameSelector = 'form input:nth-child(2)';
+                        log("✅ Website name field found as second input (fallback)");
+                    } else {
+                        throw new Error("Could not find website name field");
+                    }
+                }
             }
         }
 
@@ -331,7 +352,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Make sure element is interactable with multiple approaches
         await driver.wait(until.elementIsEnabled(websiteNameField), 5000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", websiteNameField);
-        await delay(500); // Wait longer for scroll and rendering to complete
+        await delay(200); // Wait for scroll and rendering to complete
 
         // Additional checks for element interactability
         await driver.wait(until.elementIsVisible(websiteNameField), 5000);
@@ -339,7 +360,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Try JavaScript-based interaction if Selenium fails
         try {
             await websiteNameField.clear();
-            await delay(500);
+            await delay(150);
             await websiteNameField.sendKeys(websiteName);
             log("✅ Website name entered with Selenium");
         } catch (interactionError) {
@@ -352,7 +373,7 @@ export async function createPixel({ client, website }: { client: string, website
                 arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
                 arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
             `, websiteNameField, websiteName);
-            await delay(500);
+            await delay(150);
             log("✅ Website name entered with JavaScript");
         }
 
@@ -401,7 +422,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Make sure element is interactable with multiple approaches
         await driver.wait(until.elementIsEnabled(websiteUrlField), 5000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", websiteUrlField);
-        await delay(500); // Wait longer for scroll and rendering to complete
+        await delay(200); // Wait for scroll and rendering to complete
 
         // Additional checks for element interactability
         await driver.wait(until.elementIsVisible(websiteUrlField), 5000);
@@ -409,7 +430,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Try JavaScript-based interaction if Selenium fails
         try {
             await websiteUrlField.clear();
-            await delay(500);
+            await delay(150);
             await websiteUrlField.sendKeys(website);
             log("✅ Website URL entered with Selenium");
         } catch (interactionError) {
@@ -422,7 +443,7 @@ export async function createPixel({ client, website }: { client: string, website
                 arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
                 arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
             `, websiteUrlField, website);
-            await delay(500);
+            await delay(150);
             log("✅ Website URL entered with JavaScript");
         }
 
@@ -518,7 +539,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Make sure element is interactable with multiple approaches
         await driver.wait(until.elementIsEnabled(webhookUrlField), 5000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", webhookUrlField);
-        await delay(500); // Wait longer for scroll and rendering to complete
+        await delay(200); // Wait for scroll and rendering to complete
 
         // Additional checks for element interactability
         await driver.wait(until.elementIsVisible(webhookUrlField), 5000);
@@ -526,7 +547,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Try JavaScript-based interaction if Selenium fails
         try {
             await webhookUrlField.clear();
-            await delay(500);
+            await delay(150);
             await webhookUrlField.sendKeys(webhookUrl);
             log("✅ Webhook URL entered with Selenium");
         } catch (interactionError) {
@@ -539,7 +560,7 @@ export async function createPixel({ client, website }: { client: string, website
                 arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
                 arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
             `, webhookUrlField, webhookUrl);
-            await delay(500);
+            await delay(150);
             log("✅ Webhook URL entered with JavaScript");
         }
 
@@ -633,7 +654,7 @@ export async function createPixel({ client, website }: { client: string, website
             }
 
             if (!testCompleted) {
-                await delay(500); // Wait 500ms before checking again
+                await delay(250); // Wait 250ms before checking again
             }
         }
 
@@ -799,8 +820,8 @@ export async function createPixel({ client, website }: { client: string, website
                     else if (attempts === 6) {
                         log("🔍 COMPREHENSIVE DEBUGGING - Searching all modal content for pixel code...");
 
-                        // Wait a bit more for content to fully load
-                        await delay(3000);
+                        // Wait for content to fully load
+                        await delay(1500);
 
                         // 1. Debug all pre elements in detail
                         const preElements = await driver.findElements(By.css('pre'));
@@ -924,9 +945,9 @@ export async function createPixel({ client, website }: { client: string, website
                         log("🔍 DEBUG: Page URL:", await driver.getCurrentUrl());
                         throw new Error(`Could not find pixel code element after ${maxAttempts} attempts`);
                     }
-                    log(`⏳ Waiting 2 seconds before attempt ${attempts + 1}...`);
+                    log(`⏳ Waiting 1 second before attempt ${attempts + 1}...`);
                     // Wait a bit before next attempt
-                    await delay(2000);
+                    await delay(1000);
                 }
             }
 
