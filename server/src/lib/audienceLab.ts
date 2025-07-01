@@ -125,12 +125,12 @@ export async function createPixel({ client, website }: { client: string, website
         log("🌐 Navigating to AudienceLab login page...");
         await driver.get("https://build.audiencelab.io/auth/sign-in");
         log("✅ Reached login page");
-        await delay(3000); // Wait 3 seconds to see the page load
+        await delay(500); // Wait 3 seconds to see the page load
 
         log("⏳ Waiting for username field...");
         await driver.wait(until.elementLocated(By.xpath("/html/body/div/div/form/div[1]/input")), 10000);
         log("✅ Username field found");
-        await delay(1000); // Wait 1 second
+        await delay(500); // Wait 1 second
 
         // Step 2: Enter credentials
         log("🔐 Entering login credentials...");
@@ -159,14 +159,14 @@ export async function createPixel({ client, website }: { client: string, website
         await delay(500); // Wait 0.5 seconds
         await usernameField.sendKeys(AUDLAB_USERNAME as string);
         log(`🔍 VERBOSE: Username entered successfully`);
-        await delay(1000); // Wait 1 second
+        await delay(500); // Wait 1 second
 
         log("📝 Typing password...");
         await passwordField.clear();
         await delay(500); // Wait 0.5 seconds
         await passwordField.sendKeys(AUDLAB_PASSWORD as string);
         log(`🔍 VERBOSE: Password entered successfully`);
-        await delay(1000); // Wait 1 second
+        await delay(500); // Wait 1 second
 
         // Click the "Sign in with Email" button
         log("🖱️  Clicking sign in button...");
@@ -182,14 +182,14 @@ export async function createPixel({ client, website }: { client: string, website
 
         await signInButton.click();
         log("✅ Sign in button clicked");
-        await delay(3000); // Wait 3 seconds for login to complete
+        await delay(500); // Wait 3 seconds for login to complete
 
         // Step 3: Select the simple|Audience option
         log("🎯 Waiting for audience selection page...");
         const audienceXPath = "/html/body/div/div/div[2]/div[2]/div[2]/div/div/a/div";
         await driver.wait(until.elementLocated(By.xpath(audienceXPath)), 15000);
         log("✅ Audience selection page loaded");
-        await delay(2000); // Wait 2 seconds
+        await delay(500); // Wait 0. seconds
 
         log("🖱️  Clicking simple|Audience option...");
         const audienceOption = await driver.findElement(By.xpath(audienceXPath));
@@ -202,14 +202,14 @@ export async function createPixel({ client, website }: { client: string, website
 
         await audienceOption.click();
         log("✅ Audience option selected");
-        await delay(3000); // Wait 3 seconds for dashboard to load
+        await delay(500); // Wait 3 seconds for dashboard to load
 
         // Step 4: Click the pixel menu item
         log("📊 Waiting for dashboard to load...");
         const pixelMenuXPath = "/html/body/div[1]/div/div[1]/div/div[2]/div/div[2]/div[2]/div[2]/ul/li[1]/a";
         await driver.wait(until.elementLocated(By.xpath(pixelMenuXPath)), 15000);
         log("✅ Dashboard loaded");
-        await delay(2000); // Wait 2 seconds
+        await delay(500); // Wait 2 seconds
 
         log("🖱️  Clicking pixels menu item...");
         const pixelMenuItem = await driver.findElement(By.xpath(pixelMenuXPath));
@@ -223,14 +223,14 @@ export async function createPixel({ client, website }: { client: string, website
 
         await pixelMenuItem.click();
         log("✅ Pixels section opened");
-        await delay(3000); // Wait 3 seconds
+        await delay(500); // Wait 3 seconds
 
         // Step 5: Click the "create" button
         log("⏳ Waiting for create button...");
         const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
         await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 10000);
         log("✅ Create button found");
-        await delay(1000); // Wait 1 second
+        await delay(500); // Wait 1 second
 
         log("🖱️  Clicking create pixel button...");
         const createButton = await driver.findElement(By.xpath(createBtnXPath));
@@ -244,7 +244,7 @@ export async function createPixel({ client, website }: { client: string, website
 
         await createButton.click();
         log("✅ Create button clicked");
-        await delay(3000); // Wait 3 seconds for modal to load
+        await delay(500); // Wait 3 seconds for modal to load
 
         // Wait for modal to appear - try multiple selectors
         log("⏳ Waiting for modal to appear...");
@@ -331,7 +331,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Make sure element is interactable with multiple approaches
         await driver.wait(until.elementIsEnabled(websiteNameField), 5000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", websiteNameField);
-        await delay(1000); // Wait longer for scroll and rendering to complete
+        await delay(500); // Wait longer for scroll and rendering to complete
 
         // Additional checks for element interactability
         await driver.wait(until.elementIsVisible(websiteNameField), 5000);
@@ -401,7 +401,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Make sure element is interactable with multiple approaches
         await driver.wait(until.elementIsEnabled(websiteUrlField), 5000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", websiteUrlField);
-        await delay(1000); // Wait longer for scroll and rendering to complete
+        await delay(500); // Wait longer for scroll and rendering to complete
 
         // Additional checks for element interactability
         await driver.wait(until.elementIsVisible(websiteUrlField), 5000);
@@ -518,7 +518,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Make sure element is interactable with multiple approaches
         await driver.wait(until.elementIsEnabled(webhookUrlField), 5000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", webhookUrlField);
-        await delay(1000); // Wait longer for scroll and rendering to complete
+        await delay(500); // Wait longer for scroll and rendering to complete
 
         // Additional checks for element interactability
         await driver.wait(until.elementIsVisible(webhookUrlField), 5000);
