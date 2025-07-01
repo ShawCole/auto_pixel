@@ -1,0 +1,16 @@
+{
+    "name": "pixel-setup-app",
+    "private": true,
+    "workspaces": [
+        "server",
+        "web"
+    ],
+    "scripts": {
+        "dev": "concurrently \"npm run dev --workspace=server\" \"npm run dev --workspace=web\"",
+        "install:all": "npm install --workspace=server --workspace=web"
+    },
+    "devDependencies": {
+        "concurrently": "^8.2.2",
+        "ts-node": "^10.9.2"
+    }
+}
