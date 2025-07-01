@@ -37,7 +37,8 @@ export async function ensureClientSchema(client: string) {
     const root = await mysql.createConnection({
         host: DB_HOST,
         user: DB_USER,
-        password: DB_PASS
+        password: DB_PASS,
+        connectTimeout: 30000 // 30 seconds
     });
 
     try {

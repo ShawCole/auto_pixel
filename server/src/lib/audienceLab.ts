@@ -182,7 +182,7 @@ export async function createPixel({ client, website }: { client: string, website
 
         await signInButton.click();
         log("✅ Sign in button clicked");
-        await delay(1000); // Wait for login to complete
+        await delay(200); // Wait for login to complete
 
         // Step 3: Select the simple|Audience option
         log("🎯 Waiting for audience selection page...");
@@ -202,7 +202,7 @@ export async function createPixel({ client, website }: { client: string, website
 
         await audienceOption.click();
         log("✅ Audience option selected");
-        await delay(800); // Wait for dashboard to load
+        await delay(400); // Wait for dashboard to load
 
         // Step 4: Click the pixel menu item
         log("📊 Waiting for dashboard to load...");
@@ -228,7 +228,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Step 5: Click the "create" button
         log("⏳ Waiting for create button...");
         const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
-        await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 10000);
+        await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 1000);
         log("✅ Create button found");
         await delay(200); // Brief wait
 
@@ -244,7 +244,7 @@ export async function createPixel({ client, website }: { client: string, website
 
         await createButton.click();
         log("✅ Create button clicked");
-        await delay(500); // Wait for modal to load
+        await delay(200); // Wait for modal to load
 
         // Wait for modal to appear - try multiple selectors
         log("⏳ Waiting for modal to appear...");
@@ -252,19 +252,19 @@ export async function createPixel({ client, website }: { client: string, website
         let modalElement;
         try {
             // Try different modal selectors
-            await driver.wait(until.elementLocated(By.css('div[role="dialog"]')), 5000);
+            await driver.wait(until.elementLocated(By.css('div[role="dialog"]')), 500);
             modalSelector = 'div[role="dialog"]';
             modalElement = await driver.findElement(By.css(modalSelector));
             log("✅ Modal found with role=dialog");
         } catch (e) {
             try {
-                await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]')), 5000);
+                await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]')), 500);
                 modalSelector = '/html/body/div[4]';
                 modalElement = await driver.findElement(By.xpath(modalSelector));
                 log("✅ Modal found with div[4]");
             } catch (e2) {
                 // Try finding any form that might be the modal
-                await driver.wait(until.elementLocated(By.css('form')), 5000);
+                await driver.wait(until.elementLocated(By.css('form')), 2000);
                 modalSelector = 'form';
                 modalElement = await driver.findElement(By.css(modalSelector));
                 log("✅ Modal found with form selector");
@@ -290,22 +290,23 @@ export async function createPixel({ client, website }: { client: string, website
         log("📝 Waiting for website name field...");
         const websiteName = client + '_v3';
 
-        // Try multiple selectors for the website name field
+        // Try multiple selectors for the website name field (optimized order)
         let websiteNameField;
         let websiteNameSelector = '';
         try {
-            const nameFieldXPath = '/html/body/div[4]/form/div[2]/div[1]/input';
-            await driver.wait(until.elementLocated(By.xpath(nameFieldXPath)), 5000);
-            websiteNameField = await driver.findElement(By.xpath(nameFieldXPath));
-            websiteNameSelector = nameFieldXPath;
-            log("✅ Website name field found with xpath");
+            // Try the working CSS selector first (faster)
+            const nameFieldCSS = 'input[name="websiteName"], input[name*="name"]:not([placeholder*="Search"]), form input[type="text"]:not([placeholder*="Search"])';
+            websiteNameField = await driver.findElement(By.css(nameFieldCSS));
+            websiteNameSelector = nameFieldCSS;
+            log("✅ Website name field found with proper CSS selector");
         } catch (e) {
             try {
-                // Try finding the proper website name field (not search field)
-                const nameFieldCSS = 'input[name="websiteName"], input[name*="name"]:not([placeholder*="Search"]), form input[type="text"]:not([placeholder*="Search"])';
-                websiteNameField = await driver.findElement(By.css(nameFieldCSS));
-                websiteNameSelector = nameFieldCSS;
-                log("✅ Website name field found with proper CSS selector");
+                // Fallback to xpath with shorter timeout
+                const nameFieldXPath = '/html/body/div[4]/form/div[2]/div[1]/input';
+                await driver.wait(until.elementLocated(By.xpath(nameFieldXPath)), 1000);
+                websiteNameField = await driver.findElement(By.xpath(nameFieldXPath));
+                websiteNameSelector = nameFieldXPath;
+                log("✅ Website name field found with xpath");
             } catch (e2) {
                 try {
                     // Try finding form inputs but skip search inputs
@@ -350,12 +351,12 @@ export async function createPixel({ client, website }: { client: string, website
         log(`🔍 VERBOSE: Website name field position/size: x=${nameFieldRect.x}, y=${nameFieldRect.y}, width=${nameFieldRect.width}, height=${nameFieldRect.height}`);
 
         // Make sure element is interactable with multiple approaches
-        await driver.wait(until.elementIsEnabled(websiteNameField), 5000);
+        await driver.wait(until.elementIsEnabled(websiteNameField), 200);
         await driver.executeScript("arguments[0].scrollIntoView(true);", websiteNameField);
         await delay(200); // Wait for scroll and rendering to complete
 
         // Additional checks for element interactability
-        await driver.wait(until.elementIsVisible(websiteNameField), 5000);
+        await driver.wait(until.elementIsVisible(websiteNameField), 200);
 
         // Try JavaScript-based interaction if Selenium fails
         try {
@@ -420,12 +421,12 @@ export async function createPixel({ client, website }: { client: string, website
         log(`🔍 VERBOSE: Website URL field position/size: x=${urlFieldRect.x}, y=${urlFieldRect.y}, width=${urlFieldRect.width}, height=${urlFieldRect.height}`);
 
         // Make sure element is interactable with multiple approaches
-        await driver.wait(until.elementIsEnabled(websiteUrlField), 5000);
+        await driver.wait(until.elementIsEnabled(websiteUrlField), 200);
         await driver.executeScript("arguments[0].scrollIntoView(true);", websiteUrlField);
         await delay(200); // Wait for scroll and rendering to complete
 
         // Additional checks for element interactability
-        await driver.wait(until.elementIsVisible(websiteUrlField), 5000);
+        await driver.wait(until.elementIsVisible(websiteUrlField), 200);
 
         // Try JavaScript-based interaction if Selenium fails
         try {
@@ -502,17 +503,18 @@ export async function createPixel({ client, website }: { client: string, website
         log("📝 Waiting for webhook URL field...");
         const webhookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
 
-        // Try multiple selectors for the webhook URL field
+        // Try multiple selectors for the webhook URL field (optimized order)
         let webhookUrlField;
         try {
-            await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]/form/div[2]/div/div/input')), 5000);
-            webhookUrlField = await driver.findElement(By.xpath('/html/body/div[4]/form/div[2]/div/div/input'));
-            log("✅ Webhook URL field found with xpath");
+            // Try finding by webhook-related attributes first (faster)
+            webhookUrlField = await driver.findElement(By.css('input[placeholder*="webhook"], input[placeholder*="url"], input[name*="webhook"], input[name*="url"]'));
+            log("✅ Webhook URL field found with webhook selector");
         } catch (e) {
             try {
-                // Try finding by webhook-related attributes
-                webhookUrlField = await driver.findElement(By.css('input[placeholder*="webhook"], input[placeholder*="url"], input[name*="webhook"], input[name*="url"]'));
-                log("✅ Webhook URL field found with webhook selector");
+                // Fallback to xpath with shorter timeout
+                await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]/form/div[2]/div/div/input')), 1000);
+                webhookUrlField = await driver.findElement(By.xpath('/html/body/div[4]/form/div[2]/div/div/input'));
+                log("✅ Webhook URL field found with xpath");
             } catch (e2) {
                 try {
                     // Try finding any input in the current modal/form
@@ -537,12 +539,12 @@ export async function createPixel({ client, website }: { client: string, website
         }
 
         // Make sure element is interactable with multiple approaches
-        await driver.wait(until.elementIsEnabled(webhookUrlField), 5000);
+        await driver.wait(until.elementIsEnabled(webhookUrlField), 1000);
         await driver.executeScript("arguments[0].scrollIntoView(true);", webhookUrlField);
-        await delay(200); // Wait for scroll and rendering to complete
+        await delay(100); // Wait for scroll and rendering to complete
 
         // Additional checks for element interactability
-        await driver.wait(until.elementIsVisible(webhookUrlField), 5000);
+        await driver.wait(until.elementIsVisible(webhookUrlField), 1000);
 
         // Try JavaScript-based interaction if Selenium fails
         try {
