@@ -17,7 +17,21 @@ function log(message: string, data?: any) {
 }
 
 const app = express();
-app.use(cors());
+
+// Configure CORS to allow Netlify domain
+const corsOptions = {
+    origin: [
+        'https://autopixel.netlify.app',
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://localhost:3000'
+    ],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 
 // Add request logging middleware
