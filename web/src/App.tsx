@@ -1,16 +1,6 @@
 import { useState } from 'react'
 
-interface PixelResponse {
-    message: string
-    pixelSnippet: string
-    webhookUrl: string
-    client: string
-    timestamp: string
-}
-
 export default function App() {
-    const [client, setClient] = useState('')
-    const [response, setResponse] = useState<PixelResponse | null>(null)
     const [error, setError] = useState<string | null>(null)
     const [isLoading, setIsLoading] = useState(false)
     const [clientName, setClientName] = useState('')
@@ -32,7 +22,6 @@ export default function App() {
 
     const handleSubmit = async () => {
         setError(null)
-        setResponse(null)
         setPixelCode('')
 
         if (!clientName.trim()) {
