@@ -49,7 +49,7 @@ export async function ensureClientSchema(client: string) {
         await root.query(`CREATE DATABASE IF NOT EXISTS \`${client}\``);
         log(`✅ Database '${client}' created/verified`);
 
-        const tablesToClone = ["superpixel_resolution_log", "unique_visitors"];
+        const tablesToClone = ["superpixel_resolution_log", "superpixel_visitors"];
 
         for (const table of tablesToClone) {
             log(`📋 Creating table '${table}' in database '${client}'...`);
