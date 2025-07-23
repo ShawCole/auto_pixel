@@ -1033,6 +1033,11 @@ export async function createPixel({ client, website }: { client: string, website
     } catch (err: any) {
         return { error: err.message || String(err) };
     } finally {
-        // await driver.quit(); // Uncomment when not debugging
+        try {
+            await driver.quit(); // Enable proper browser cleanup
+            log("🧹 Browser session cleaned up");
+        } catch (cleanupError) {
+            log("⚠️ Browser cleanup error:", cleanupError);
+        }
     }
 } 
