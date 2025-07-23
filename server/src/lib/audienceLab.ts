@@ -743,9 +743,30 @@ export async function createPixel({ client, website }: { client: string, website
             } catch (clickError) {
                 log("⚠️ Create button click intercepted, trying JavaScript approach...");
                 log(`🔍 VERBOSE: Click error: ${clickError instanceof Error ? clickError.message : String(clickError)}`);
-                // Use JavaScript to click directly
-                await driver.executeScript("arguments[0].click();", createButton);
-                log("✅ Create button clicked with JavaScript");
+
+                // Scroll to element and try to remove any overlays
+                await driver.executeScript(`
+                    arguments[0].scrollIntoView({behavior: 'smooth', block: 'center'});
+                    
+                    // Remove any potential overlay elements that might be blocking
+                    const overlays = document.querySelectorAll('[class*="overlay"], [class*="backdrop"], [class*="modal-backdrop"]');
+                    overlays.forEach(overlay => overlay.style.display = 'none');
+                    
+                    // Wait a bit for scroll and overlay removal
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                `, createButton);
+
+                await delay(500);
+
+                // Try Selenium click again after cleanup
+                try {
+                    await createButton.click();
+                    log("✅ Create button clicked with Selenium after overlay cleanup");
+                } catch (secondClickError) {
+                    // Final fallback: JavaScript click
+                    await driver.executeScript("arguments[0].click();", createButton);
+                    log("✅ Create button clicked with JavaScript fallback");
+                }
             }
 
             // 9. Wait for pixel creation to complete
