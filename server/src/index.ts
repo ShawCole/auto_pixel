@@ -18,10 +18,12 @@ function log(message: string, data?: any) {
 
 const app = express();
 
-// Configure CORS to allow Netlify domain
+// Configure CORS to allow Netlify domain and pixel.thynkdata.com
 const corsOptions = {
     origin: [
         'https://autopixel.netlify.app',
+        'https://pixel.thynkdata.com',
+        'http://pixel.thynkdata.com',
         'http://localhost:5173',
         'http://localhost:5174',
         'http://localhost:3000'
