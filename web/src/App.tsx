@@ -44,7 +44,9 @@ export default function App() {
         setIsLoading(true)
 
         try {
-            const apiUrl = import.meta.env.VITE_API_URL || 'http://146.148.83.186:8080'
+            // Use production API URL if no environment variable is set and we're not on localhost
+            const apiUrl = import.meta.env.VITE_API_URL ||
+                (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://api.thynkdata.com')
             const res = await fetch(`${apiUrl}/generate`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

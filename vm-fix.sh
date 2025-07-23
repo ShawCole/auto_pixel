@@ -39,7 +39,7 @@ TEMPLATE_DB=template
 TEMPLATE_TABLE=superpixel_resolution_log
 
 # AudienceLab Credentials - UPDATE THESE
-AUDLAB_USERNAME=scole@thynkdata.com
+AUDLAB_USERNAME=shaw@accupointsolutions.com
 AUDLAB_PASSWORD=AccuPoint01!
 
 # Server Configuration

@@ -96,7 +96,7 @@ export async function createPixel({ client, website }: { client: string, website
     }
     // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
-        .addArguments('--headless=new') // Enable headless mode for production
+        // .addArguments('--headless=new') // COMMENTED OUT FOR DEBUGGING - Enable headless mode for production
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
@@ -134,8 +134,8 @@ export async function createPixel({ client, website }: { client: string, website
         // Browser is running in headless mode
 
         // Step 1: Navigate to login page
-        log("🌐 Navigating to AudienceLab login page...");
-        await driver.get("https://build.audiencelab.io/auth/sign-in");
+        log("🌐 Navigating to SimpleAudience login page...");
+        await driver.get("https://app.simpleaudience.io/auth/sign-in");
         log("✅ Reached login page");
         await delay(200); // Wait for page load
 

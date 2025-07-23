@@ -60,50 +60,59 @@ log('Environment variables loaded:', {
 });
 
 // POST /generate { client: "strategy_simple" }
-app.post("/generate", async (req, res) => {
-    const client: string = (req.body.client || "").trim();
-    log(`📝 Received generate request for client: "${client}"`);
+app.post('/generate', async (req, res) => {
+    const { client, website } = req.body;
+
+    log(`📝 Received generate request for client: "${client}"`, {
+        headers: req.headers,
+        body: req.body,
+        query: req.query
+    });
+
+    if (!client || !website) {
+        return res.status(400).json({ error: 'Client name and website URL are required' });
+    }
 
     if (!client.match(/^[-_a-zA-Z0-9]+$/)) {
-        log(`❌ Invalid client name: "${client}"`);
-        return res.status(400).json({ error: "Invalid client string - only letters, numbers, hyphens, and underscores allowed" });
+        return res.status(400).json({ error: 'Client name can only contain letters, numbers, hyphens, and underscores' });
     }
 
     try {
         log(`🎯 Starting pixel generation for client: ${client}`);
 
-        // 1️⃣  Create DB + table clone
-        log("🗄️  Creating database schema...");
-        await ensureClientSchema(client);
-        log("✅ Database schema created successfully");
+        // Skip database setup if explicitly requested or if database env vars are missing
+        const { DB_HOST, DB_USER, DB_PASS, TEMPLATE_DB, TEMPLATE_TABLE } = process.env;
+        const skipDatabase = process.env.SKIP_DATABASE === 'true' ||
+            !DB_HOST || !DB_USER || !DB_PASS || !TEMPLATE_DB || !TEMPLATE_TABLE;
 
-        // 2️⃣  Build webhook URL
-        const webhookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
-        log(`🔗 Webhook URL generated: ${webhookUrl}`);
-
-        // 3️⃣  Create pixel (headless) & retrieve script
-        log("🤖 Starting AudienceLab automation...");
-        const website = (req.body.website || "").trim();
-        const result = await createPixel({ client, website });
-        if (result.pixelCode) {
-            log("✅ Pixel snippet retrieved successfully");
-            return res.json({
-                message: "Pixel, DB, and webhook successfully created!",
-                pixelSnippet: result.pixelCode,
-                webhookUrl,
-                client,
-                timestamp: new Date().toISOString()
-            });
+        if (skipDatabase) {
+            log("⚠️  Skipping database setup (missing env vars or SKIP_DATABASE=true)");
         } else {
-            throw new Error(result.error || "Pixel creation failed");
+            log("🗄️  Creating database schema...");
+            await ensureClientSchema(client);
+            log("✅ Database schema ready");
         }
-    } catch (e: any) {
+
+        log("🤖 Starting AudienceLab automation...");
+        const result = await createPixel({ client, website });
+        log("✅ Pixel generated successfully");
+
+        res.json({
+            pixelSnippet: result.pixelCode,
+            message: `Pixel generated successfully for ${client}`,
+            databaseSetup: !skipDatabase
+        });
+    } catch (error: any) {
         log("💥 Error during pixel generation:", {
-            error: e.message,
-            stack: e.stack,
+            error: error.message,
+            stack: error.stack,
             client
         });
-        return res.status(500).json({ error: e.message || "Internal error" });
+
+        res.status(500).json({
+            error: error.message || 'Unknown error occurred',
+            details: DEBUG ? error.stack : undefined
+        });
     }
 });
 
