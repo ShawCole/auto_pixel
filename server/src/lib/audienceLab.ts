@@ -96,7 +96,7 @@ export async function createPixel({ client, website }: { client: string, website
     }
     // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
-        .addArguments('--headless=new') // Enable headless mode for production
+        // .addArguments('--headless=new') // DISABLED for debugging - Enable headless mode for production
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
@@ -673,9 +673,27 @@ export async function createPixel({ client, website }: { client: string, website
         }
 
         if (!testCompleted) {
-            // Assume success if no errors found and timeout reached
-            log("⚠️ Webhook test timeout reached, assuming success and proceeding...");
-            isSuccess = true;
+            // Don't assume success - webhook test actually failed
+            log("❌ Webhook test timeout reached - test failed");
+            isSuccess = false;
+
+            // Check if Create button is actually enabled before proceeding
+            try {
+                const createButtons = await driver.findElements(By.xpath("//button[contains(text(), 'Create')]"));
+                for (const button of createButtons) {
+                    const isEnabled = await button.isEnabled();
+                    if (isEnabled) {
+                        log("✅ Create button is enabled despite timeout - proceeding");
+                        isSuccess = true;
+                        break;
+                    }
+                }
+                if (!isSuccess) {
+                    log("❌ Create button is still disabled - webhook test definitely failed");
+                }
+            } catch (e) {
+                log("❌ Could not check Create button state");
+            }
         }
 
         if (isSuccess) {
