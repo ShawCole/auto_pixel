@@ -97,7 +97,19 @@ app.post('/generate', async (req, res) => {
 
         log("🤖 Starting AudienceLab automation...");
         const result = await createPixel({ client, website });
-        log("✅ Pixel generated successfully");
+
+        // Check if pixel generation had errors
+        if (result.error) {
+            log("❌ Pixel generation failed:", result.error);
+            throw new Error(result.error);
+        }
+
+        if (!result.pixelCode) {
+            log("❌ Pixel generation completed but no pixel code was extracted");
+            throw new Error("Pixel generation completed but no pixel code was extracted");
+        }
+
+        log("✅ Pixel generated successfully with code");
 
         res.json({
             pixelSnippet: result.pixelCode,

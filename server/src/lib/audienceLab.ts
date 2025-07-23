@@ -96,7 +96,7 @@ export async function createPixel({ client, website }: { client: string, website
     }
     // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
-        // .addArguments('--headless=new') // COMMENTED OUT FOR DEBUGGING - Enable headless mode for production
+        .addArguments('--headless=new') // Enable headless mode for production
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
