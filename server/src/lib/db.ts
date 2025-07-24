@@ -49,6 +49,12 @@ export async function ensureClientSchema(client: string) {
         await root.query(`CREATE DATABASE IF NOT EXISTS \`${client}\``);
         log(`✅ Database '${client}' created/verified`);
 
+        // Grant permissions to the database user for this specific database
+        log(`🔐 Granting permissions to user '${DB_USER}' on database '${client}'...`);
+        await root.query(`GRANT ALL PRIVILEGES ON \`${client}\`.* TO '${DB_USER}'@'%'`);
+        await root.query(`FLUSH PRIVILEGES`);
+        log(`✅ Permissions granted to '${DB_USER}' on database '${client}'`);
+
         const tablesToClone = ["superpixel_resolution_log", "superpixel_visitors"];
 
         for (const table of tablesToClone) {

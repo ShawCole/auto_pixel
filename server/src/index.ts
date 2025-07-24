@@ -90,9 +90,11 @@ app.post('/generate', async (req, res) => {
         if (skipDatabase) {
             log("⚠️  Skipping database setup (missing env vars or SKIP_DATABASE=true)");
         } else {
-            log("🗄️  Creating database schema...");
+            // IMPORTANT: Create database FIRST, before SimpleAudience automation
+            // This ensures the webhook test will succeed
+            log("🗄️  Creating database schema BEFORE pixel creation...");
             await ensureClientSchema(client);
-            log("✅ Database schema ready");
+            log("✅ Database schema ready - webhook should now work");
         }
 
         log("🤖 Starting AudienceLab automation...");

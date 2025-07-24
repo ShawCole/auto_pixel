@@ -10,6 +10,23 @@ $dbPass = getenv('DB_PASS') ?: 'AccuPoint01!';
 $client = isset($_GET['client']) ? preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['client']) : null;
 $dbName = $client ?: (getenv('DB_NAME') ?: 'pixel');
 
+// For GET requests (webhook tests), don't fail if database doesn't exist
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    // Just test MySQL connectivity, not specific database
+    $testConn = new mysqli($dbHost, $dbUser, $dbPass);
+    if ($testConn->connect_error) {
+        http_response_code(500);
+        echo json_encode(['error' => 'MySQL connection failed']);
+        exit;
+    }
+    $testConn->close();
+    
+    // Return success for webhook test
+    echo json_encode(['status' => 'success', 'message' => 'Webhook endpoint is reachable']);
+    exit;
+}
+
+// For POST requests, connect to specific database
 $mysqli = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
 if ($mysqli->connect_error) {
     $err = "Connection failed: " . $mysqli->connect_error;

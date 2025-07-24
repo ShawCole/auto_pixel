@@ -240,12 +240,19 @@ export async function createPixel({ client, website }: { client: string, website
         // Step 5: Click the "create" button
         log("⏳ Waiting for create button...");
         const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
-        await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 1000);
+        await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 5000);
         log("✅ Create button found");
+
+        // Wait for the button to be enabled
+        log("⏳ Waiting for create button to be enabled...");
+        let createButton = await driver.findElement(By.xpath(createBtnXPath));
+        await driver.wait(until.elementIsEnabled(createButton), 5000);
+        log("✅ Create button is enabled");
+
         await delay(200); // Brief wait
 
         log("🖱️  Clicking create pixel button...");
-        const createButton = await driver.findElement(By.xpath(createBtnXPath));
+        createButton = await driver.findElement(By.xpath(createBtnXPath)); // Re-find to ensure fresh reference
         log(`🔍 VERBOSE: Create button found with XPath: ${createBtnXPath}`);
         log(`🔍 VERBOSE: Create button tag: ${await createButton.getTagName()}`);
         log(`🔍 VERBOSE: Create button text: ${await createButton.getText()}`);
