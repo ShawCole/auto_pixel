@@ -6,6 +6,7 @@ export default function App() {
     const [clientName, setClientName] = useState('')
     const [websiteUrl, setWebsiteUrl] = useState('')
     const [pixelCode, setPixelCode] = useState('')
+    const [sheetUrl, setSheetUrl] = useState('')
 
     const formatWebsiteUrl = (url: string) => {
         let formatted = url.trim()
@@ -23,6 +24,7 @@ export default function App() {
     const handleSubmit = async () => {
         setError(null)
         setPixelCode('')
+        setSheetUrl('')
 
         if (!clientName.trim()) {
             setError('Client name is required')
@@ -61,6 +63,9 @@ export default function App() {
 
             if (data.pixelSnippet) {
                 setPixelCode(data.pixelSnippet)
+                if (data.sheetUrl) {
+                    setSheetUrl(data.sheetUrl)
+                }
             } else {
                 setError(data.error || 'Unknown error')
             }
@@ -180,6 +185,34 @@ export default function App() {
                                 </div>
                             </div>
                         </div>
+
+                        {/* Google Sheet Link */}
+                        {sheetUrl && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-lg font-semibold text-gray-900">Google Sheet</h3>
+                                    <button
+                                        onClick={() => copyToClipboard(sheetUrl, 'Sheet URL')}
+                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                    >
+                                        Copy URL
+                                    </button>
+                                </div>
+                                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                                    <a
+                                        href={sheetUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 hover:text-blue-800 underline break-all"
+                                    >
+                                        {sheetUrl}
+                                    </a>
+                                </div>
+                                <p className="text-sm text-gray-600">
+                                    View and share visitor data with your client. Data syncs every 5 minutes.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Pixel Script */}
                         <div className="space-y-2">
