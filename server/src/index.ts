@@ -182,12 +182,16 @@ app.post('/generate', async (req, res) => {
         // Create Google Sheet for the client
         let sheetUrl: string | undefined;
         const sheetResult = await createGoogleSheet(client, pixelId);
+        log(`🔍 Sheet creation result:`, sheetResult); // Debug log
+
         if (sheetResult.sheetUrl) {
             sheetUrl = sheetResult.sheetUrl;
+            log(`✅ Sheet URL obtained: ${sheetUrl}`); // Debug log
 
             // Trigger full dynamic sync after 10 seconds to include the new sheet
             log(`⏰ Scheduling full dynamic sync in 10 seconds to include new sheet...`);
             setTimeout(() => {
+                log(`🚀 Executing triggerFullSync now...`); // Debug log
                 triggerFullSync();
             }, 10000);
         } else {
