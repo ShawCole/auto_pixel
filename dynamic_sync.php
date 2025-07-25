@@ -69,10 +69,10 @@ function calculateOptimalTiming($totalSheets) {
 function syncAllSheetsDynamically($mysqli, $service) {
     global $VISITORS_LIMIT, $EVENTS_LIMIT;
     
-    // Get all client sheets
+    // Get all client sheets - prioritize newer sheets (NULL last_sync_at) first
     $sql = "SELECT * FROM pixel.pixel_sheets 
             WHERE sheet_id IS NOT NULL 
-            ORDER BY COALESCE(last_sync_at, '1970-01-01') ASC";
+            ORDER BY last_sync_at IS NULL DESC, COALESCE(last_sync_at, '1970-01-01') ASC";
     
     $result = $mysqli->query($sql);
     if (!$result) {
@@ -360,18 +360,12 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
 if (php_sapi_name() === 'cli') {
     // Check for specific client parameter
     $specificClient = null;
-    echo "Debug: Command line arguments: " . implode(' ', $argv) . "\n";
-    
     foreach ($argv as $arg) {
-        echo "Debug: Checking argument: '$arg'\n";
         if (strpos($arg, '--client=') === 0) {
             $specificClient = substr($arg, 9); // Remove '--client='
-            echo "Debug: Found client parameter: '$specificClient'\n";
             break;
         }
     }
-    
-    echo "Debug: Specific client: " . ($specificClient ?: 'null') . "\n";
     
     // Connect to MySQL
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass);

@@ -51,31 +51,31 @@ async function createGoogleSheet(client: string, pixelId: string): Promise<{ she
     }
 }
 
-// Function to trigger immediate sync for a specific client
-async function triggerImmediateSync(client: string): Promise<void> {
+// Function to trigger full dynamic sync after new pixel creation
+async function triggerFullSync(): Promise<void> {
     try {
-        log(`🔄 Triggering immediate sync for client: ${client}`);
+        log(`🔄 Triggering full dynamic sync to include new sheets`);
 
         // Use different command based on environment
         const isDevelopment = process.env.NODE_ENV === 'development';
         const syncCommand = isDevelopment
-            ? `php ../web/dynamic_sync.php --client="${client}"`
-            : `sudo -u www-data php /opt/auto-pixel/dynamic_sync.php --client="${client}"`;
+            ? `php ../web/dynamic_sync.php`
+            : `sudo -u www-data php /opt/auto-pixel/dynamic_sync.php`;
 
         // Execute sync in background (don't wait for completion)
         exec(syncCommand, (error, stdout, stderr) => {
             if (error) {
-                log(`⚠️ Immediate sync error for ${client}:`, error);
+                log(`⚠️ Full sync error:`, error);
             } else {
-                log(`✅ Immediate sync completed for ${client}`);
+                log(`✅ Full sync completed`);
             }
-            if (stdout) log(`Sync stdout for ${client}:`, stdout);
-            if (stderr) log(`Sync stderr for ${client}:`, stderr);
+            if (stdout) log(`Sync stdout:`, stdout);
+            if (stderr) log(`Sync stderr:`, stderr);
         });
 
-        log(`🚀 Immediate sync triggered for ${client} (running in background)`);
+        log(`🚀 Full dynamic sync triggered (running in background)`);
     } catch (error: any) {
-        log(`💥 Error triggering immediate sync for ${client}:`, error);
+        log(`💥 Error triggering full sync:`, error);
     }
 }
 
@@ -185,11 +185,11 @@ app.post('/generate', async (req, res) => {
         if (sheetResult.sheetUrl) {
             sheetUrl = sheetResult.sheetUrl;
 
-            // Trigger immediate sync after 5 seconds to populate the sheet with test data
-            log(`⏰ Scheduling immediate sync for ${client} in 5 seconds...`);
+            // Trigger full dynamic sync after 10 seconds to include the new sheet
+            log(`⏰ Scheduling full dynamic sync in 10 seconds to include new sheet...`);
             setTimeout(() => {
-                triggerImmediateSync(client);
-            }, 5000);
+                triggerFullSync();
+            }, 10000);
         } else {
             log("⚠️ Failed to create Google Sheet but continuing:", sheetResult.error);
         }
