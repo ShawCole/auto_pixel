@@ -153,6 +153,52 @@ function syncAllSheetsDynamically($mysqli, $service) {
     return $successCount === $totalSheets;
 }
 
+// Function to sync a specific client immediately
+function syncSpecificClient($mysqli, $service, $clientName) {
+    global $VISITORS_LIMIT, $EVENTS_LIMIT;
+    
+    // Get the specific client's sheet info
+    $sql = "SELECT * FROM pixel.pixel_sheets 
+            WHERE client_name = ? AND sheet_id IS NOT NULL";
+    
+    $stmt = $mysqli->prepare($sql);
+    $stmt->bind_param("s", $clientName);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 0) {
+        echo "❌ No sheet found for client: $clientName\n";
+        return false;
+    }
+    
+    $sheet = $result->fetch_assoc();
+    echo "Found sheet for $clientName: {$sheet['sheet_id']}\n";
+    
+    // Select client database
+    $clientDb = $sheet['client_name'];
+    if (!$mysqli->select_db($clientDb)) {
+        echo "Error: Could not select database $clientDb\n";
+        return false;
+    }
+    
+    // Sync both tabs together (Visitors + Events)
+    echo "Updating both tabs (Visitors + Events) for $clientName...\n";
+    $visitorsSuccess = syncVisitorsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service);
+    $eventsSuccess = syncEventsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service, $sheet['last_sync_at']);
+    
+    // Update last sync time if successful
+    if ($visitorsSuccess && $eventsSuccess) {
+        $mysqli->select_db('pixel');
+        $updateSql = "UPDATE pixel_sheets SET last_sync_at = NOW() WHERE id = " . $sheet['id'];
+        $mysqli->query($updateSql);
+        echo "✅ Immediate sync completed successfully for $clientName\n";
+        return true;
+    } else {
+        echo "❌ Immediate sync completed with errors for $clientName\n";
+        return false;
+    }
+}
+
 // Sync visitors data to sheet
 function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     global $VISITORS_LIMIT;
@@ -312,6 +358,15 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
 
 // Main execution
 if (php_sapi_name() === 'cli') {
+    // Check for specific client parameter
+    $specificClient = null;
+    foreach ($argv as $arg) {
+        if (strpos($arg, '--client=') === 0) {
+            $specificClient = substr($arg, 9); // Remove '--client='
+            break;
+        }
+    }
+    
     // Connect to MySQL
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
     if ($mysqli->connect_error) {
@@ -322,13 +377,19 @@ if (php_sapi_name() === 'cli') {
     $client = getGoogleClient();
     $service = new Sheets($client);
     
-    // Run dynamic sync
-    $success = syncAllSheetsDynamically($mysqli, $service);
+    if ($specificClient) {
+        // Sync specific client immediately
+        echo "=== Immediate Sync for $specificClient ===\n";
+        $success = syncSpecificClient($mysqli, $service, $specificClient);
+    } else {
+        // Run full dynamic sync
+        $success = syncAllSheetsDynamically($mysqli, $service);
+    }
     
     $mysqli->close();
     
     if ($success) {
-        echo "\n✅ All sheets synced successfully!\n";
+        echo "\n✅ Sync completed successfully!\n";
     } else {
         echo "\n⚠️  Some sheets had sync issues\n";
     }

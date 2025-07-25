@@ -2,17 +2,80 @@ import "dotenv/config";
 import express from "express";
 import bodyParser from "body-parser";
 import cors from "cors";
+import { exec } from "child_process";
+import { promisify } from "util";
 import { ensureClientSchema } from "./lib/db.js";
 import { createPixel } from "./lib/audienceLab.js";
 
 // Enable verbose logging
 const DEBUG = process.env.DEBUG === '*' || process.env.NODE_ENV === 'development';
+const execAsync = promisify(exec);
 
 function log(message: string, data?: any) {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] ${message}`);
     if (data && DEBUG) {
         console.log(JSON.stringify(data, null, 2));
+    }
+}
+
+// Function to create Google Sheet for client
+async function createGoogleSheet(client: string, pixelId: string): Promise<{ sheetUrl?: string; error?: string }> {
+    try {
+        log(`📊 Creating Google Sheet for client: ${client}`);
+
+        // Use different command based on environment
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        const phpCommand = isDevelopment
+            ? `php ../web/create_client_sheet.php "${client}" "${pixelId}"`
+            : `sudo -u www-data php /opt/auto-pixel/create_client_sheet.php "${client}" "${pixelId}"`;
+
+        const { stdout, stderr } = await execAsync(phpCommand);
+
+        if (stderr) {
+            log("⚠️ PHP stderr output:", stderr);
+        }
+
+        const result = JSON.parse(stdout);
+
+        if (result.success) {
+            log(`✅ Google Sheet created successfully: ${result.sheetUrl}`);
+            return { sheetUrl: result.sheetUrl };
+        } else {
+            log(`❌ Failed to create Google Sheet: ${result.error}`);
+            return { error: result.error };
+        }
+    } catch (error: any) {
+        log(`💥 Error creating Google Sheet:`, error);
+        return { error: error.message || 'Failed to create Google Sheet' };
+    }
+}
+
+// Function to trigger immediate sync for a specific client
+async function triggerImmediateSync(client: string): Promise<void> {
+    try {
+        log(`🔄 Triggering immediate sync for client: ${client}`);
+
+        // Use different command based on environment
+        const isDevelopment = process.env.NODE_ENV === 'development';
+        const syncCommand = isDevelopment
+            ? `php ../web/dynamic_sync.php --client="${client}"`
+            : `sudo -u www-data php /opt/auto-pixel/dynamic_sync.php --client="${client}"`;
+
+        // Execute sync in background (don't wait for completion)
+        exec(syncCommand, (error, stdout, stderr) => {
+            if (error) {
+                log(`⚠️ Immediate sync error for ${client}:`, error);
+            } else {
+                log(`✅ Immediate sync completed for ${client}`);
+            }
+            if (stdout) log(`Sync stdout for ${client}:`, stdout);
+            if (stderr) log(`Sync stderr for ${client}:`, stderr);
+        });
+
+        log(`🚀 Immediate sync triggered for ${client} (running in background)`);
+    } catch (error: any) {
+        log(`💥 Error triggering immediate sync for ${client}:`, error);
     }
 }
 
@@ -113,8 +176,27 @@ app.post('/generate', async (req, res) => {
 
         log("✅ Pixel generated successfully with code");
 
+        // Generate a unique pixel ID for tracking
+        const pixelId = `${client.toLowerCase()}-pixel-${Date.now()}`;
+
+        // Create Google Sheet for the client
+        let sheetUrl: string | undefined;
+        const sheetResult = await createGoogleSheet(client, pixelId);
+        if (sheetResult.sheetUrl) {
+            sheetUrl = sheetResult.sheetUrl;
+
+            // Trigger immediate sync after 5 seconds to populate the sheet with test data
+            log(`⏰ Scheduling immediate sync for ${client} in 5 seconds...`);
+            setTimeout(() => {
+                triggerImmediateSync(client);
+            }, 5000);
+        } else {
+            log("⚠️ Failed to create Google Sheet but continuing:", sheetResult.error);
+        }
+
         res.json({
             pixelSnippet: result.pixelCode,
+            sheetUrl: sheetUrl,
             message: `Pixel generated successfully for ${client}`,
             databaseSetup: !skipDatabase
         });
