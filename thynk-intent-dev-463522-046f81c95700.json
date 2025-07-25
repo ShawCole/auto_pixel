@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "thynk-intent-dev-463522",
+  "private_key_id": "046f81c9570072c9b19aeef3b03b3f4d6ea73948",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC4DHS6WF0bkGCZ\nAPus8W66JGhUuUNxbCojlJ3m6heFQL6IdgxTsD2m8fCLQ0UH1iEu9Ol5Awf02jiQ\nmDXSgglsI7oqJ7HhS3NJcvOc/j5IirqDs6MBOLW7z/uTTN/6yaF5WWklDIIQh5XT\ndthqFV7YswsW2hzTF8lErbWjSiSUDYfliBxKNOOWKwyTBd3/6r+Gy5xC06F4C42i\nQcI1navAS9XGzu7d5q0rb+sUqxUt0qJw50xCvoziViNcXkEv4OgbqZxvIT1v6VDf\nH1h+tJpznG8p9QDojIGYsXiGtBGYmM/8ig92bF23nnV/BYPuuniMnzcvLK9HMwE+\nD8wqi1B1AgMBAAECggEAAK5Q+7UcYoqWq5G2OoaSaQj1UIYhWHsUsva73PQ+fvdh\nFq5s3AzOAdrYfqYSmRvS970KOfT8+wOpRT8llW4hEMuOpLMEOv5JmgnDtAl1CFVo\nZPrg07WYvGV7MP6nv+I/OJ/Hl9+QTo7y7QX1myXNfjrRNxX2S988uTDsqy2FpUGB\n8qG1NbJw4OQVp2mijCfR439w36JEpJSk9fnOFwssmKnn1nQpJGuJ0ifpW0gMgkGM\n+YipM3464Jyksdex5ARu6rlqkBBro2XSEg/GWp5+CT8za/WAqdTGwY7ui+DSOrb9\nWiB5D1q+fKsCNC26BM/jC+53uFk/Sj1PcvgzhdyzwQKBgQDsKinhrs5VhnQHXTpl\nN+6qg5GAl0LgGJpFBX0DLoUp7kK2xdMq8TxWv0jLuGZUzBJBkZrG413sV0IePDFY\n2/oWLovteiCJ+PI8LPZNGRZMwiuGt8Tq6QkXjvkhLeli52Z+U8esLiH8uwX8OMlp\ni/GE4shSL1G86p6JeQkiU0le5QKBgQDHgbty6Xo4DJYjF7c+BHtv5k02nr79SqgJ\nYgflnoCRehWLBX1sc++OR/l2gf2Zjs6idGmo5YDlVpURomdUUyMkLxHEMxo2yfXh\n7hUtwKaxEwebIeKQwPeRPhDrSomH1dk1PYhU9v0MpkUPEqTFtC6royw4ZEM4clRS\nTzbaD1SCUQKBgQDhFXaBUFf7j3/6nNJRMjPYdDkzM/dbGle+PPLfG3Fze1A+XuFa\nZj05+GnrMD7nxvAHajz4Hi+gV7H+myP1KwN6LLbUibeFiK1myPuek7B7S/ysE24s\n7hnqSCwNgXKU/zLiZ/tAkV93PtD/iSf93pE8M+D044Cl639aSu93taWSOQKBgCyn\nuBo/cjDLeGuAam6COFLSnKPGIn+1TylSfOwDb0mgpuPIJcu5o3wYVhkVfXr6gPvR\nzLiWLiSnHZSl4jT4qtv1gSeGPK7Yw6V/UdQ809K8rK4nhnvaBU/IMadItsHltsl4\n7WP/KKLFMJ3wEVuDOhMG4eX5YyZmSMNnoaJrXgIRAoGAZQa1XuIKqqA69IB/fpMK\n9XsJ0tt5Ee+lqaVQe0rnUiLkAdAp4DR9gi52AuR7Gz5uzexGXBidnnvcFYG8uQaj\nduCN2cWsWkYl4NOV1TDmR6oqR0PXvAdZ5mQpKT3+yh5kKxl/ZKGysWV41jPYGr0i\nUAhnqJ04s3vWewHsRcg7IR8=\n-----END PRIVATE KEY-----\n",
+  "client_email": "pixel-tracking-sync@thynk-intent-dev-463522.iam.gserviceaccount.com",
+  "client_id": "100894576294585387170",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/pixel-tracking-sync%40thynk-intent-dev-463522.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

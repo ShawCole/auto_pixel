@@ -77,6 +77,86 @@ export async function ensureClientSchema(client: string) {
             }
         }
 
+        // Create triggers for NPN/CRD lookup
+        log(`🔧 Creating triggers for NPN/CRD lookup in database '${client}'...`);
+
+        // Trigger for superpixel_resolution_log
+        const resolutionTrigger = `
+            CREATE TRIGGER \`${client}\`.before_resolution_log_insert
+            BEFORE INSERT ON \`${client}\`.superpixel_resolution_log
+            FOR EACH ROW
+            BEGIN
+                DECLARE vNPN VARCHAR(255);
+                DECLARE vCRD VARCHAR(255);
+                
+                SELECT NPN, CRD INTO vNPN, vCRD
+                FROM accupoint_solutions.hash_emails
+                WHERE hash256 = NEW.hem_sha256
+                LIMIT 1;
+                
+                SET NEW.npn = vNPN;
+                SET NEW.crd = vCRD;
+            END
+        `;
+
+        // Trigger for superpixel_visitors
+        const visitorInsertTrigger = `
+            CREATE TRIGGER \`${client}\`.before_visitors_insert
+            BEFORE INSERT ON \`${client}\`.superpixel_visitors
+            FOR EACH ROW
+            BEGIN
+                DECLARE vNPN VARCHAR(255);
+                DECLARE vCRD VARCHAR(255);
+                
+                SELECT NPN, CRD INTO vNPN, vCRD
+                FROM accupoint_solutions.hash_emails
+                WHERE hash256 = NEW.hem_sha256
+                LIMIT 1;
+                
+                SET NEW.npn = vNPN;
+                SET NEW.crd = vCRD;
+            END
+        `;
+
+        // Trigger for superpixel_visitors update
+        const visitorUpdateTrigger = `
+            CREATE TRIGGER \`${client}\`.before_visitors_update
+            BEFORE UPDATE ON \`${client}\`.superpixel_visitors
+            FOR EACH ROW
+            BEGIN
+                DECLARE vNPN VARCHAR(255);
+                DECLARE vCRD VARCHAR(255);
+                
+                IF (NEW.npn IS NULL OR NEW.crd IS NULL) AND NEW.hem_sha256 IS NOT NULL THEN
+                    SELECT NPN, CRD INTO vNPN, vCRD
+                    FROM accupoint_solutions.hash_emails
+                    WHERE hash256 = NEW.hem_sha256
+                    LIMIT 1;
+                    
+                    IF vNPN IS NOT NULL THEN
+                        SET NEW.npn = vNPN;
+                    END IF;
+                    IF vCRD IS NOT NULL THEN
+                        SET NEW.crd = vCRD;
+                    END IF;
+                END IF;
+            END
+        `;
+
+        try {
+            await root.query(resolutionTrigger);
+            log(`✅ Resolution log trigger created for '${client}'`);
+
+            await root.query(visitorInsertTrigger);
+            log(`✅ Visitor insert trigger created for '${client}'`);
+
+            await root.query(visitorUpdateTrigger);
+            log(`✅ Visitor update trigger created for '${client}'`);
+        } catch (triggerError: any) {
+            log(`⚠️ Warning: Could not create triggers for '${client}':`, triggerError.message);
+            // Don't throw - triggers are optional
+        }
+
         log(`🎉 Database schema setup completed for client: ${client}`);
     } catch (error: any) {
         log("💥 Database operation failed:", {
