@@ -360,12 +360,18 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
 if (php_sapi_name() === 'cli') {
     // Check for specific client parameter
     $specificClient = null;
+    echo "Debug: Command line arguments: " . implode(' ', $argv) . "\n";
+    
     foreach ($argv as $arg) {
+        echo "Debug: Checking argument: '$arg'\n";
         if (strpos($arg, '--client=') === 0) {
             $specificClient = substr($arg, 9); // Remove '--client='
+            echo "Debug: Found client parameter: '$specificClient'\n";
             break;
         }
     }
+    
+    echo "Debug: Specific client: " . ($specificClient ?: 'null') . "\n";
     
     // Connect to MySQL
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
