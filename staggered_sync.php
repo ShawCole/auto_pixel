@@ -37,7 +37,7 @@ function syncClientBatch($mysqli, $service, $offset = 0, $limit = 3) {
     // Get batch of clients ordered by last sync time
     $sql = "SELECT * FROM pixel.pixel_sheets 
             WHERE sheet_id IS NOT NULL 
-            ORDER BY last_sync_at ASC NULLS FIRST 
+            ORDER BY COALESCE(last_sync_at, '1970-01-01') ASC 
             LIMIT $limit OFFSET $offset";
     
     $result = $mysqli->query($sql);
