@@ -37,14 +37,16 @@ function getGoogleClient() {
 function calculateOptimalTiming($totalSheets) {
     global $TARGET_SYNC_INTERVAL, $RATE_LIMIT_WINDOW, $MAX_REQUESTS_PER_WINDOW;
     
-    // Each sheet needs ~2 API calls (visitors + events)
-    $apiCallsPerSheet = 2;
+    // Each sheet (with 2 tabs) needs ~2 API calls (visitors + events) but they're paired
+    // So we treat each sheet as 1 unit that updates both tabs simultaneously
+    $apiCallsPerSheet = 2; // Still 2 calls, but they happen together
     $totalApiCalls = $totalSheets * $apiCallsPerSheet;
     
     // Calculate minimum time needed to stay within rate limits
     $minTimeNeeded = ($totalApiCalls / $MAX_REQUESTS_PER_WINDOW) * $RATE_LIMIT_WINDOW;
     
     // Calculate delay between sheets to spread over 5 minutes
+    // Each sheet gets its full 5-minute cycle, just staggered
     $availableTime = $TARGET_SYNC_INTERVAL - 10; // Leave 10 seconds buffer
     $delayBetweenSheets = max(1, floor($availableTime / $totalSheets));
     
@@ -59,7 +61,8 @@ function calculateOptimalTiming($totalSheets) {
         'estimated_total_time' => $totalSheets * $delayBetweenSheets,
         'api_calls_per_sheet' => $apiCallsPerSheet,
         'total_api_calls' => $totalApiCalls,
-        'rate_limit_safe' => ($totalApiCalls * $delayBetweenSheets) <= ($MAX_REQUESTS_PER_WINDOW * $RATE_LIMIT_WINDOW)
+        'rate_limit_safe' => ($totalApiCalls * $delayBetweenSheets) <= ($MAX_REQUESTS_PER_WINDOW * $RATE_LIMIT_WINDOW),
+        'sync_frequency_per_sheet' => $TARGET_SYNC_INTERVAL / $totalSheets // How often each sheet gets updated
     ];
 }
 
@@ -89,15 +92,18 @@ function syncAllSheetsDynamically($mysqli, $service) {
     }
     
     // Calculate optimal timing
+    // Strategy: Each sheet (with both tabs) gets updated every 5 minutes
+    // Sheets are staggered so they don't all update at the same time
     $timing = calculateOptimalTiming($totalSheets);
     
     echo "=== Dynamic Sync Started ===\n";
     echo "Total sheets: $totalSheets\n";
     echo "Delay between sheets: {$timing['delay_between_sheets']}s\n";
     echo "Estimated total time: {$timing['estimated_total_time']}s\n";
-    echo "API calls per sheet: {$timing['api_calls_per_sheet']}\n";
+    echo "API calls per sheet: {$timing['api_calls_per_sheet']} (both tabs updated together)\n";
     echo "Total API calls: {$timing['total_api_calls']}\n";
-    echo "Rate limit safe: " . ($timing['rate_limit_safe'] ? '✅ Yes' : '❌ No') . "\n\n";
+    echo "Rate limit safe: " . ($timing['rate_limit_safe'] ? '✅ Yes' : '❌ No') . "\n";
+    echo "Each sheet syncs every: " . round($timing['sync_frequency_per_sheet'], 1) . "s\n\n";
     
     $startTime = time();
     $successCount = 0;
@@ -114,10 +120,9 @@ function syncAllSheetsDynamically($mysqli, $service) {
             continue;
         }
         
-        // Sync visitors
+        // Sync both tabs together (Visitors + Events)
+        echo "Updating both tabs (Visitors + Events) for {$sheet['client_name']}...\n";
         $visitorsSuccess = syncVisitorsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service);
-        
-        // Sync events
         $eventsSuccess = syncEventsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service, $sheet['last_sync_at']);
         
         // Update last sync time if successful
