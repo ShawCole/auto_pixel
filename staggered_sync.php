@@ -7,6 +7,8 @@ require_once __DIR__ . '/vendor/autoload.php';
 
 use Google\Client;
 use Google\Service\Sheets;
+use Google\Service\Sheets\ValueRange;
+use Google\Service\Sheets\BatchUpdateValuesRequest;
 
 $dbHost = '34.31.66.104';
 $dbUser = 'root';
