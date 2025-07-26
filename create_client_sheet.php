@@ -99,7 +99,7 @@ function createGoogleSheet($clientName, $pixelId) {
         
         $sheets->spreadsheets_values->update(
             $spreadsheetId,
-            'Events!A1:P1',
+            'Events!A1:R1',
             new Google\Service\Sheets\ValueRange([
                 'values' => $eventsHeaders
             ]),
