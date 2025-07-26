@@ -92,9 +92,9 @@ function createGoogleSheet($clientName, $pixelId) {
         
         // Set up headers for Events sheet with all new columns
         $eventsHeaders = [[
-            'Timestamp', 'Event Type', 'URL', 'Elements', 'Referrer', 'IP Address', 
+            'Timestamp', 'Event Type', 'URL', 'Element', 'Referrer', 'IP Address', 
             'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 
-            'Phone', 'City', 'State', 'HemSha256'
+            'Phone', 'City', 'State', 'HemSha256', 'NPN', 'CRD'
         ]];
         
         $sheets->spreadsheets_values->update(

@@ -53,12 +53,12 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
             first_seen_at, 
             last_seen_at, 
             event_count,
-            last_visited_url,
-            last_element,
-            last_percentage,
-            last_referrer,
-            last_timestamp,
-            last_event,
+            url,
+            element,
+            percentage,
+            referrer,
+            event_timestamp,
+            event_type,
             npn,
             crd
         FROM superpixel_visitors 
@@ -89,12 +89,12 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['first_seen_at'] ?? '',
             $row['last_seen_at'] ?? '',
             $row['event_count'] ?? 0,
-            $row['last_visited_url'] ?? '',
-            $row['last_element'] ?? '',
-            $row['last_percentage'] ?? '',
-            $row['last_referrer'] ?? '',
-            $row['last_timestamp'] ?? '',
-            $row['last_event'] ?? '',
+            $row['url'] ?? '',
+            $row['element'] ?? '',
+            $row['percentage'] ?? '',
+            $row['referrer'] ?? '',
+            $row['event_timestamp'] ?? '',
+            $row['event_type'] ?? '',
             $row['npn'] ?? '',
             $row['crd'] ?? ''
         ];
@@ -125,8 +125,8 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
         'Last Element',
         'Last Percentage',
         'Last Referrer',
-        'Last Timestamp',
-        'Last Event',
+        'Last Event Timestamp',
+        'Last Event Type',
         'NPN',
         'CRD'
     ];
@@ -155,8 +155,8 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     $sql = "SELECT 
             event_timestamp, 
             event_type,
-            visited_url as url,
-            elements,
+            url,
+            element,
             referrer,
             ip_address, 
             uuid, 
@@ -168,7 +168,9 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             mobile_phone, 
             personal_city, 
             personal_state,
-            hem_sha256
+            hem_sha256,
+            npn,
+            crd
         FROM superpixel_resolution_log 
         WHERE event_timestamp IS NOT NULL 
         ORDER BY event_timestamp DESC 
@@ -186,7 +188,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['event_timestamp'] ?? '',
             $row['event_type'] ?? '',
             $row['url'] ?? '',
-            $row['elements'] ?? '',
+            $row['element'] ?? '',
             $row['referrer'] ?? '',
             $row['ip_address'] ?? '',
             $row['uuid'] ?? '',
@@ -198,7 +200,9 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['mobile_phone'] ?? '',
             $row['personal_city'] ?? '',
             $row['personal_state'] ?? '',
-            $row['hem_sha256'] ?? ''
+            $row['hem_sha256'] ?? '',
+            $row['npn'] ?? '',
+            $row['crd'] ?? ''
         ];
     }
     
@@ -208,29 +212,31 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     }
     
     // Updated headers with new columns
-    $headers = [
+            $headers = [
         'Timestamp', 
-        'Event Type',
-        'URL',
-        'Elements',
-        'Referrer',
-        'IP Address', 
+        'Event Type', 
+        'URL', 
+        'Element', 
+        'Referrer', 
+        'IP Address',
         'UUID', 
         'First Name', 
         'Last Name', 
         'Company', 
         'Job Title', 
         'Emails', 
-        'Phone', 
+        'Phone',
         'City', 
         'State',
-        'HemSha256'
+        'HemSha256',
+        'NPN',
+        'CRD'
     ];
     
     $allData = array_merge([$headers], $events);
     
-    // Update range to include all columns (A to P)
-    $range = 'Events!A1:P' . count($allData);
+    // Update range to include all columns (A to R)
+    $range = 'Events!A1:R' . count($allData);
     $body = new ValueRange(['values' => $allData]);
     
     try {
@@ -301,7 +307,7 @@ function getSheetsToSync() {
     }
     
     // Get sheets prioritized by: new sheets first, then oldest sync time
-    $sql = "SELECT client_name, sheet_id FROM pixel_sheets 
+    $sql = "SELECT client_name, sheet_id, last_sync_at FROM pixel_sheets 
             WHERE sheet_id IS NOT NULL 
             ORDER BY last_sync_at IS NULL DESC, COALESCE(last_sync_at, '1970-01-01') ASC 
             LIMIT $MAX_SHEETS_PER_RUN";
@@ -426,7 +432,7 @@ if ($specificClient) {
 
     $successCount = 0;
     foreach ($sheetsToSync as $index => $sheet) {
-        $isNew = $sheet['last_sync_at'] === null;
+        $isNew = !isset($sheet['last_sync_at']) || $sheet['last_sync_at'] === null;
         $success = syncSingleSheet($sheet['client_name'], $sheet['sheet_id'], $isNew);
         if ($success) $successCount++;
         
