@@ -273,14 +273,14 @@ try {
                         }
                     }
                     
-                    // Add last_* fields from event data
+                    // Add event fields (matching resolution log naming for consistency)
                     $visitor_data['hem_sha256'] = $insert_data['hem_sha256'] ?? null;
-                    $visitor_data['last_visited_url'] = $insert_data['visited_url'] ?? null;
-                    $visitor_data['last_element'] = isset($decodedEventData['element']) ? json_encode($decodedEventData['element']) : null;
-                    $visitor_data['last_percentage'] = $decodedEventData['percentage'] ?? null;
-                    $visitor_data['last_referrer'] = $decodedEventData['referrer'] ?? null;
-                    $visitor_data['last_timestamp'] = $decodedEventData['timestamp'] ?? null;
-                    $visitor_data['last_event'] = $event['event_type'] ?? null;
+                    $visitor_data['url'] = $insert_data['visited_url'] ?? null;
+                    $visitor_data['element'] = isset($decodedEventData['element']) ? json_encode($decodedEventData['element']) : null;
+                    $visitor_data['percentage'] = !empty($decodedEventData['percentage']) ? (int)$decodedEventData['percentage'] : null;
+                    $visitor_data['referrer'] = $decodedEventData['referrer'] ?? null;
+                    $visitor_data['event_timestamp'] = $decodedEventData['timestamp'] ?? null;
+                    $visitor_data['event_type'] = $event['event_type'] ?? null;
                     
                     if (!empty($visitor_data)) {
                         // Build INSERT ... ON DUPLICATE KEY UPDATE query
@@ -290,15 +290,15 @@ try {
                         
                         foreach ($visitor_data as $key => $value) {
                             $escaped_key = "`" . $mysqli->real_escape_string($key) . "`";
-                            $escaped_value = "'" . $mysqli->real_escape_string($value) . "'";
+                            $escaped_value = ($value === null) ? "NULL" : "'" . $mysqli->real_escape_string($value) . "'";
                             
                             $visitor_columns[] = $escaped_key;
                             $visitor_values[] = $escaped_value;
                             
                             // Use COALESCE to not overwrite existing data with empty values
                             if ($key !== 'uuid') { // Don't update UUID in UPDATE clause
-                                // Always update last_* fields
-                                if (strpos($key, 'last_') === 0) {
+                                // Always update event-related fields (latest visit data)
+                                if (in_array($key, ['url', 'element', 'percentage', 'referrer', 'event_timestamp', 'event_type', 'hem_sha256'])) {
                                     $update_parts[] = "$escaped_key = $escaped_value";
                                 } else {
                                     $update_parts[] = "$escaped_key = COALESCE(NULLIF($escaped_value, ''), $escaped_key, $escaped_value)";

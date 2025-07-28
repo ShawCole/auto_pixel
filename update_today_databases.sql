@@ -1,0 +1,38 @@
+-- Update today's test databases with missing columns
+-- Safe update script - will skip if columns already exist
+
+-- Update TEST_NEW_COLUMNS
+ALTER TABLE TEST_NEW_COLUMNS.superpixel_visitors 
+ADD COLUMN IF NOT EXISTS hem_sha256 text CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_visited_url varchar(1000) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_element text CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_percentage int DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_referrer varchar(1000) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_timestamp varchar(100) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_event varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS npn varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS crd varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL;
+
+ALTER TABLE TEST_NEW_COLUMNS.superpixel_resolution_log 
+ADD COLUMN IF NOT EXISTS elements text CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS npn varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS crd varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL;
+
+-- Update DEBUG_DATABASE_CREATION (if it needs updating)
+ALTER TABLE DEBUG_DATABASE_CREATION.superpixel_visitors 
+ADD COLUMN IF NOT EXISTS hem_sha256 text CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_visited_url varchar(1000) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_element text CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_percentage int DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_referrer varchar(1000) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_timestamp varchar(100) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS last_event varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS npn varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS crd varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL;
+
+ALTER TABLE DEBUG_DATABASE_CREATION.superpixel_resolution_log 
+ADD COLUMN IF NOT EXISTS elements text CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS npn varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL,
+ADD COLUMN IF NOT EXISTS crd varchar(255) CHARACTER SET utf32 COLLATE utf32_general_ci DEFAULT NULL;
+
+SELECT 'Today databases updated successfully' as status; 

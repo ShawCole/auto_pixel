@@ -12,15 +12,16 @@ $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 $credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
 
-// Get client name and pixel ID from command line arguments
-if ($argc < 3) {
-    die(json_encode(['error' => 'Usage: php create_client_sheet.php CLIENT_NAME PIXEL_ID']));
+// Get client name, pixel ID, and website URL from command line arguments
+if ($argc < 4) {
+    die(json_encode(['error' => 'Usage: php create_client_sheet.php CLIENT_NAME PIXEL_ID WEBSITE_URL']));
 }
 
 $clientName = $argv[1];
 $pixelId = $argv[2];
+$websiteUrl = $argv[3];
 
-function createGoogleSheet($clientName, $pixelId) {
+function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
     global $credentialsPath, $dbHost, $dbUser, $dbPass;
     
     try {
@@ -171,8 +172,8 @@ function createGoogleSheet($clientName, $pixelId) {
             throw new Exception("Database connection failed: " . $mysqli->connect_error);
         }
         
-        $stmt = $mysqli->prepare("INSERT INTO pixel_sheets (client_name, pixel_id, sheet_id, sheet_url) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $clientName, $pixelId, $spreadsheetId, $spreadsheetUrl);
+        $stmt = $mysqli->prepare("INSERT INTO pixel_sheets (client_name, pixel_id, sheet_id, sheet_url, client_website) VALUES (?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssss", $clientName, $pixelId, $spreadsheetId, $spreadsheetUrl, $websiteUrl);
         
         if (!$stmt->execute()) {
             throw new Exception("Failed to save sheet info: " . $stmt->error);
@@ -196,6 +197,6 @@ function createGoogleSheet($clientName, $pixelId) {
 }
 
 // Execute and return JSON result
-$result = createGoogleSheet($clientName, $pixelId);
+$result = createGoogleSheet($clientName, $pixelId, $websiteUrl);
 echo json_encode($result);
 ?> 
