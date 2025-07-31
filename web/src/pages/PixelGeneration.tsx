@@ -10,17 +10,12 @@ export default function PixelGeneration() {
 
     const formatWebsiteUrl = (url: string) => {
         let formatted = url.trim()
+	// Only add https:// if no protocol is specified, otherwise leave URL exactly as entered
         if (!/^https?:\/\//i.test(formatted)) {
-            formatted = formatted.replace(/^www\./i, '')
-            formatted = 'https://www.' + formatted
-        }
-        // Optionally, add .com if missing
-        if (!/\.[a-z]{2,}$/i.test(formatted)) {
-            formatted += '.com'
+            formatted = 'https://' + formatted
         }
         return formatted
     }
-
     const handleSubmit = async () => {
         setError(null)
         setPixelCode('')
