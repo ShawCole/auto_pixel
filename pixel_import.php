@@ -1,27 +1,34 @@
 <?php
-// pixel_import.php for ThynkData - Full Field Mapping (MySQL)
+// pixel_import.php for ThynkData - FINAL FIXED VERSION WITH PROPER FIELD MAPPING
 
 header('Content-Type: application/json');
 
 $dbHost = getenv('DB_HOST') ?: '34.31.66.104';
 $dbUser = getenv('DB_USER') ?: 'root';
 $dbPass = getenv('DB_PASS') ?: 'AccuPoint01!';
-#$dbName = getenv('DB_NAME') ?: 'pixel';
 $client = isset($_GET['client']) ? preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['client']) : null;
 $dbName = $client ?: (getenv('DB_NAME') ?: 'pixel');
 
-// For GET requests (webhook tests), don't fail if database doesn't exist
+$logFile = '/var/www/hook.thynkdata.com/pixel_import_debug.log';
+
+// Logging function
+function debugLog($message) {
+    global $logFile;
+    file_put_contents($logFile, "[" . date('c') . "] " . $message . "\n", FILE_APPEND);
+}
+
+// For GET requests (webhook tests)
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    // Just test MySQL connectivity, not specific database
     $testConn = new mysqli($dbHost, $dbUser, $dbPass);
     if ($testConn->connect_error) {
+        debugLog("GET request - MySQL connection failed: " . $testConn->connect_error);
         http_response_code(500);
         echo json_encode(['error' => 'MySQL connection failed']);
         exit;
     }
     $testConn->close();
     
-    // Return success for webhook test
+    debugLog("GET request successful for client: " . ($client ?: 'none'));
     echo json_encode(['status' => 'success', 'message' => 'Webhook endpoint is reachable']);
     exit;
 }
@@ -30,207 +37,312 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 $mysqli = new mysqli($dbHost, $dbUser, $dbPass, $dbName);
 if ($mysqli->connect_error) {
     $err = "Connection failed: " . $mysqli->connect_error;
-    send_email(array('Database Connection Error' => $err), "Database Connection Error");
+    debugLog("POST request - Database connection failed: " . $err);
     http_response_code(500);
     echo json_encode(['error' => 'DB connection failed']);
     exit;
 }
 
-// SendGrid Email API
+// FIXED Email function - properly handle all data types
 function send_email($data, $subject_text) {
-    // Your SendGrid API key
     $sendgridApiKey = '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';
-
-    // Define sender and recipient
     $fromEmail = 'noreply@accupointsolutions.email';
     $subject = '[THYNKDATA] ' . $subject_text;
+    $toEmails = ['joseabreu@accupointsolutions.com', 'shaw@accupointsolutions.com'];
 
-    // Multiple recipients
-    $toEmails = [
-	    'joseabreu@accupointsolutions.com',
-	    'shaw@accupointsolutions.com'
-    ];
-
-    // Format POST array into a readable string
     $postBody = '';
     foreach ($data as $key => $value) {
-        $postBody .= $key . ': ' . print_r($value, true) . "\n";
+        // Handle all possible data types safely
+        if (is_array($value)) {
+            $postBody .= $key . ': ' . json_encode($value, JSON_UNESCAPED_SLASHES) . "\n";
+        } elseif (is_object($value)) {
+            $postBody .= $key . ': ' . json_encode($value, JSON_UNESCAPED_SLASHES) . "\n";
+        } elseif (is_null($value)) {
+            $postBody .= $key . ': NULL' . "\n";
+        } elseif (is_bool($value)) {
+            $postBody .= $key . ': ' . ($value ? 'TRUE' : 'FALSE') . "\n";
+        } else {
+            $postBody .= $key . ': ' . strval($value) . "\n";
+        }
     }
 
-    // Construct email body in ARRAY
     $emailData = array(
-        'from'      => $fromEmail,
-        'fromname'  => "AccuPoint Solutions",
-        'subject'   => $subject,
-        'html'      => $postBody
+        'from' => $fromEmail,
+        'fromname' => "AccuPoint Solutions",
+        'subject' => $subject,
+        'html' => $postBody
     );
 
-    // Append multiple 'to[]' fields
     foreach ($toEmails as $to) {
         $emailData['to'][] = $to;
     }
 
-    // Initialize cURL
     $session = curl_init('https://api.sendgrid.com/api/mail.send.json');
     curl_setopt($session, CURLOPT_HTTPHEADER, array('Authorization: Bearer ' . $sendgridApiKey));
-    // Tell curl to use HTTP POST
     curl_setopt($session, CURLOPT_POST, true);
-    // Tell curl that this is the body of the POST
     curl_setopt($session, CURLOPT_POSTFIELDS, $emailData);
-    // Tell curl not to return headers, but do return the response
     curl_setopt($session, CURLOPT_HEADER, false);
     curl_setopt($session, CURLOPT_RETURNTRANSFER, true);
     
-    // Send request
     $response = curl_exec($session);
-    $response = json_decode($response);
     curl_close($session);
-
-//    if(isset($response->message) && $response->message == "success") {
-//        echo 'email sent - ' . $subject_text . " :: " . $postBody;
-//    } else {
-//        echo 'email failed - '. $subject_text . " :: " . $postBody;
-//    }
 }
 
 try {
     if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        // Get the raw POST data
+        debugLog("Processing POST request for client: " . ($client ?: 'none'));
+        
         $rawData = file_get_contents('php://input');
         $decoded = json_decode($rawData, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
             throw new Exception("Invalid JSON: " . json_last_error_msg());
         }
-	#send_email($decoded, "Hook POST Data Received");
-	$logFile = '/var/www/hook.thynkdata.com/pixel_import_debug.log';
-	file_put_contents($logFile, "[" . date('c') . "] Decoded payload: " . print_r($decoded, true) . "\n", FILE_APPEND);
 
+        debugLog("Decoded payload size: " . count($decoded));
 
-	if(isset($decoded['events']) && is_array($decoded['events'])) {
-            $events = $decoded['events'] ?? [];
+        if(isset($decoded['events']) && is_array($decoded['events'])) {
+            $events = $decoded['events'];
+            debugLog("Processing " . count($events) . " events");
     
-            foreach ($events as $event) {
-                $pixel_data = $event['resolution'];
-                $event_data = @$event['event_data']; 
+            foreach ($events as $eventIndex => $event) {
+                debugLog("Processing event $eventIndex");
+                
+                $pixel_data = isset($event['resolution']) ? $event['resolution'] : [];
+                $event_data = isset($event['event_data']) ? $event['event_data'] : [];
     
                 if (is_string($event_data)) {
-                    $decodedEventData = json_decode($event_data, true);
-    
+                    $event_data = json_decode($event_data, true) ?: [];
                 }
                 
-				$insert_data = array(
-					"pixel_id" => @$event['pixel_id'], 
-					"hem_sha256" => @$event['hem_sha256'], 
-					"event_timestamp" => @$event['event_timestamp'], 
-					"event_type" => @$event['event_type'],
-				        "referrer_url" => @$event_data['referrer_url'],	
-					"ip_address" => @$event['ip_address'], 
-					"activity_start_date" => @$event['activity_start_date'], 
-					"activity_end_date" => @$event['activity_end_date'], 
-					"visited_page"=>@$event_data['title'],
-					"visited_url"=>@$event_data['url'],
-					"referrer"=>@$event_data['referrer'],
-					"visit_timestamp"=>@$event_data['timestamp'],
-					"UUID" => @$pixel_data['UUID'], 
-					"DEEP_VERIFIED_EMAILS" => @$pixel_data['DEEP_VERIFIED_EMAILS'], 
-					"FIRST_NAME" => @$pixel_data['FIRST_NAME'], 
-					"LAST_NAME" => @$pixel_data['LAST_NAME'], 
-					"DIRECT_NUMBER" => @$pixel_data['DIRECT_NUMBER'],
-					"DIRECT_NUMBER_DNC" => @$pixel_data['DIRECT_NUMBER_DNC'],
-					"MOBILE_PHONE" => @$pixel_data['MOBILE_PHONE'], 
-					"MOBILE_PHONE_DNC" => @$pixel_data['MOBILE_PHONE_DNC'], 
-					"PERSONAL_ADDRESS" => @$pixel_data['PERSONAL_ADDRESS'], 
-					"PERSONAL_CITY" => @$pixel_data['PERSONAL_CITY'], 
-					"PERSONAL_PHONE" => @$pixel_data['PERSONAL_PHONE'], 
-					"PERSONAL_PHONE_DNC" => @$pixel_data['PERSONAL_PHONE_DNC'], 
-					"PERSONAL_STATE" => @$pixel_data['PERSONAL_STATE'], 
-					"PERSONAL_ZIP" => @$pixel_data['PERSONAL_ZIP'], 
-					"PERSONAL_ZIP4" => @$pixel_data['PERSONAL_ZIP4'], 
-					"SOCIAL_CONNECTIONS" => @$pixel_data['SOCIAL_CONNECTIONS'], 
-					"AGE_RANGE" => @$pixel_data['AGE_RANGE'], 
-					"CHILDREN" => @$pixel_data['CHILDREN'], 
-					"GENDER" => @$pixel_data['GENDER'], 
-					"HOMEOWNER" => @$pixel_data['HOMEOWNER'], 
-					"MARRIED" => @$pixel_data['MARRIED'],
-					"INCOME_RANGE" =>@$pixel_data['INCOME_RANGE'], 
-					"NET_WORTH" => @$pixel_data['NET_WORTH'], 
-					"SHA256_PERSONAL_EMAIL" => @$pixel_data['SHA256_PERSONAL_EMAIL'], 
-					"SHA256_BUSINESS_EMAIL" => @$pixel_data['SHA256_BUSINESS_EMAIL'], 
-					"LAST_UPDATED" => @$pixel_data['LAST_UPDATED'], 
-					"COMPANY_ADDRESS" => @$pixel_data['COMPANY_ADDRESS'], 
-					"COMPANY_DESCRIPTIONS" => @$pixel_data['COMPANY_DESCRIPTIONS'], 
-					"COMPANY_DOMAIN" => @$pixel_data['COMPANY_DOMAIN'], 
-					"COMPANY_EMPLOYEE_COUNT" => @$pixel_data['COMPANY_EMPLOYEE_COUNT'], 
-					"COMPANY_LINKEDIN_URL" => @$pixel_data['COMPANY_LINKEDIN_URL'], 
-					"COMPANY_NAME" => @$pixel_data['COMPANY_NAME'], 
-					"COMPANY_NAME_HISTORY"=> (!empty($pixel_data['COMPANY_NAME_HISTORY']) ? implode(",",$pixel_data['COMPANY_NAME_HISTORY']) : ""),  
-					"COMPANY_PHONE" => @$pixel_data['COMPANY_PHONE'], 
-					"COMPANY_REVENUE" => @$pixel_data['COMPANY_REVENUE'], 
-					"COMPANY_SIC" => @$pixel_data['COMPANY_SIC'], 
-					"COMPANY_NAICS" => @$pixel_data['COMPANY_NAICS'], 
-					"COMPANY_CITY" => @$pixel_data['COMPANY_CITY'], 
-					"COMPANY_STATE" => @$pixel_data['COMPANY_STATE'], 
-					"COMPANY_ZIP" => @$pixel_data['COMPANY_ZIP'], 
-					"COMPANY_INDUSTRY" => @$pixel_data['COMPANY_INDUSTRY'], 
-					"COMPANY_LAST_UPDATED" => @$pixel_data['COMPANY_LAST_UPDATED'], 
-					"DEPARTMENT" => @$pixel_data['DEPARTMENT'], 
-					"EDUCATION_HISTORY" => (!empty($event['EDUCATION_HISTORY']) ? json_encode($event['EDUCATION_HISTORY']) : ""), 
-					"JOB_TITLE" => @$pixel_data['JOB_TITLE'], 
-					"JOB_TITLE_HISTORY"=> (!empty($pixel_data['JOB_TITLE_HISTORY']) ? implode(",",$pixel_data['JOB_TITLE_HISTORY']) : ""),  
-					"LINKEDIN_URL" => @$pixel_data['LINKEDIN_URL'], 
-					"SENIORITY_LEVEL" => @$pixel_data['SENIORITY_LEVEL'], 
-					"PERSONAL_EMAIL" => @$pixel_data['PERSONAL_EMAIL'], 
-					"PERSONAL_EMAILS" => @$pixel_data['PERSONAL_EMAILS'], 
-					"BUSINESS_EMAIL" => @$pixel_data['BUSINESS_EMAIL'], 
-					"SKIPTRACE_NAME"=>@$pixel_data['SKIPTRACE_NAME'],
-					"PERSONAL_EMAIL" => @$pixel_data['PERSONAL_EMAIL'], 
-					"PERSONAL_EMAILS" => @$pixel_data['PERSONAL_EMAILS'], 
-					"BUSINESS_EMAIL" => @$pixel_data['BUSINESS_EMAIL'], 
-					"SKIPTRACE_NAME"=>@$pixel_data['SKIPTRACE_NAME'],
-					"SKIPTRACE_ADDRESS"=>@$pixel_data['SKIPTRACE_ADDRESS'],
-					"SKIPTRACE_CITY"=>@$pixel_data['SKIPTRACE_CITY'],
-					"SKIPTRACE_STATE"=>@$pixel_data['SKIPTRACE_STATE'],
-					"SKIPTRACE_ZIP"=>@$pixel_data['SKIPTRACE_ZIP'],
-					"SKIPTRACE_LANDLINE_NUMBERS"=>@$pixel_data['skiptrace']['LANDLINE_NUMBERS'],
-					"SKIPTRACE_WIRELESS_NUMBERS"=>@$pixel_data['SKIPTRACE_WIRELESS_NUMBERS'],
-					"SKIPTRACE_CREDIT_RATING"=>@$pixel_data['skiptrace']['CREDIT_RATING'],
-					"SKIPTRACE_DNC"=>@$pixel_data['SKIPTRACE_DNC'],
-					"SKIPTRACE_ETHNIC_CODE"=>@$pixel_data['SKIPTRACE_ETHNIC_CODE'],
-					"SKIPTRACE_LANGUAGE_CODE"=>@$pixel_data['SKIPTRACE_LANGUAGE_CODE'],
-					"SKIPTRACE_MATCH_SCORE"=>@$pixel_data['SKIPTRACE_MATCH_SCORE'],
-					"SKIPTRACE_EXACT_AGE"=>@$pixel_data['SKIPTRACE_EXACT_AGE'],
-					"SKIPTRACE_IP"=>@$pixel_data['SKIPTRACE_IP'],
-					"SKIPTRACE_B2B_WEBSITE" => @$pixel_data['SKIPTRACE_B2B_WEBSITE'],
-					"SKIPTRACE_B2B_ADDRESS" => @$pixel_data['SKIPTRACE_B2B_ADDRESS'],
-					"SKIPTRACE_B2B_PHONE" => @$pixel_data['SKIPTRACE_B2B_PHONE'],
-					"SKIPTRACE_B2B_SOURCE" => @$pixel_data['SKIPTRACE_B2B_SOURCE'],
-				);
+                // FIXED: Map SimpleAudience UPPERCASE fields to lowercase database columns
+                $insert_data = array(
+                    // Basic event fields
+                    "pixel_id" => isset($event['pixel_id']) ? strval($event['pixel_id']) : '', 
+                    "hem_sha256" => isset($event['hem_sha256']) ? strval($event['hem_sha256']) : '', 
+                    "event_timestamp" => isset($event['event_timestamp']) ? strval($event['event_timestamp']) : '', 
+                    "event_type" => isset($event['event_type']) ? strval($event['event_type']) : '',
+                    "referrer_url" => isset($event_data['referrer_url']) ? strval($event_data['referrer_url']) : '',
+                    "ip_address" => isset($event['ip_address']) ? strval($event['ip_address']) : '', 
+                    "activity_start_date" => isset($event['activity_start_date']) ? strval($event['activity_start_date']) : '', 
+                    "activity_end_date" => isset($event['activity_end_date']) ? strval($event['activity_end_date']) : '', 
+                    
+                    // Event data fields
+                    "title" => isset($event_data['title']) ? strval($event_data['title']) : '',
+                    "url" => isset($event_data['url']) ? strval($event_data['url']) : '',
+                    "referrer" => isset($event_data['referrer']) ? strval($event_data['referrer']) : '',
+                    "timestamp" => isset($event_data['timestamp']) ? strval($event_data['timestamp']) : '',
+                    "percentage" => isset($event_data['percentage']) ? strval($event_data['percentage']) : '',
+                    "element" => isset($event_data['element']) ? json_encode($event_data['element']) : '',
+                    
+                    // Personal info - map UPPERCASE SimpleAudience fields to lowercase DB columns
+                    "uuid" => isset($pixel_data['UUID']) ? strval($pixel_data['UUID']) : '', 
+                    "first_name" => isset($pixel_data['FIRST_NAME']) ? strval($pixel_data['FIRST_NAME']) : '', 
+                    "last_name" => isset($pixel_data['LAST_NAME']) ? strval($pixel_data['LAST_NAME']) : '', 
+                    "personal_address" => isset($pixel_data['PERSONAL_ADDRESS']) ? strval($pixel_data['PERSONAL_ADDRESS']) : '', 
+                    "personal_city" => isset($pixel_data['PERSONAL_CITY']) ? strval($pixel_data['PERSONAL_CITY']) : '', 
+                    "personal_state" => isset($pixel_data['PERSONAL_STATE']) ? strval($pixel_data['PERSONAL_STATE']) : '', 
+                    "personal_zip" => isset($pixel_data['PERSONAL_ZIP']) ? strval($pixel_data['PERSONAL_ZIP']) : '', 
+                    "personal_zip4" => isset($pixel_data['PERSONAL_ZIP4']) ? strval($pixel_data['PERSONAL_ZIP4']) : '', 
+                    "age_range" => isset($pixel_data['AGE_RANGE']) ? strval($pixel_data['AGE_RANGE']) : '', 
+                    "children" => isset($pixel_data['CHILDREN']) ? strval($pixel_data['CHILDREN']) : '', 
+                    "gender" => isset($pixel_data['GENDER']) ? strval($pixel_data['GENDER']) : '', 
+                    "homeowner" => isset($pixel_data['HOMEOWNER']) ? strval($pixel_data['HOMEOWNER']) : '', 
+                    "married" => isset($pixel_data['MARRIED']) ? strval($pixel_data['MARRIED']) : '',
+                    "income_range" => isset($pixel_data['INCOME_RANGE']) ? strval($pixel_data['INCOME_RANGE']) : '', 
+                    "net_worth" => isset($pixel_data['NET_WORTH']) ? strval($pixel_data['NET_WORTH']) : '', 
+                    
+                    // Contact info
+                    "direct_number" => isset($pixel_data['DIRECT_NUMBER']) ? strval($pixel_data['DIRECT_NUMBER']) : '',
+                    "direct_number_dnc" => isset($pixel_data['DIRECT_NUMBER_DNC']) ? strval($pixel_data['DIRECT_NUMBER_DNC']) : '',
+                    "mobile_phone" => isset($pixel_data['MOBILE_PHONE']) ? strval($pixel_data['MOBILE_PHONE']) : '', 
+                    "mobile_phone_dnc" => isset($pixel_data['MOBILE_PHONE_DNC']) ? strval($pixel_data['MOBILE_PHONE_DNC']) : '', 
+                    "personal_phone" => isset($pixel_data['PERSONAL_PHONE']) ? strval($pixel_data['PERSONAL_PHONE']) : '', 
+                    "personal_phone_dnc" => isset($pixel_data['PERSONAL_PHONE_DNC']) ? strval($pixel_data['PERSONAL_PHONE_DNC']) : '', 
+                    "personal_emails" => isset($pixel_data['PERSONAL_EMAILS']) ? strval($pixel_data['PERSONAL_EMAILS']) : '', 
+                    "business_email" => isset($pixel_data['BUSINESS_EMAIL']) ? strval($pixel_data['BUSINESS_EMAIL']) : '',
+                    "deep_verified_emails" => isset($pixel_data['DEEP_VERIFIED_EMAILS']) ? strval($pixel_data['DEEP_VERIFIED_EMAILS']) : '', 
+                    "sha256_personal_email" => isset($pixel_data['SHA256_PERSONAL_EMAIL']) ? strval($pixel_data['SHA256_PERSONAL_EMAIL']) : '', 
+                    "sha256_business_email" => isset($pixel_data['SHA256_BUSINESS_EMAIL']) ? strval($pixel_data['SHA256_BUSINESS_EMAIL']) : '', 
+                    
+                    // Company info
+                    "company_address" => isset($pixel_data['COMPANY_ADDRESS']) ? strval($pixel_data['COMPANY_ADDRESS']) : '', 
+                    "company_name" => isset($pixel_data['COMPANY_NAME']) ? strval($pixel_data['COMPANY_NAME']) : '', 
+                    "company_city" => isset($pixel_data['COMPANY_CITY']) ? strval($pixel_data['COMPANY_CITY']) : '', 
+                    "company_state" => isset($pixel_data['COMPANY_STATE']) ? strval($pixel_data['COMPANY_STATE']) : '', 
+                    "company_zip" => isset($pixel_data['COMPANY_ZIP']) ? strval($pixel_data['COMPANY_ZIP']) : '', 
+                    "company_description" => isset($pixel_data['COMPANY_DESCRIPTION']) ? strval($pixel_data['COMPANY_DESCRIPTION']) : '', 
+                    "company_domain" => isset($pixel_data['COMPANY_DOMAIN']) ? strval($pixel_data['COMPANY_DOMAIN']) : '', 
+                    "company_employee_count" => isset($pixel_data['COMPANY_EMPLOYEE_COUNT']) ? strval($pixel_data['COMPANY_EMPLOYEE_COUNT']) : '', 
+                    "company_industry" => isset($pixel_data['COMPANY_INDUSTRY']) ? strval($pixel_data['COMPANY_INDUSTRY']) : '', 
+                    "company_phone" => isset($pixel_data['COMPANY_PHONE']) ? strval($pixel_data['COMPANY_PHONE']) : '', 
+                    "company_revenue" => isset($pixel_data['COMPANY_REVENUE']) ? strval($pixel_data['COMPANY_REVENUE']) : '', 
+                    "company_sic" => isset($pixel_data['COMPANY_SIC']) ? strval($pixel_data['COMPANY_SIC']) : '', 
+                    "company_naics" => isset($pixel_data['COMPANY_NAICS']) ? strval($pixel_data['COMPANY_NAICS']) : '', 
+                    "company_name_history" => isset($pixel_data['COMPANY_NAME_HISTORY']) ? strval($pixel_data['COMPANY_NAME_HISTORY']) : '', 
+                    
+                    // Professional info
+                    "job_title" => isset($pixel_data['JOB_TITLE']) ? strval($pixel_data['JOB_TITLE']) : '', 
+                    "job_title_history" => isset($pixel_data['JOB_TITLE_HISTORY']) ? strval($pixel_data['JOB_TITLE_HISTORY']) : '', 
+                    "headline" => isset($pixel_data['HEADLINE']) ? strval($pixel_data['HEADLINE']) : '', 
+                    "department" => isset($pixel_data['DEPARTMENT']) ? strval($pixel_data['DEPARTMENT']) : '', 
+                    "seniority_level" => isset($pixel_data['SENIORITY_LEVEL']) ? strval($pixel_data['SENIORITY_LEVEL']) : '', 
+                    "inferred_years_experience" => isset($pixel_data['INFERRED_YEARS_EXPERIENCE']) ? strval($pixel_data['INFERRED_YEARS_EXPERIENCE']) : '', 
+                    "education_history" => isset($pixel_data['EDUCATION_HISTORY']) ? strval($pixel_data['EDUCATION_HISTORY']) : '', 
+                    
+                    // Social
+                    "linkedin_url" => isset($pixel_data['LINKEDIN_URL']) ? strval($pixel_data['LINKEDIN_URL']) : '', 
+                    "twitter_url" => isset($pixel_data['TWITTER_URL']) ? strval($pixel_data['TWITTER_URL']) : '', 
+                    "facebook_url" => isset($pixel_data['FACEBOOK_URL']) ? strval($pixel_data['FACEBOOK_URL']) : '', 
+                    "social_connections" => isset($pixel_data['SOCIAL_CONNECTIONS']) ? strval($pixel_data['SOCIAL_CONNECTIONS']) : '', 
+                    "skills" => isset($pixel_data['SKILLS']) ? strval($pixel_data['SKILLS']) : '', 
+                    "interests" => isset($pixel_data['INTERESTS']) ? strval($pixel_data['INTERESTS']) : '', 
+                    
+                    // Skiptrace data
+                    "skiptrace_match_score" => isset($pixel_data['SKIPTRACE_MATCH_SCORE']) ? strval($pixel_data['SKIPTRACE_MATCH_SCORE']) : '', 
+                    "skiptrace_name" => isset($pixel_data['SKIPTRACE_NAME']) ? strval($pixel_data['SKIPTRACE_NAME']) : '', 
+                    "skiptrace_address" => isset($pixel_data['SKIPTRACE_ADDRESS']) ? strval($pixel_data['SKIPTRACE_ADDRESS']) : '', 
+                    "skiptrace_city" => isset($pixel_data['SKIPTRACE_CITY']) ? strval($pixel_data['SKIPTRACE_CITY']) : '', 
+                    "skiptrace_state" => isset($pixel_data['SKIPTRACE_STATE']) ? strval($pixel_data['SKIPTRACE_STATE']) : '', 
+                    "skiptrace_zip" => isset($pixel_data['SKIPTRACE_ZIP']) ? strval($pixel_data['SKIPTRACE_ZIP']) : '', 
+                    "skiptrace_landline_numbers" => isset($pixel_data['SKIPTRACE_LANDLINE_NUMBERS']) ? strval($pixel_data['SKIPTRACE_LANDLINE_NUMBERS']) : '', 
+                    "skiptrace_wireless_numbers" => isset($pixel_data['SKIPTRACE_WIRELESS_NUMBERS']) ? strval($pixel_data['SKIPTRACE_WIRELESS_NUMBERS']) : '', 
+                    "skiptrace_credit_rating" => isset($pixel_data['SKIPTRACE_CREDIT_RATING']) ? strval($pixel_data['SKIPTRACE_CREDIT_RATING']) : '', 
+                    "skiptrace_dnc" => isset($pixel_data['SKIPTRACE_DNC']) ? strval($pixel_data['SKIPTRACE_DNC']) : '', 
+                    "skiptrace_exact_age" => isset($pixel_data['SKIPTRACE_EXACT_AGE']) ? strval($pixel_data['SKIPTRACE_EXACT_AGE']) : '', 
+                    "skiptrace_ethnic_code" => isset($pixel_data['SKIPTRACE_ETHNIC_CODE']) ? strval($pixel_data['SKIPTRACE_ETHNIC_CODE']) : '', 
+                    "skiptrace_language_code" => isset($pixel_data['SKIPTRACE_LANGUAGE_CODE']) ? strval($pixel_data['SKIPTRACE_LANGUAGE_CODE']) : '', 
+                    "skiptrace_ip" => isset($pixel_data['SKIPTRACE_IP']) ? strval($pixel_data['SKIPTRACE_IP']) : '', 
+                    "skiptrace_b2b_address" => isset($pixel_data['SKIPTRACE_B2B_ADDRESS']) ? strval($pixel_data['SKIPTRACE_B2B_ADDRESS']) : '', 
+                    "skiptrace_b2b_phone" => isset($pixel_data['SKIPTRACE_B2B_PHONE']) ? strval($pixel_data['SKIPTRACE_B2B_PHONE']) : '', 
+                    "skiptrace_b2b_source" => isset($pixel_data['SKIPTRACE_B2B_SOURCE']) ? strval($pixel_data['SKIPTRACE_B2B_SOURCE']) : '', 
+                    "skiptrace_b2b_website" => isset($pixel_data['SKIPTRACE_B2B_WEBSITE']) ? strval($pixel_data['SKIPTRACE_B2B_WEBSITE']) : '', 
+                    
+                    // Other fields
+                    "valid_phones" => isset($pixel_data['VALID_PHONES']) ? strval($pixel_data['VALID_PHONES']) : ''
+                );
                 
+                // Build SQL with safe escaping
                 $columns = [];
                 $values = [];
     
                 foreach ($insert_data as $key => $value) {
                     $columns[] = "`" . $mysqli->real_escape_string($key) . "`";
-                    $values[] = "'" . $mysqli->real_escape_string(is_array($value) ? implode(', ', $value) : $value) . "'";
+                    $values[] = "'" . $mysqli->real_escape_string($value) . "'";
                 }
                 
+                // Step 1: Insert raw event into superpixel_resolution_log
                 $sql = "INSERT INTO superpixel_resolution_log (" . implode(",", $columns) . ") VALUES (" . implode(",", $values) . ")";
+                debugLog("Executing event SQL for event $eventIndex");
 
                 if (!$mysqli->query($sql)) {
-                    throw new Exception("Insert failed: " . $mysqli->error . "\nSQL: " . $sql);
+                    $error = "Event insert failed for event $eventIndex: " . $mysqli->error;
+                    debugLog($error);
+                    throw new Exception($error);
+                }
+                
+                debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
+                
+                // Step 2: Upsert visitor profile into superpixel_visitors (if UUID exists)
+                if (!empty($insert_data['uuid'])) {
+                    // Extract only visitor profile fields (exclude event-specific fields)
+                    $visitor_fields = [
+                        'uuid', 'first_name', 'last_name', 'personal_address', 'personal_city', 
+                        'personal_state', 'personal_zip', 'personal_zip4', 'age_range', 'children', 
+                        'gender', 'homeowner', 'married', 'net_worth', 'income_range', 'direct_number', 
+                        'direct_number_dnc', 'mobile_phone', 'mobile_phone_dnc', 'personal_phone', 
+                        'personal_phone_dnc', 'business_email', 'personal_emails', 'deep_verified_emails', 
+                        'sha256_personal_email', 'sha256_business_email', 'job_title', 'headline', 
+                        'department', 'seniority_level', 'inferred_years_experience', 'company_name_history', 
+                        'job_title_history', 'education_history', 'company_address', 'company_description', 
+                        'company_domain', 'company_employee_count', 'company_linkedin_url', 'company_name', 
+                        'company_phone', 'company_revenue', 'company_sic', 'company_naics', 'company_city', 
+                        'company_state', 'company_zip', 'company_industry', 'linkedin_url', 'twitter_url', 
+                        'facebook_url', 'social_connections', 'skills', 'interests', 'skiptrace_match_score', 
+                        'skiptrace_name', 'skiptrace_address', 'skiptrace_city', 'skiptrace_state', 
+                        'skiptrace_zip', 'skiptrace_landline_numbers', 'skiptrace_wireless_numbers', 
+                        'skiptrace_credit_rating', 'skiptrace_dnc', 'skiptrace_exact_age', 'skiptrace_ethnic_code', 
+                        'skiptrace_language_code', 'skiptrace_ip', 'skiptrace_b2b_address', 'skiptrace_b2b_phone', 
+                        'skiptrace_b2b_source', 'skiptrace_b2b_website', 'valid_phones'
+                    ];
+                    
+                    $visitor_data = [];
+                    foreach ($visitor_fields as $field) {
+                        if (isset($insert_data[$field])) {
+                            $visitor_data[$field] = $insert_data[$field];
+                        }
+                    }
+                    
+                    // Add event fields (matching resolution log naming for consistency)
+                    $visitor_data['hem_sha256'] = $insert_data['hem_sha256'] ?? null;
+                    $visitor_data['url'] = $insert_data['visited_url'] ?? null;
+                    $visitor_data['element'] = isset($decodedEventData['element']) ? json_encode($decodedEventData['element']) : null;
+                    $visitor_data['percentage'] = !empty($decodedEventData['percentage']) ? (int)$decodedEventData['percentage'] : null;
+                    $visitor_data['referrer'] = $decodedEventData['referrer'] ?? null;
+                    $visitor_data['event_timestamp'] = $decodedEventData['timestamp'] ?? null;
+                    $visitor_data['event_type'] = $event['event_type'] ?? null;
+                    
+                    if (!empty($visitor_data)) {
+                        // Build INSERT ... ON DUPLICATE KEY UPDATE query
+                        $visitor_columns = [];
+                        $visitor_values = [];
+                        $update_parts = [];
+                        
+                        foreach ($visitor_data as $key => $value) {
+                            $escaped_key = "`" . $mysqli->real_escape_string($key) . "`";
+                            $escaped_value = ($value === null) ? "NULL" : "'" . $mysqli->real_escape_string($value) . "'";
+                            
+                            $visitor_columns[] = $escaped_key;
+                            $visitor_values[] = $escaped_value;
+                            
+                            // Use COALESCE to not overwrite existing data with empty values
+                            if ($key !== 'uuid') { // Don't update UUID in UPDATE clause
+                                // Always update event-related fields (latest visit data)
+                                if (in_array($key, ['url', 'element', 'percentage', 'referrer', 'event_timestamp', 'event_type', 'hem_sha256'])) {
+                                    $update_parts[] = "$escaped_key = $escaped_value";
+                                } else {
+                                    $update_parts[] = "$escaped_key = COALESCE(NULLIF($escaped_value, ''), $escaped_key, $escaped_value)";
+                                }
+                            }
+                        }
+                        
+                        $visitor_sql = "INSERT INTO superpixel_visitors (" . implode(",", $visitor_columns) . ") 
+                                       VALUES (" . implode(",", $visitor_values) . ")
+                                       ON DUPLICATE KEY UPDATE " . implode(", ", $update_parts) . ",
+                                       event_count = event_count + 1,
+                                       last_seen_at = CURRENT_TIMESTAMP";
+                        
+                        debugLog("Executing visitor upsert for event $eventIndex");
+                        
+                        if (!$mysqli->query($visitor_sql)) {
+                            $error = "Visitor upsert failed for event $eventIndex: " . $mysqli->error;
+                            debugLog($error);
+                            // Don't throw exception here - event was already saved successfully
+                            debugLog("Warning: Event saved but visitor profile update failed");
+                        } else {
+                            debugLog("Successfully upserted visitor profile for event $eventIndex");
+                        }
+                    }
+                } else {
+                    debugLog("Warning: No UUID found for event $eventIndex - skipping visitor profile update");
                 }
             }
         }
 
+        debugLog("All events processed successfully");
         echo json_encode(['status' => 'success']);
+        
     } else {
         http_response_code(405);
         echo json_encode(['error' => 'Method not allowed']);
     }
 } catch (Throwable $e) {
-    send_email(array('Database Connection Error' => $e->getMessage()), "Fatal Error in Hook Handler");
+    $errorMsg = "Fatal error: " . $e->getMessage();
+    debugLog($errorMsg);
+    send_email(['Error' => $errorMsg], "Fatal Error in Hook Handler");
     http_response_code(500);
     echo json_encode(['error' => 'Internal Server Error']);
 }
-?>
+
+$mysqli->close();
+?> 

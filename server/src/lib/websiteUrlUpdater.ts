@@ -1,5 +1,5 @@
 import { Builder, By, until, WebDriver } from "selenium-webdriver";
-import chrome from "selenium-webdriver/chrome";
+import chrome from "selenium-webdriver/chrome.js";
 import mysql from "mysql2/promise";
 
 const { AUDLAB_USERNAME, AUDLAB_PASSWORD, DB_HOST, DB_USER, DB_PASS } = process.env;
