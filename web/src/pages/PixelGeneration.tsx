@@ -26,8 +26,8 @@ export default function PixelGeneration() {
             return
         }
 
-        if (!clientName.match(/^[-_a-zA-Z0-9]+$/)) {
-            setError('Client name can only contain letters, numbers, hyphens, and underscores')
+        if (!clientName.match(/^[_a-zA-Z0-9]+$/)) {
+            setError('Client name can only contain letters, numbers, and underscores (hyphens are not accepted)')
             return
         }
 
@@ -109,7 +109,7 @@ export default function PixelGeneration() {
                             disabled={isLoading}
                         />
                         <p className="mt-1 text-sm text-gray-500">
-                            Only letters, numbers, hyphens, and underscores allowed
+                            Only letters, numbers, and underscores allowed
                         </p>
                     </div>
 
