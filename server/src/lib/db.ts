@@ -38,7 +38,10 @@ export async function ensureClientSchema(client: string) {
         host: DB_HOST,
         user: DB_USER,
         password: DB_PASS,
-        connectTimeout: 30000 // 30 seconds
+        connectTimeout: 30000, // 30 seconds
+        namedPlaceholders: false,
+        supportBigNumbers: true,
+        bigNumberStrings: false
     });
 
     try {
@@ -51,8 +54,8 @@ export async function ensureClientSchema(client: string) {
 
         // Grant permissions to the database user for this specific database
         log(`🔐 Granting permissions to user '${DB_USER}' on database '${client}'...`);
-        await root.query(`GRANT ALL PRIVILEGES ON \`${client}\`.* TO '${DB_USER}'@'%'`);
-        await root.query(`FLUSH PRIVILEGES`);
+        await root.execute(`GRANT ALL PRIVILEGES ON \`${client}\`.* TO '${DB_USER}'@'%'`);
+        await root.execute(`FLUSH PRIVILEGES`);
         log(`✅ Permissions granted to '${DB_USER}' on database '${client}'`);
 
         const tablesToClone = ["superpixel_resolution_log", "superpixel_visitors"];
@@ -61,7 +64,7 @@ export async function ensureClientSchema(client: string) {
             log(`📋 Creating table '${table}' in database '${client}'...`);
             const createTableQuery = `CREATE TABLE IF NOT EXISTS \`${client}\`.\`${table}\` LIKE \`${TEMPLATE_DB}\`.\`${table}\``;
             log("🔍 Executing query:", createTableQuery);
-            await root.query(createTableQuery);
+            await root.execute(createTableQuery);
             log(`✅ Table '${table}' created/verified in database '${client}'`);
 
             // Verify the table was created successfully
@@ -144,13 +147,13 @@ export async function ensureClientSchema(client: string) {
         `;
 
         try {
-            await root.query(resolutionTrigger);
+            await root.execute(resolutionTrigger);
             log(`✅ Resolution log trigger created for '${client}'`);
 
-            await root.query(visitorInsertTrigger);
+            await root.execute(visitorInsertTrigger);
             log(`✅ Visitor insert trigger created for '${client}'`);
 
-            await root.query(visitorUpdateTrigger);
+            await root.execute(visitorUpdateTrigger);
             log(`✅ Visitor update trigger created for '${client}'`);
         } catch (triggerError: any) {
             log(`⚠️ Warning: Could not create triggers for '${client}':`, triggerError.message);
