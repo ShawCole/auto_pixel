@@ -1,6 +1,9 @@
 <?php
 // pixel_import.php for ThynkData - Full Field Mapping (MySQL)
 
+// Include standardized visitor functions
+require_once __DIR__ . '/visitor_upsert_functions.php';
+
 header('Content-Type: application/json');
 
 $dbHost = getenv('DB_HOST') ?: '34.31.66.104';
@@ -220,6 +223,9 @@ try {
                 if (!$mysqli->query($sql)) {
                     throw new Exception("Insert failed: " . $mysqli->error . "\nSQL: " . $sql);
                 }
+
+                // Step 2: Upsert visitor profile into superpixel_visitors (if UUID exists)
+                upsertVisitorFromEvent($mysqli, $insert_data, "event_$eventIndex");
             }
         }
 

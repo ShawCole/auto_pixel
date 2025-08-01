@@ -10,13 +10,9 @@ export default function PixelGeneration() {
 
     const formatWebsiteUrl = (url: string) => {
         let formatted = url.trim()
+        // Only add https:// if no protocol is specified, otherwise leave URL exactly as entered
         if (!/^https?:\/\//i.test(formatted)) {
-            formatted = formatted.replace(/^www\./i, '')
-            formatted = 'https://www.' + formatted
-        }
-        // Optionally, add .com if missing
-        if (!/\.[a-z]{2,}$/i.test(formatted)) {
-            formatted += '.com'
+            formatted = 'https://' + formatted
         }
         return formatted
     }
@@ -31,8 +27,8 @@ export default function PixelGeneration() {
             return
         }
 
-        if (!clientName.match(/^[-_a-zA-Z0-9]+$/)) {
-            setError('Client name can only contain letters, numbers, hyphens, and underscores')
+        if (!clientName.match(/^[_a-zA-Z0-9]+$/)) {
+            setError('Client name can only contain letters, numbers, and underscores (hyphens are not accepted)')
             return
         }
 
@@ -114,7 +110,7 @@ export default function PixelGeneration() {
                             disabled={isLoading}
                         />
                         <p className="mt-1 text-sm text-gray-500">
-                            Only letters, numbers, hyphens, and underscores allowed
+                            Only letters, numbers, and underscores allowed
                         </p>
                     </div>
 

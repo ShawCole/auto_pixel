@@ -2,6 +2,9 @@
 // smart_sync.php - Hybrid sync script with continuous monitoring and immediate new sheet detection
 require_once __DIR__ . '/vendor/autoload.php';
 
+// Include standardized visitor functions
+require_once __DIR__ . '/visitor_upsert_functions.php';
+
 use Google\Client;
 use Google\Service\Sheets;
 use Google\Service\Sheets\ValueRange;
@@ -20,6 +23,11 @@ $SYNC_INTERVAL = 300; // 5 minutes in seconds
 $STAGGER_DELAY = 15; // 15 seconds between sheets (reduced from 30s)
 $MONITOR_INTERVAL = 10; // Check for new sheets every 10 seconds
 $MAX_SHEETS_PER_RUN = 4; // Process max 4 sheets per run to stay within 5 minutes
+
+// Visitor consistency configuration
+$VISITOR_CONSISTENCY_CHECK = true; // Enable visitor consistency checks
+$VISITOR_BACKFILL_LIMIT = 500; // Max visitors to backfill per client per run
+$VISITOR_CHECK_FREQUENCY = 5; // Check every N runs (5 = every 10 minutes with 2-minute cron)
 
 function getGoogleClient() {
     global $credentialsPath;
@@ -266,7 +274,26 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
     $client = getGoogleClient();
     $service = new Sheets($client);
     
-    // Sync both tabs
+    // Step 1: Ensure visitor consistency before syncing (optional, configurable frequency)
+    global $VISITOR_CONSISTENCY_CHECK, $VISITOR_BACKFILL_LIMIT, $VISITOR_CHECK_FREQUENCY;
+    
+    if ($VISITOR_CONSISTENCY_CHECK) {
+        // Check if we should run consistency check this time (based on frequency)
+        $currentMinute = (int)date('i');
+        $shouldCheck = ($currentMinute % ($VISITOR_CHECK_FREQUENCY * 2)) == 0; // Every N*2 minutes
+        
+        if ($shouldCheck || $isNewSheet) {
+            echo "🔍 Checking visitor consistency for $clientName...\n";
+            $backfillResult = backfillMissingVisitors($mysqli, $VISITOR_BACKFILL_LIMIT, "smart_sync_$clientName");
+            if ($backfillResult['backfilled_count'] > 0) {
+                echo "✅ Backfilled {$backfillResult['backfilled_count']} missing visitors\n";
+            } else {
+                echo "✅ Visitor consistency OK (no missing visitors)\n";
+            }
+        }
+    }
+    
+    // Step 2: Sync both tabs
     echo "Updating both tabs (Visitors + Events) for $clientName...\n";
     
     $visitorsSuccess = syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service);
