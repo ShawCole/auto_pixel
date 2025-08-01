@@ -1,5 +1,5 @@
 import { Builder, By, until, WebDriver } from "selenium-webdriver";
-import chrome from "selenium-webdriver/chrome";
+import chrome from "selenium-webdriver/chrome.js";
 
 const { AUDLAB_USERNAME, AUDLAB_PASSWORD } = process.env;
 
@@ -94,6 +94,24 @@ export async function createPixel({ client, website }: { client: string, website
     if (!AUDLAB_USERNAME || !AUDLAB_PASSWORD) {
         throw new Error("Missing AudienceLab credentials in environment variables");
     }
+
+    log(`🚨 DEBUG: COMPILATION TEST - Processing website URL: ${website}`);
+
+    // Preprocess website URL to prevent AudienceLab from incorrectly appending .com
+    // If URL already contains a TLD and ends with "/", remove the trailing slash
+    let processedWebsite = website;
+    const commonTlds = ['.com', '.org', '.net', '.edu', '.gov', '.mil', '.int', '.co', '.io', '.ly', '.me', '.tv', '.biz', '.info', '.name', '.pro', '.museum', '.travel', '.jobs', '.mobi', '.tel', '.asia', '.cat', '.xxx', '.post', '.coop', '.aero'];
+
+    for (const tld of commonTlds) {
+        if (processedWebsite.includes(tld) && processedWebsite.endsWith('/')) {
+            processedWebsite = processedWebsite.slice(0, -1); // Remove trailing slash
+            log(`🔧 URL preprocessed: "${website}" → "${processedWebsite}" (removed trailing slash after TLD)`);
+            break;
+        }
+    }
+
+    log(`🚨 DEBUG: Final processed website: ${processedWebsite}`);
+
     // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
         .addArguments('--headless=new') // DISABLED for debugging - Enable headless mode for production
@@ -451,7 +469,7 @@ export async function createPixel({ client, website }: { client: string, website
         try {
             await websiteUrlField.clear();
             await delay(150);
-            await websiteUrlField.sendKeys(website);
+            await websiteUrlField.sendKeys(processedWebsite);
             log("✅ Website URL entered with Selenium");
         } catch (interactionError) {
             log("⚠️ Selenium interaction failed, trying JavaScript approach...");
@@ -462,7 +480,7 @@ export async function createPixel({ client, website }: { client: string, website
                 arguments[0].value = arguments[1];
                 arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
                 arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-            `, websiteUrlField, website);
+            `, websiteUrlField, processedWebsite);
             await delay(150);
             log("✅ Website URL entered with JavaScript");
         }

@@ -172,16 +172,17 @@ export async function downloadClientData(clientName: string): Promise<{ success:
     try {
         console.log(`📊 Downloading data for client: ${clientName}`);
 
+        // Use the client's specific database
+        await connection.execute(`USE \`${clientName}\``);
+
         // Get data from superpixel_visitors table
         const [visitorsData] = await connection.execute<RowDataPacket[]>(
-            'SELECT * FROM `superpixel_visitors` WHERE client_name = ?',
-            [clientName]
+            'SELECT * FROM `superpixel_visitors`'
         );
 
         // Get data from superpixel_resolution_log table
         const [resolutionData] = await connection.execute<RowDataPacket[]>(
-            'SELECT * FROM `superpixel_resolution_log` WHERE client_name = ?',
-            [clientName]
+            'SELECT * FROM `superpixel_resolution_log`'
         );
 
         const clientData = {
