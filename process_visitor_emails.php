@@ -151,6 +151,8 @@ function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = 
                 if ($debug) echo "Direct match found - CRD: {$row['CRD']}, NPN: {$row['NPN']}\n";
                 
                 // STEP 2: If we have CRD but no NPN, look for NPN using CRD
+                // Note: After running normalize_match_emails.php, this should rarely be needed
+                // as NPNs are propagated to all rows with the same CRD
                 if (!empty($results['crd']) && empty($results['npn'])) {
                     $crd_query = "SELECT NPN FROM match_emails 
                                  WHERE CRD = ? AND NPN IS NOT NULL 
@@ -169,6 +171,7 @@ function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = 
                 }
                 
                 // STEP 3: If still no NPN but we have AgentID, try that
+                // This is useful for emails without CRD but with AgentID
                 if (empty($results['npn']) && !empty($agentId)) {
                     $agent_query = "SELECT NPN FROM match_emails 
                                    WHERE AgentID = ? AND NPN IS NOT NULL 
