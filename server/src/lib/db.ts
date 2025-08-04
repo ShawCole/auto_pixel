@@ -220,12 +220,12 @@ export async function ensureClientSchema(client: string) {
 
         // Check if reference table exists first
         try {
-            const [refTableCheck] = await root.query(`SHOW TABLES IN pixel LIKE 'CPACFANoIntent_CENTRAL'`);
+            const [refTableCheck] = await root.query(`SHOW TABLES IN accupoint_solutions LIKE 'match_emails'`);
             const hasRefTable = Array.isArray(refTableCheck) && refTableCheck.length > 0;
-            log(`🔍 Reference table pixel.CPACFANoIntent_CENTRAL exists: ${hasRefTable}`);
+            log(`🔍 Reference table accupoint_solutions.match_emails exists: ${hasRefTable}`);
 
             if (!hasRefTable) {
-                log(`⚠️ Warning: Reference table pixel.CPACFANoIntent_CENTRAL not found - NPN/CRD lookup will be skipped`);
+                log(`⚠️ Warning: Reference table accupoint_solutions.match_emails not found - NPN/CRD lookup will be skipped`);
             }
         } catch (refError: any) {
             log(`⚠️ Warning: Could not check reference table:`, refError.message);
@@ -322,26 +322,38 @@ export async function ensureClientSchema(client: string) {
                 BEGIN
                     DECLARE vNPN VARCHAR(255);
                     DECLARE vCRD VARCHAR(255);
+                    DECLARE vAgentID VARCHAR(255);
                     DECLARE table_exists INT DEFAULT 0;
                     
                     -- Check if reference table exists
                     SELECT COUNT(*) INTO table_exists
                     FROM information_schema.tables 
-                    WHERE table_schema = 'pixel' AND table_name = 'CPACFANoIntent_CENTRAL';
+                    WHERE table_schema = 'accupoint_solutions' AND table_name = 'match_emails';
                     
                     IF table_exists > 0 THEN
-                        -- Look up NPN/CRD by email in CPACFANoIntent_CENTRAL table
-                        SELECT NPN, CRD INTO vNPN, vCRD
-                        FROM pixel.CPACFANoIntent_CENTRAL
-                        WHERE business_email = NEW.email
-                           OR personal_email_1 = NEW.email
-                           OR personal_email_2 = NEW.email
-                           OR personal_email_3 = NEW.email
-                           OR personal_email_4 = NEW.email
-                           OR personal_email_5 = NEW.email
+                        -- STEP 1: Direct email match - get CRD, NPN, and AgentID
+                        SELECT CRD, NPN, AgentID INTO vCRD, vNPN, vAgentID
+                        FROM accupoint_solutions.match_emails
+                        WHERE Email = NEW.email
                         LIMIT 1;
                         
-                        -- Update visitors table if NPN/CRD found
+                        -- STEP 2: If we found a CRD but no NPN, search for NPN using the CRD
+                        IF vCRD IS NOT NULL AND vNPN IS NULL THEN
+                            SELECT NPN INTO vNPN
+                            FROM accupoint_solutions.match_emails
+                            WHERE CRD = vCRD AND NPN IS NOT NULL
+                            LIMIT 1;
+                        END IF;
+                        
+                        -- STEP 3: If still no NPN but we have AgentID, try using AgentID
+                        IF vNPN IS NULL AND vAgentID IS NOT NULL THEN
+                            SELECT NPN INTO vNPN
+                            FROM accupoint_solutions.match_emails
+                            WHERE AgentID = vAgentID AND NPN IS NOT NULL
+                            LIMIT 1;
+                        END IF;
+                        
+                        -- Update visitors table if CRD or NPN found
                         IF vNPN IS NOT NULL OR vCRD IS NOT NULL THEN
                             UPDATE \`${client}\`.superpixel_visitors
                             SET npn = COALESCE(npn, vNPN),

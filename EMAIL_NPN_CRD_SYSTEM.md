@@ -2,141 +2,106 @@
 
 ## Overview
 
-The Email-Based NPN/CRD Lookup System automatically extracts individual emails from visitor and event data, stores them in a dedicated table, and uses them to look up financial advisor credentials (NPN/CRD) from the CPACFANoIntent_CENTRAL reference table.
+This system automatically extracts individual emails from comma-separated lists and uses them to lookup NPN (National Producer Number) and CRD (Central Registration Depository) identifiers for financial advisors using the `accupoint_solutions.match_emails` table.
 
 ## System Architecture
 
-### Tables Involved
+### 1. Database Tables
 
-1. **`superpixel_resolution_log`** - Stores all visitor events with email data
-2. **`superpixel_visitors`** - Stores deduplicated visitor information  
-3. **`superpixel_emails`** - NEW table storing individual parsed emails
-4. **`pixel.CPACFANoIntent_CENTRAL`** - Reference table containing email-to-NPN/CRD mappings
+#### Per-Client Tables:
+- **superpixel_resolution_log**: Events table with email fields (business_email, personal_emails, deep_verified_emails)
+- **superpixel_visitors**: Visitors table with same email fields
+- **superpixel_emails**: NEW table storing individual parsed emails
 
-### Data Flow
+#### Reference Table:
+- **accupoint_solutions.match_emails**: Contains 3.9M+ email-to-advisor mappings
+  - Columns: Email, CRD, NPN, AgentID
+  - Multiple emails can map to same CRD (one advisor, multiple emails)
+  - NPN may not be present on all rows for the same advisor
 
-```
-Event Arrives → superpixel_resolution_log
-                     ↓ (trigger)
-              Parse emails → superpixel_emails
-                                    ↓ (trigger)
-                            Lookup NPN/CRD from CPACFANoIntent_CENTRAL
-                                    ↓
-                            Update both superpixel_resolution_log 
-                            and superpixel_visitors with NPN/CRD
-```
+### 2. Email Parsing Flow
 
-## Implementation Details
+1. **Event Insertion** → `superpixel_resolution_log`
+2. **Trigger Fires** → `after_resolution_log_insert`
+3. **Procedure Called** → `parse_visitor_emails` splits comma-separated emails
+4. **Emails Stored** → Individual emails saved to `superpixel_emails`
+5. **Lookup Trigger** → `after_email_insert` performs multi-step NPN/CRD lookup
+6. **Updates Applied** → Both visitors and resolution_log tables updated
 
-### 1. superpixel_emails Table Structure
+### 3. Multi-Step NPN/CRD Lookup Strategy
+
+The lookup trigger uses a sophisticated 3-step approach to maximize NPN matches:
 
 ```sql
-CREATE TABLE superpixel_emails (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    uuid VARCHAR(100) NOT NULL,
-    email VARCHAR(255) NOT NULL,
-    email_type ENUM('personal', 'business', 'deep_verified') NOT NULL,
-    source_column VARCHAR(50),
-    source_table ENUM('resolution_log', 'visitors') DEFAULT 'resolution_log',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY unique_uuid_email (uuid, email),
-    INDEX idx_email (email),
-    INDEX idx_uuid (uuid),
-    INDEX idx_email_type (email_type)
-)
+-- STEP 1: Direct email match
+SELECT CRD, NPN, AgentID FROM match_emails WHERE Email = [email]
+
+-- STEP 2: If CRD found but no NPN, search by CRD
+IF vCRD IS NOT NULL AND vNPN IS NULL THEN
+    SELECT NPN FROM match_emails WHERE CRD = vCRD AND NPN IS NOT NULL
+
+-- STEP 3: If still no NPN but AgentID exists, search by AgentID  
+IF vNPN IS NULL AND vAgentID IS NOT NULL THEN
+    SELECT NPN FROM match_emails WHERE AgentID = vAgentID AND NPN IS NOT NULL
 ```
 
-### 2. Email Parsing Procedure
+This approach handles cases where:
+- An advisor has multiple emails but NPN is only on some records
+- The matched email doesn't have NPN but another email for the same CRD does
+- AgentID can be used as an additional linking field
 
-The `parse_visitor_emails` stored procedure:
-- Takes comma-separated email strings
-- Splits them into individual emails
-- Validates email format
-- Inserts unique email-UUID pairs into superpixel_emails
-
-### 3. Trigger Flow
-
-#### A. After INSERT on superpixel_resolution_log
-- Extracts emails from business_email, personal_emails, deep_verified_emails
-- Calls parse_visitor_emails for each non-empty email field
-- Stores parsed emails in superpixel_emails table
-
-#### B. After INSERT on superpixel_visitors
-- Same process as above for visitor records
-
-#### C. After UPDATE on superpixel_visitors
-- Checks if email fields changed
-- If yes, deletes old emails and re-parses new ones
-
-#### D. After INSERT on superpixel_emails
-- Looks up email in CPACFANoIntent_CENTRAL table
-- Checks multiple columns: business_email, personal_email_1 through personal_email_5
-- If match found, updates BOTH:
-  - superpixel_visitors (by UUID)
-  - superpixel_resolution_log (all records with same UUID)
-
-## Usage
+## Implementation
 
 ### For New Clients
 
-When creating a new pixel through the API, the system automatically:
-1. Creates the superpixel_emails table
-2. Creates the parse_visitor_emails procedure
-3. Creates all necessary triggers
-4. Ready to process emails immediately
+When creating a new client via `/generate` endpoint:
+1. All tables are created automatically
+2. Email parsing procedure is installed
+3. All triggers are set up
+4. System is ready to process emails immediately
 
 ### For Existing Clients
 
-To backfill emails from existing data:
+Run the backfill script to:
+1. Parse all existing emails from events
+2. Populate the superpixel_emails table
+3. Trigger NPN/CRD lookups for all emails
 
 ```bash
-php backfill_emails_from_events.php <database_name>
+php backfill_emails_from_events.php [client_name]
 ```
-
-This script will:
-1. Parse all emails from existing events
-2. Populate the superpixel_emails table
-3. Trigger NPN/CRD lookups automatically
 
 ## Benefits
 
-1. **Accurate Matching**: Individual emails are matched precisely against the reference table
-2. **Automatic Updates**: NPN/CRD values populate automatically when matches are found
-3. **Comprehensive Coverage**: Both event records and visitor records get updated
-4. **Historical Data**: Works with both new and existing data
-5. **Performance**: Indexed email lookups are fast and efficient
+1. **Higher Match Rate**: 3.9M+ emails vs previous 133K in old system
+2. **Intelligent Matching**: Multi-step lookup maximizes NPN discovery
+3. **Automatic Processing**: No manual intervention needed
+4. **Historical Data**: Can backfill existing clients
+5. **Performance**: Indexed lookups ensure fast processing
 
 ## Troubleshooting
 
-### Check if email table exists:
+### Check Email Parsing
 ```sql
-SHOW TABLES LIKE 'superpixel_emails';
+SELECT COUNT(*) FROM superpixel_emails WHERE uuid = '[uuid]';
 ```
 
-### Check email parsing status:
+### Check NPN/CRD Matches
 ```sql
-SELECT COUNT(*) FROM superpixel_emails;
-SELECT email_type, COUNT(*) FROM superpixel_emails GROUP BY email_type;
+SELECT uuid, npn, crd FROM superpixel_visitors WHERE npn IS NOT NULL OR crd IS NOT NULL;
 ```
 
-### Check NPN/CRD match rate:
+### Verify Reference Table
 ```sql
-SELECT 
-    COUNT(DISTINCT uuid) as total_visitors,
-    COUNT(DISTINCT CASE WHEN npn IS NOT NULL THEN uuid END) as with_npn,
-    COUNT(DISTINCT CASE WHEN crd IS NOT NULL THEN uuid END) as with_crd
-FROM superpixel_visitors;
+SELECT COUNT(*) FROM accupoint_solutions.match_emails;
+-- Should return 3.9M+ rows
 ```
 
-### Manually trigger email parsing for a specific UUID:
+### Debug Specific Email
 ```sql
-CALL parse_visitor_emails('uuid-here', 'email1@test.com,email2@test.com', 'personal', 'manual');
-```
+-- Check all records for an advisor by CRD
+SELECT * FROM accupoint_solutions.match_emails WHERE CRD = '24504';
 
-## Important Notes
-
-1. The system uses `COALESCE` when updating NPN/CRD to preserve existing values
-2. Email validation uses a regex pattern to ensure only valid emails are stored
-3. The UNIQUE constraint on (uuid, email) prevents duplicate entries
-4. Triggers run automatically - no manual intervention needed for new data 
+-- Check what emails we parsed for a visitor
+SELECT * FROM superpixel_emails WHERE uuid = '[uuid]';
+``` 
