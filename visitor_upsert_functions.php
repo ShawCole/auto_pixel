@@ -17,8 +17,22 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
     }
 
     try {
-        // Define all possible visitor fields (schema-aware)
-        $visitor_fields = [
+        // Get actual columns that exist in the superpixel_visitors table
+        $columnsQuery = "SHOW COLUMNS FROM superpixel_visitors";
+        $columnsResult = $mysqli->query($columnsQuery);
+        
+        if (!$columnsResult) {
+            debugLog("Failed to get table schema for $debug_context: " . $mysqli->error);
+            return false;
+        }
+        
+        $existing_columns = [];
+        while ($row = $columnsResult->fetch_assoc()) {
+            $existing_columns[] = $row['Field'];
+        }
+
+        // Define all possible visitor fields
+        $possible_visitor_fields = [
             'uuid', 'first_name', 'last_name', 'company_name', 'job_title',
             'personal_emails', 'mobile_phone', 'personal_address', 'personal_city', 
             'personal_state', 'personal_zip', 'personal_zip4', 'age_range', 
@@ -29,7 +43,10 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             'npn', 'crd'
         ];
 
-        // Extract visitor data from event data
+        // Only use fields that actually exist in the table
+        $visitor_fields = array_intersect($possible_visitor_fields, $existing_columns);
+
+        // Extract visitor data from event data (only for existing columns)
         $visitor_data = [];
         foreach ($visitor_fields as $field) {
             if (isset($event_data[$field])) {
@@ -37,23 +54,23 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             }
         }
 
-        // Add derived fields from event context
-        if (isset($event_data['url'])) {
+        // Add derived fields from event context (only if columns exist)
+        if (isset($event_data['url']) && in_array('last_visited_url', $existing_columns)) {
             $visitor_data['last_visited_url'] = $event_data['url'];
         }
-        if (isset($event_data['element'])) {
+        if (isset($event_data['element']) && in_array('last_element', $existing_columns)) {
             $visitor_data['last_element'] = $event_data['element'];
         }
-        if (isset($event_data['percentage'])) {
+        if (isset($event_data['percentage']) && in_array('last_percentage', $existing_columns)) {
             $visitor_data['last_percentage'] = $event_data['percentage'];
         }
-        if (isset($event_data['referrer'])) {
+        if (isset($event_data['referrer']) && in_array('last_referrer', $existing_columns)) {
             $visitor_data['last_referrer'] = $event_data['referrer'];
         }
-        if (isset($event_data['timestamp'])) {
+        if (isset($event_data['timestamp']) && in_array('last_timestamp', $existing_columns)) {
             $visitor_data['last_timestamp'] = $event_data['timestamp'];
         }
-        if (isset($event_data['event_type'])) {
+        if (isset($event_data['event_type']) && in_array('last_event', $existing_columns)) {
             $visitor_data['last_event'] = $event_data['event_type'];
         }
 
@@ -69,22 +86,55 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
 
         foreach ($visitor_data as $key => $value) {
             $escaped_key = "`" . $mysqli->real_escape_string($key) . "`";
-            $escaped_value = "'" . $mysqli->real_escape_string($value) . "'";
+            
+            // Handle data type compatibility for integer/numeric columns
+            if (in_array($key, ['last_percentage', 'event_count', 'age_range']) && ($value === '' || $value === null)) {
+                $escaped_value = "NULL";
+            } else {
+                $escaped_value = "'" . $mysqli->real_escape_string($value) . "'";
+            }
 
             $visitor_columns[] = $escaped_key;
             $visitor_values[] = $escaped_value;
 
             // Use COALESCE to not overwrite existing data with empty values
             if ($key !== 'uuid') { // Don't update UUID in UPDATE clause
-                $update_parts[] = "$escaped_key = COALESCE(NULLIF($escaped_value, ''), $escaped_key, $escaped_value)";
+                if ($escaped_value === "NULL") {
+                    // For NULL values, don't overwrite existing data, but allow NULL if no existing data
+                    $update_parts[] = "$escaped_key = COALESCE($escaped_key, $escaped_value)";
+                } else {
+                    $update_parts[] = "$escaped_key = COALESCE(NULLIF($escaped_value, ''), $escaped_key, $escaped_value)";
+                }
             }
+        }
+
+        // Build the ON DUPLICATE KEY UPDATE clause, checking for schema-specific fields
+        $update_clauses = $update_parts;
+        
+        // Add event_count increment if the column exists
+        if (in_array('event_count', $existing_columns)) {
+            $update_clauses[] = "event_count = event_count + 1";
+        }
+        
+        // Add last_seen_at update if the column exists
+        if (in_array('last_seen_at', $existing_columns)) {
+            $update_clauses[] = "last_seen_at = CURRENT_TIMESTAMP";
+        } elseif (in_array('updated_at', $existing_columns)) {
+            $update_clauses[] = "updated_at = CURRENT_TIMESTAMP";
+        }
+        
+        // Add first_seen_at if it's an insert (only if column exists and not already set)
+        if (in_array('first_seen_at', $existing_columns) && !isset($visitor_data['first_seen_at'])) {
+            $visitor_columns[] = "`first_seen_at`";
+            $visitor_values[] = "CURRENT_TIMESTAMP";
+        } elseif (in_array('created_at', $existing_columns) && !isset($visitor_data['created_at'])) {
+            $visitor_columns[] = "`created_at`";
+            $visitor_values[] = "CURRENT_TIMESTAMP";
         }
 
         $visitor_sql = "INSERT INTO superpixel_visitors (" . implode(",", $visitor_columns) . ") 
                        VALUES (" . implode(",", $visitor_values) . ")
-                       ON DUPLICATE KEY UPDATE " . implode(", ", $update_parts) . ",
-                       event_count = event_count + 1,
-                       last_seen_at = CURRENT_TIMESTAMP";
+                       ON DUPLICATE KEY UPDATE " . implode(", ", $update_clauses);
 
         debugLog("Executing visitor upsert for $debug_context");
 
@@ -169,39 +219,60 @@ function backfillMissingVisitors($mysqli, $limit = 1000, $debug_context = "backf
     $column_list = implode(', ', $select_columns);
 
     // Find events with UUIDs that don't have visitor records
-    $sql = "SELECT $column_list, 
-                   COUNT(*) as event_count,
-                   MAX(timestamp) as latest_timestamp
-            FROM (
-                SELECT DISTINCT r.uuid, $column_list
-                FROM superpixel_resolution_log r 
-                LEFT JOIN superpixel_visitors v ON r.uuid = v.uuid 
-                WHERE v.uuid IS NULL 
-                  AND r.uuid IS NOT NULL 
-                  AND r.uuid != '' 
-                  AND r.uuid != 'null'
-                ORDER BY r.timestamp DESC
-                LIMIT $limit
-            ) as latest_events
-            GROUP BY uuid";
+    // Get list of missing UUIDs first, then get their latest event data
+    $sql = "SELECT DISTINCT r.uuid
+            FROM superpixel_resolution_log r 
+            LEFT JOIN superpixel_visitors v ON r.uuid = v.uuid 
+            WHERE v.uuid IS NULL 
+              AND r.uuid IS NOT NULL 
+              AND r.uuid != '' 
+              AND r.uuid != 'null'
+            LIMIT $limit";
 
-    $result = $mysqli->query($sql);
-    if (!$result) {
-        debugLog("Error querying missing visitors for $debug_context: " . $mysqli->error);
+    $uuidResult = $mysqli->query($sql);
+    if (!$uuidResult) {
+        debugLog("Error getting missing UUIDs for $debug_context: " . $mysqli->error);
         return ['backfilled_count' => 0, 'error_count' => 1];
     }
 
     $backfilled_count = 0;
     $error_count = 0;
 
-    while ($row = $result->fetch_assoc()) {
-        $event_context = "$debug_context-uuid_" . substr($row['uuid'], 0, 8);
+    // For each missing UUID, get the latest event and create visitor
+    while ($uuidRow = $uuidResult->fetch_assoc()) {
+        $uuid = $uuidRow['uuid'];
         
-        if (upsertVisitorFromEvent($mysqli, $row, $event_context)) {
-            $backfilled_count++;
+        // Get the latest event for this UUID
+        $eventSql = "SELECT " . implode(', ', $select_columns) . "
+                     FROM superpixel_resolution_log 
+                     WHERE uuid = ? 
+                     ORDER BY timestamp DESC 
+                     LIMIT 1";
+        
+        $stmt = $mysqli->prepare($eventSql);
+        if (!$stmt) {
+            debugLog("Failed to prepare event query for UUID $uuid: " . $mysqli->error);
+            $error_count++;
+            continue;
+        }
+        
+        $stmt->bind_param("s", $uuid);
+        $stmt->execute();
+        $eventResult = $stmt->get_result();
+        
+        if ($eventData = $eventResult->fetch_assoc()) {
+            $event_context = "$debug_context-uuid_" . substr($uuid, 0, 8);
+            
+            if (upsertVisitorFromEvent($mysqli, $eventData, $event_context)) {
+                $backfilled_count++;
+            } else {
+                $error_count++;
+            }
         } else {
             $error_count++;
         }
+        
+        $stmt->close();
     }
 
     debugLog("Backfill complete for $debug_context: $backfilled_count backfilled, $error_count errors");

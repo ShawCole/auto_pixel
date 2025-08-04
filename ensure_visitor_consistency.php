@@ -21,20 +21,27 @@ function getClientDatabases($mysqli) {
     $sql = "SELECT TABLE_SCHEMA as db_name
             FROM information_schema.TABLES 
             WHERE TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys', 'pixel', 'template')
-              AND TABLE_NAME = 'superpixel_resolution_log'
+              AND TABLE_NAME IN ('superpixel_resolution_log', 'superpixel_visitors')
             GROUP BY TABLE_SCHEMA
-            HAVING COUNT(CASE WHEN TABLE_NAME = 'superpixel_visitors' THEN 1 END) > 0
+            HAVING COUNT(CASE WHEN TABLE_NAME = 'superpixel_resolution_log' THEN 1 END) > 0
+               AND COUNT(CASE WHEN TABLE_NAME = 'superpixel_visitors' THEN 1 END) > 0
             ORDER BY TABLE_SCHEMA";
     
+    echo "🔍 Debug: Running database query...\n";
     $result = $mysqli->query($sql);
     $databases = [];
     
     if ($result) {
+        echo "🔍 Debug: Query successful, found {$result->num_rows} databases\n";
         while ($row = $result->fetch_assoc()) {
             $databases[] = $row['db_name'];
+            echo "🔍 Debug: Found database: {$row['db_name']}\n";
         }
+    } else {
+        echo "🔍 Debug: Query failed: {$mysqli->error}\n";
     }
     
+    echo "🔍 Debug: Returning " . count($databases) . " databases\n";
     return $databases;
 }
 
