@@ -1,17 +1,34 @@
-# Email-Based NPN/CRD Lookup System
+# Email-Based NPN/CRD Lookup System (Hybrid Approach)
 
 ## Overview
 
-This system automatically extracts individual emails from comma-separated lists and uses them to lookup NPN (National Producer Number) and CRD (Central Registration Depository) identifiers for financial advisors using the `accupoint_solutions.match_emails` table.
+This system uses a hybrid approach to automatically process visitor emails and lookup NPN/CRD identifiers:
+- **Database triggers** parse comma-separated emails and store them in `superpixel_emails` table
+- **PHP scripts** perform the complex multi-step NPN/CRD lookup from `accupoint_solutions.match_emails`
 
 ## System Architecture
 
-### 1. Database Tables
+### 1. Database Components
 
 #### Per-Client Tables:
 - **superpixel_resolution_log**: Events table with email fields (business_email, personal_emails, deep_verified_emails)
 - **superpixel_visitors**: Visitors table with same email fields
-- **superpixel_emails**: NEW table storing individual parsed emails
+- **superpixel_emails**: Stores individual parsed emails
+
+#### Database Triggers (Email Parsing Only):
+- **after_resolution_log_insert**: Parses emails when new events arrive
+- **after_visitors_insert**: Parses emails when new visitors are created
+- **after_visitors_update**: Re-parses emails when visitor email fields change
+
+#### Stored Procedure:
+- **parse_visitor_emails**: Splits comma-separated emails and validates them
+
+### 2. PHP Components
+
+#### process_visitor_emails.php
+- Performs multi-step NPN/CRD lookup
+- Can parse emails as fallback if triggers fail
+- Updates both visitors and resolution_log tables with NPN/CRD
 
 #### Reference Table:
 - **accupoint_solutions.match_emails**: Contains 3.9M+ email-to-advisor mappings
@@ -19,18 +36,30 @@ This system automatically extracts individual emails from comma-separated lists 
   - Multiple emails can map to same CRD (one advisor, multiple emails)
   - NPN may not be present on all rows for the same advisor
 
-### 2. Email Parsing Flow
+### 3. Data Flow
 
-1. **Event Insertion** → `superpixel_resolution_log`
-2. **Trigger Fires** → `after_resolution_log_insert`
-3. **Procedure Called** → `parse_visitor_emails` splits comma-separated emails
-4. **Emails Stored** → Individual emails saved to `superpixel_emails`
-5. **Lookup Trigger** → `after_email_insert` performs multi-step NPN/CRD lookup
-6. **Updates Applied** → Both visitors and resolution_log tables updated
+```
+1. Event arrives → INSERT into superpixel_resolution_log
+   ↓
+2. Database trigger fires → Calls parse_visitor_emails procedure
+   ↓
+3. Individual emails → INSERT into superpixel_emails
+   ↓
+4. Webhook PHP script → Calls upsertVisitorFromEvent()
+   ↓
+5. upsertVisitorFromEvent → Calls processVisitorEmails()
+   ↓
+6. processVisitorEmails → Multi-step NPN/CRD lookup:
+   - Step 1: Direct email match
+   - Step 2: If CRD found but no NPN, search by CRD
+   - Step 3: If still no NPN, search by AgentID
+   ↓
+7. Updates → Both superpixel_visitors and superpixel_resolution_log
+```
 
-### 3. Multi-Step NPN/CRD Lookup Strategy
+### 4. Multi-Step NPN/CRD Lookup Strategy
 
-The lookup trigger uses a sophisticated 3-step approach to maximize NPN matches:
+The PHP script uses a sophisticated approach to maximize NPN matches:
 
 ```sql
 -- STEP 1: Direct email match
@@ -45,63 +74,82 @@ IF vNPN IS NULL AND vAgentID IS NOT NULL THEN
     SELECT NPN FROM match_emails WHERE AgentID = vAgentID AND NPN IS NOT NULL
 ```
 
-This approach handles cases where:
-- An advisor has multiple emails but NPN is only on some records
-- The matched email doesn't have NPN but another email for the same CRD does
-- AgentID can be used as an additional linking field
-
 ## Implementation
 
 ### For New Clients
 
 When creating a new client via `/generate` endpoint:
-1. All tables are created automatically
-2. Email parsing procedure is installed
-3. All triggers are set up
-4. System is ready to process emails immediately
+1. `superpixel_emails` table is created
+2. `parse_visitor_emails` procedure is installed
+3. Email parsing triggers are set up
+4. PHP scripts handle NPN/CRD lookup
 
 ### For Existing Clients
 
-Run the backfill script to:
-1. Parse all existing emails from events
-2. Populate the superpixel_emails table
-3. Trigger NPN/CRD lookups for all emails
+Run the backfill script to process existing data:
 
 ```bash
 php backfill_emails_from_events.php [client_name]
 ```
 
-## Benefits
+### Manual Testing
 
-1. **Higher Match Rate**: 3.9M+ emails vs previous 133K in old system
-2. **Intelligent Matching**: Multi-step lookup maximizes NPN discovery
-3. **Automatic Processing**: No manual intervention needed
-4. **Historical Data**: Can backfill existing clients
-5. **Performance**: Indexed lookups ensure fast processing
+Test individual UUID processing:
+
+```bash
+# Process emails and lookup NPN/CRD
+php process_visitor_emails.php [database] [uuid] debug
+
+# Only do NPN/CRD lookup (skip email parsing)
+php process_visitor_emails.php [database] [uuid] lookup-only
+```
+
+## Benefits of Hybrid Approach
+
+1. **Reliability**: Database triggers ensure emails are parsed immediately on insert
+2. **Flexibility**: PHP can handle complex multi-step lookups and fallback parsing
+3. **Performance**: Email parsing happens at database level, lookup happens in PHP
+4. **Debugging**: Easier to debug PHP logic than complex database triggers
+5. **Maintainability**: Business logic in PHP is easier to update than database procedures
 
 ## Troubleshooting
 
-### Check Email Parsing
+### Check if Triggers are Working
 ```sql
+-- Check if emails are being parsed
 SELECT COUNT(*) FROM superpixel_emails WHERE uuid = '[uuid]';
+
+-- Check trigger status
+SHOW TRIGGERS LIKE 'after_%';
 ```
 
-### Check NPN/CRD Matches
+### Check NPN/CRD Coverage
 ```sql
-SELECT uuid, npn, crd FROM superpixel_visitors WHERE npn IS NOT NULL OR crd IS NOT NULL;
-```
-
-### Verify Reference Table
-```sql
-SELECT COUNT(*) FROM accupoint_solutions.match_emails;
--- Should return 3.9M+ rows
+SELECT 
+    COUNT(DISTINCT uuid) as total_visitors,
+    COUNT(DISTINCT CASE WHEN npn IS NOT NULL THEN uuid END) as with_npn,
+    COUNT(DISTINCT CASE WHEN crd IS NOT NULL THEN uuid END) as with_crd
+FROM superpixel_visitors;
 ```
 
 ### Debug Specific Email
 ```sql
--- Check all records for an advisor by CRD
-SELECT * FROM accupoint_solutions.match_emails WHERE CRD = '24504';
-
--- Check what emails we parsed for a visitor
+-- Check what emails were parsed
 SELECT * FROM superpixel_emails WHERE uuid = '[uuid]';
-``` 
+
+-- Check match_emails for specific email
+SELECT * FROM accupoint_solutions.match_emails WHERE Email = '[email]';
+
+-- Check all emails for a CRD
+SELECT * FROM accupoint_solutions.match_emails WHERE CRD = '[crd]';
+```
+
+### If Triggers Fail
+
+The PHP script will automatically parse emails if none are found in `superpixel_emails`. Check logs:
+
+```bash
+tail -f /var/www/hook.thynkdata.com/pixel_import_debug.log
+```
+
+Look for: "No emails found in superpixel_emails, parsing from source tables..." 

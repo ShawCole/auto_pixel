@@ -143,51 +143,33 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             debugLog($error);
             return false;
         } else {
-            debugLog("Successfully upserted visitor profile for $debug_context");
+            debugLog("$debug_context - Successfully upserted visitor record");
             
-            // Parse emails into superpixel_emails table (if table exists and procedure exists)
+            // Process NPN/CRD lookup using PHP function
+            // In the hybrid approach, emails should already be parsed by database triggers
+            // But we'll allow parsing as a fallback if triggers failed
             if (isset($visitor_data['uuid'])) {
                 $uuid = $visitor_data['uuid'];
                 
-                // Check if the email parsing procedure exists
-                $proc_check = $mysqli->query("SHOW PROCEDURE STATUS WHERE Db = DATABASE() AND Name = 'parse_visitor_emails'");
-                if ($proc_check && $proc_check->num_rows > 0) {
+                // Include the email processing function
+                if (file_exists(__DIR__ . '/process_visitor_emails.php')) {
+                    require_once __DIR__ . '/process_visitor_emails.php';
                     
-                    // Parse business emails
-                    if (!empty($visitor_data['business_email'])) {
-                        $call_sql = "CALL parse_visitor_emails(?, ?, 'business', 'business_email')";
-                        $stmt = $mysqli->prepare($call_sql);
-                        if ($stmt) {
-                            $stmt->bind_param("ss", $uuid, $visitor_data['business_email']);
-                            $stmt->execute();
-                            $stmt->close();
-                            debugLog("Parsed business emails for $debug_context");
-                        }
+                    // Get the database name from the connection
+                    $db_name_query = $mysqli->query("SELECT DATABASE()");
+                    if ($db_name_query && $row = $db_name_query->fetch_row()) {
+                        $db_name = $row[0];
+                        
+                        debugLog("$debug_context - Processing NPN/CRD lookup for UUID: $uuid in database: $db_name");
+                        
+                        // Process emails and lookup NPN/CRD
+                        // Set parse_emails=true to handle cases where triggers might have failed
+                        $email_results = processVisitorEmails($db_name, $uuid, true, false);
+                        
+                        debugLog("$debug_context - Email processing results: " . json_encode($email_results));
                     }
-                    
-                    // Parse personal emails
-                    if (!empty($visitor_data['personal_emails'])) {
-                        $call_sql = "CALL parse_visitor_emails(?, ?, 'personal', 'personal_emails')";
-                        $stmt = $mysqli->prepare($call_sql);
-                        if ($stmt) {
-                            $stmt->bind_param("ss", $uuid, $visitor_data['personal_emails']);
-                            $stmt->execute();
-                            $stmt->close();
-                            debugLog("Parsed personal emails for $debug_context");
-                        }
-                    }
-                    
-                    // Parse deep verified emails
-                    if (!empty($visitor_data['deep_verified_emails'])) {
-                        $call_sql = "CALL parse_visitor_emails(?, ?, 'deep_verified', 'deep_verified_emails')";
-                        $stmt = $mysqli->prepare($call_sql);
-                        if ($stmt) {
-                            $stmt->bind_param("ss", $uuid, $visitor_data['deep_verified_emails']);
-                            $stmt->execute();
-                            $stmt->close();
-                            debugLog("Parsed deep verified emails for $debug_context");
-                        }
-                    }
+                } else {
+                    debugLog("$debug_context - process_visitor_emails.php not found, skipping NPN/CRD lookup");
                 }
             }
             

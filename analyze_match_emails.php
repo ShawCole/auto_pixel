@@ -96,17 +96,32 @@ echo "✨ MULTI-STEP LOOKUP BENEFIT:\n";
 echo "Additional NPNs found via CRD lookup: " . number_format($enhanced['enhanced_matches']) . "\n\n";
 
 // 6. AgentID Analysis
-$result = $mysqli->query("SELECT 
-                            COUNT(DISTINCT CASE WHEN AgentID IS NOT NULL AND NPN IS NULL THEN Email END) as emails_with_agentid_no_npn,
-                            COUNT(DISTINCT CASE WHEN a2.NPN IS NOT NULL THEN a1.Email END) as npns_via_agentid
-                         FROM match_emails a1
-                         LEFT JOIN match_emails a2 ON a1.AgentID = a2.AgentID AND a2.NPN IS NOT NULL
-                         WHERE a1.AgentID IS NOT NULL AND a1.NPN IS NULL");
-$agentid_analysis = $result->fetch_assoc();
-
 echo "🆔 AGENTID LOOKUP BENEFIT:\n";
-echo "Emails with AgentID but no NPN: " . number_format($agentid_analysis['emails_with_agentid_no_npn']) . "\n";
-echo "Additional NPNs found via AgentID: " . number_format($agentid_analysis['npns_via_agentid']) . "\n\n";
+try {
+    $result = $mysqli->query("SELECT 
+                                COUNT(DISTINCT CASE WHEN AgentID IS NOT NULL AND NPN IS NULL THEN Email END) as emails_with_agentid_no_npn
+                             FROM match_emails 
+                             WHERE AgentID IS NOT NULL AND NPN IS NULL");
+    
+    if ($result) {
+        $agentid_basic = $result->fetch_assoc();
+        echo "Emails with AgentID but no NPN: " . number_format($agentid_basic['emails_with_agentid_no_npn']) . "\n";
+        
+        // Separate query for NPN lookup via AgentID
+        $result2 = $mysqli->query("SELECT COUNT(DISTINCT m1.Email) as npns_via_agentid
+                                   FROM match_emails m1
+                                   INNER JOIN match_emails m2 ON m1.AgentID = m2.AgentID
+                                   WHERE m1.NPN IS NULL AND m2.NPN IS NOT NULL
+                                   AND m1.AgentID IS NOT NULL");
+        
+        if ($result2) {
+            $agentid_enhanced = $result2->fetch_assoc();
+            echo "Additional NPNs found via AgentID: " . number_format($agentid_enhanced['npns_via_agentid']) . "\n\n";
+        }
+    }
+} catch (Exception $e) {
+    echo "Error analyzing AgentID data: " . $e->getMessage() . "\n\n";
+}
 
 // 7. Sample problematic case
 echo "📋 SAMPLE CASE (James Bockenek example):\n";

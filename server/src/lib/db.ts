@@ -113,62 +113,15 @@ export async function ensureClientSchema(client: string) {
             throw new Error(`Failed to create superpixel_emails table in database ${client}`);
         }
 
-        // Create email parsing stored procedure
+        // Create simple email parsing stored procedure
         log(`🔧 Creating email parsing procedure in database '${client}'...`);
 
         try {
-            // First drop if exists
+            // Drop if exists
             await root.execute(`DROP PROCEDURE IF EXISTS \`${client}\`.parse_visitor_emails`);
 
-            // Create the procedure with proper delimiters
-            const emailParsingProcedure = `
-                DELIMITER $$
-                CREATE PROCEDURE \`${client}\`.parse_visitor_emails(
-                    IN p_uuid VARCHAR(100),
-                    IN p_email_string TEXT,
-                    IN p_email_type ENUM('personal', 'business', 'deep_verified'),
-                    IN p_source_column VARCHAR(50)
-                )
-                BEGIN
-                    DECLARE done INT DEFAULT FALSE;
-                    DECLARE email_item VARCHAR(255);
-                    DECLARE email_cursor CURSOR FOR 
-                        SELECT TRIM(SUBSTRING_INDEX(SUBSTRING_INDEX(p_email_string, ',', n.digit+1), ',', -1)) as email
-                        FROM (SELECT 0 as digit UNION ALL SELECT 1 UNION ALL SELECT 2 UNION ALL SELECT 3 
-                              UNION ALL SELECT 4 UNION ALL SELECT 5 UNION ALL SELECT 6 UNION ALL SELECT 7 
-                              UNION ALL SELECT 8 UNION ALL SELECT 9) n
-                        WHERE CHAR_LENGTH(p_email_string) - CHAR_LENGTH(REPLACE(p_email_string, ',', '')) >= n.digit
-                           OR n.digit = 0;
-                    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
-                    
-                    IF p_email_string IS NOT NULL AND p_email_string != '' THEN
-                        OPEN email_cursor;
-                        read_loop: LOOP
-                            FETCH email_cursor INTO email_item;
-                            IF done THEN
-                                LEAVE read_loop;
-                            END IF;
-                            
-                            SET email_item = TRIM(email_item);
-                            
-                            -- Validate email format
-                            IF email_item REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}$' AND email_item != '' THEN
-                                INSERT IGNORE INTO \`${client}\`.superpixel_emails 
-                                (uuid, email, email_type, source_column) 
-                                VALUES (p_uuid, email_item, p_email_type, p_source_column);
-                            END IF;
-                        END LOOP;
-                        CLOSE email_cursor;
-                    END IF;
-                END$$
-                DELIMITER ;
-            `;
-
-            // Execute procedure creation in parts due to DELIMITER limitations
-            await root.execute(`DROP PROCEDURE IF EXISTS \`${client}\`.parse_visitor_emails`);
-
-            // Simplified procedure without complex cursor logic for now
-            const simpleProcedure = `
+            // Simple procedure that just parses and inserts emails
+            const emailProcedure = `
                 CREATE PROCEDURE \`${client}\`.parse_visitor_emails(
                     IN p_uuid VARCHAR(100),
                     IN p_email_string TEXT,
@@ -177,91 +130,83 @@ export async function ensureClientSchema(client: string) {
                 )
                 BEGIN
                     DECLARE email_item VARCHAR(255);
-                    DECLARE pos INT DEFAULT 1;
+                    DECLARE remaining_string TEXT;
                     DECLARE comma_pos INT;
                     
-                    IF p_email_string IS NOT NULL AND p_email_string != '' THEN
-                        -- Simple loop to split by comma
-                        WHILE pos <= CHAR_LENGTH(p_email_string) DO
-                            SET comma_pos = LOCATE(',', p_email_string, pos);
-                            IF comma_pos = 0 THEN
-                                SET comma_pos = CHAR_LENGTH(p_email_string) + 1;
-                            END IF;
-                            
-                            SET email_item = TRIM(SUBSTRING(p_email_string, pos, comma_pos - pos));
-                            
-                            IF email_item != '' AND email_item REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}$' THEN
-                                INSERT IGNORE INTO \`${client}\`.superpixel_emails 
-                                (uuid, email, email_type, source_column) 
-                                VALUES (p_uuid, email_item, p_email_type, p_source_column);
-                            END IF;
-                            
-                            SET pos = comma_pos + 1;
-                        END WHILE;
+                    SET remaining_string = TRIM(p_email_string);
+                    
+                    -- Handle NULL or empty string
+                    IF remaining_string IS NULL OR remaining_string = '' THEN
+                        LEAVE parse_emails;
                     END IF;
+                    
+                    parse_emails: WHILE LENGTH(remaining_string) > 0 DO
+                        -- Find the next comma
+                        SET comma_pos = LOCATE(',', remaining_string);
+                        
+                        IF comma_pos = 0 THEN
+                            -- No more commas, this is the last email
+                            SET email_item = TRIM(remaining_string);
+                            SET remaining_string = '';
+                        ELSE
+                            -- Extract email before comma
+                            SET email_item = TRIM(SUBSTRING(remaining_string, 1, comma_pos - 1));
+                            SET remaining_string = TRIM(SUBSTRING(remaining_string, comma_pos + 1));
+                        END IF;
+                        
+                        -- Basic email validation and insert
+                        IF email_item REGEXP '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}$' THEN
+                            INSERT IGNORE INTO \`${client}\`.superpixel_emails 
+                            (uuid, email, email_type, source_column) 
+                            VALUES (p_uuid, email_item, p_email_type, p_source_column);
+                        END IF;
+                    END WHILE parse_emails;
                 END
             `;
 
-            await root.execute(simpleProcedure);
+            await root.execute(emailProcedure);
             log(`✅ Email parsing procedure created for '${client}'`);
         } catch (procError: any) {
-            log(`❌ ERROR: Could not create email parsing procedure for '${client}':`, {
+            log(`⚠️ Warning: Could not create email parsing procedure:`, {
                 message: procError.message,
-                code: procError.code,
-                errno: procError.errno,
-                sqlState: procError.sqlState,
                 sqlMessage: procError.sqlMessage
             });
-            // Don't throw - procedure is optional for basic functionality
+            // Continue - we can still use PHP-based parsing
         }
 
-        // Create triggers for automatic email parsing and NPN/CRD lookup
-        log(`🔧 Creating triggers for email parsing and NPN/CRD lookup in database '${client}'...`);
-
-        // Check if reference table exists first
-        try {
-            const [refTableCheck] = await root.query(`SHOW TABLES IN accupoint_solutions LIKE 'match_emails'`);
-            const hasRefTable = Array.isArray(refTableCheck) && refTableCheck.length > 0;
-            log(`🔍 Reference table accupoint_solutions.match_emails exists: ${hasRefTable}`);
-
-            if (!hasRefTable) {
-                log(`⚠️ Warning: Reference table accupoint_solutions.match_emails not found - NPN/CRD lookup will be skipped`);
-            }
-        } catch (refError: any) {
-            log(`⚠️ Warning: Could not check reference table:`, refError.message);
-        }
+        // Create simple triggers that ONLY parse emails (no NPN/CRD lookup)
+        log(`🔧 Creating email parsing triggers in database '${client}'...`);
 
         try {
-            // Drop existing triggers first
+            // Drop existing triggers
             await root.execute(`DROP TRIGGER IF EXISTS \`${client}\`.after_resolution_log_insert`);
             await root.execute(`DROP TRIGGER IF EXISTS \`${client}\`.after_visitors_insert`);
             await root.execute(`DROP TRIGGER IF EXISTS \`${client}\`.after_visitors_update`);
-            await root.execute(`DROP TRIGGER IF EXISTS \`${client}\`.after_email_insert`);
 
-            // Trigger for superpixel_resolution_log - parse emails when events are inserted
-            const resolutionLogInsertTrigger = `
+            // Trigger for resolution log - parse emails when events are inserted
+            const resolutionTrigger = `
                 CREATE TRIGGER \`${client}\`.after_resolution_log_insert
                 AFTER INSERT ON \`${client}\`.superpixel_resolution_log
                 FOR EACH ROW
                 BEGIN
-                    -- Parse business emails from event
+                    -- Parse business emails
                     IF NEW.business_email IS NOT NULL AND NEW.business_email != '' THEN
                         CALL \`${client}\`.parse_visitor_emails(NEW.uuid, NEW.business_email, 'business', 'business_email');
                     END IF;
                     
-                    -- Parse personal emails from event
+                    -- Parse personal emails
                     IF NEW.personal_emails IS NOT NULL AND NEW.personal_emails != '' THEN
                         CALL \`${client}\`.parse_visitor_emails(NEW.uuid, NEW.personal_emails, 'personal', 'personal_emails');
                     END IF;
                     
-                    -- Parse deep verified emails from event
+                    -- Parse deep verified emails
                     IF NEW.deep_verified_emails IS NOT NULL AND NEW.deep_verified_emails != '' THEN
                         CALL \`${client}\`.parse_visitor_emails(NEW.uuid, NEW.deep_verified_emails, 'deep_verified', 'deep_verified_emails');
                     END IF;
                 END
             `;
 
-            // Trigger for superpixel_visitors - parse emails and lookup NPN/CRD after insert
+            // Trigger for visitors insert
             const visitorInsertTrigger = `
                 CREATE TRIGGER \`${client}\`.after_visitors_insert
                 AFTER INSERT ON \`${client}\`.superpixel_visitors
@@ -284,18 +229,18 @@ export async function ensureClientSchema(client: string) {
                 END
             `;
 
-            // Trigger for superpixel_visitors - re-parse emails and lookup NPN/CRD after update
+            // Trigger for visitors update - re-parse if emails change
             const visitorUpdateTrigger = `
                 CREATE TRIGGER \`${client}\`.after_visitors_update
                 AFTER UPDATE ON \`${client}\`.superpixel_visitors
                 FOR EACH ROW
                 BEGIN
-                    -- Check if email fields changed
+                    -- Only process if email fields changed
                     IF (OLD.business_email != NEW.business_email OR 
                         OLD.personal_emails != NEW.personal_emails OR 
                         OLD.deep_verified_emails != NEW.deep_verified_emails) THEN
                         
-                        -- Delete existing emails for this UUID
+                        -- Delete old emails for this UUID
                         DELETE FROM \`${client}\`.superpixel_emails WHERE uuid = NEW.uuid;
                         
                         -- Re-parse all emails
@@ -314,83 +259,26 @@ export async function ensureClientSchema(client: string) {
                 END
             `;
 
-            // Trigger for superpixel_emails - lookup NPN/CRD when new email is added
-            const emailInsertTrigger = `
-                CREATE TRIGGER \`${client}\`.after_email_insert
-                AFTER INSERT ON \`${client}\`.superpixel_emails
-                FOR EACH ROW
-                BEGIN
-                    DECLARE vNPN VARCHAR(255);
-                    DECLARE vCRD VARCHAR(255);
-                    DECLARE vAgentID VARCHAR(255);
-                    DECLARE table_exists INT DEFAULT 0;
-                    
-                    -- Check if reference table exists
-                    SELECT COUNT(*) INTO table_exists
-                    FROM information_schema.tables 
-                    WHERE table_schema = 'accupoint_solutions' AND table_name = 'match_emails';
-                    
-                    IF table_exists > 0 THEN
-                        -- STEP 1: Direct email match - get CRD, NPN, and AgentID
-                        SELECT CRD, NPN, AgentID INTO vCRD, vNPN, vAgentID
-                        FROM accupoint_solutions.match_emails
-                        WHERE Email = NEW.email
-                        LIMIT 1;
-                        
-                        -- STEP 2: If we found a CRD but no NPN, search for NPN using the CRD
-                        IF vCRD IS NOT NULL AND vNPN IS NULL THEN
-                            SELECT NPN INTO vNPN
-                            FROM accupoint_solutions.match_emails
-                            WHERE CRD = vCRD AND NPN IS NOT NULL
-                            LIMIT 1;
-                        END IF;
-                        
-                        -- STEP 3: If still no NPN but we have AgentID, try using AgentID
-                        IF vNPN IS NULL AND vAgentID IS NOT NULL THEN
-                            SELECT NPN INTO vNPN
-                            FROM accupoint_solutions.match_emails
-                            WHERE AgentID = vAgentID AND NPN IS NOT NULL
-                            LIMIT 1;
-                        END IF;
-                        
-                        -- Update visitors table if CRD or NPN found
-                        IF vNPN IS NOT NULL OR vCRD IS NOT NULL THEN
-                            UPDATE \`${client}\`.superpixel_visitors
-                            SET npn = COALESCE(npn, vNPN),
-                                crd = COALESCE(crd, vCRD)
-                            WHERE uuid = NEW.uuid;
-                            
-                            -- Also update resolution log entries for this UUID
-                            UPDATE \`${client}\`.superpixel_resolution_log
-                            SET npn = COALESCE(npn, vNPN),
-                                crd = COALESCE(crd, vCRD)
-                            WHERE uuid = NEW.uuid;
-                        END IF;
-                    END IF;
-                END
-            `;
-
-            await root.execute(resolutionLogInsertTrigger);
-            log(`✅ Resolution log insert trigger created for '${client}'`);
+            // Create the triggers
+            await root.execute(resolutionTrigger);
+            log(`✅ Resolution log email parsing trigger created`);
 
             await root.execute(visitorInsertTrigger);
-            log(`✅ Visitor insert trigger created for '${client}'`);
+            log(`✅ Visitor insert email parsing trigger created`);
 
             await root.execute(visitorUpdateTrigger);
-            log(`✅ Visitor update trigger created for '${client}'`);
+            log(`✅ Visitor update email parsing trigger created`);
 
-            await root.execute(emailInsertTrigger);
-            log(`✅ Email insert trigger created for '${client}'`);
         } catch (triggerError: any) {
-            log(`❌ ERROR: Could not create triggers for '${client}':`, {
+            log(`⚠️ Warning: Could not create email parsing triggers:`, {
                 message: triggerError.message,
-                code: triggerError.code,
-                errno: triggerError.errno,
-                sqlState: triggerError.sqlState,
                 sqlMessage: triggerError.sqlMessage
             });
-            // Don't throw - triggers are optional for basic functionality
+            // Continue - PHP scripts can still parse emails
         }
+
+        // Note: NPN/CRD lookup will be handled by PHP scripts
+        log(`ℹ️  Note: NPN/CRD lookup will be handled by PHP scripts (process_visitor_emails.php)`);
 
         log(`🎉 Database schema setup completed for client: ${client}`);
     } catch (error: any) {
