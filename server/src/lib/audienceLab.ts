@@ -97,18 +97,8 @@ export async function createPixel({ client, website }: { client: string, website
 
     log(`🚨 DEBUG: COMPILATION TEST - Processing website URL: ${website}`);
 
-    // Preprocess website URL to prevent AudienceLab from incorrectly appending .com
-    // If URL already contains a TLD and ends with "/", remove the trailing slash
+    // Pass website URL exactly as provided - no preprocessing
     let processedWebsite = website;
-    const commonTlds = ['.com', '.org', '.net', '.edu', '.gov', '.mil', '.int', '.co', '.io', '.ly', '.me', '.tv', '.biz', '.info', '.name', '.pro', '.museum', '.travel', '.jobs', '.mobi', '.tel', '.asia', '.cat', '.xxx', '.post', '.coop', '.aero'];
-
-    for (const tld of commonTlds) {
-        if (processedWebsite.includes(tld) && processedWebsite.endsWith('/')) {
-            processedWebsite = processedWebsite.slice(0, -1); // Remove trailing slash
-            log(`🔧 URL preprocessed: "${website}" → "${processedWebsite}" (removed trailing slash after TLD)`);
-            break;
-        }
-    }
 
     log(`🚨 DEBUG: Final processed website: ${processedWebsite}`);
 
