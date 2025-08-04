@@ -166,13 +166,22 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
         
         $drive->permissions->create($spreadsheetId, $permission);
         
-        // Store in database
+        // Store in database (update if exists, insert if new)
         $mysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
         if ($mysqli->connect_error) {
             throw new Exception("Database connection failed: " . $mysqli->connect_error);
         }
         
-        $stmt = $mysqli->prepare("INSERT INTO pixel_sheets (client_name, pixel_id, sheet_id, sheet_url, client_website) VALUES (?, ?, ?, ?, ?)");
+        // Use INSERT ... ON DUPLICATE KEY UPDATE to handle existing clients
+        $stmt = $mysqli->prepare("
+            INSERT INTO pixel_sheets (client_name, pixel_id, sheet_id, sheet_url, client_website) 
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+                pixel_id = VALUES(pixel_id),
+                sheet_id = VALUES(sheet_id), 
+                sheet_url = VALUES(sheet_url),
+                client_website = VALUES(client_website)
+        ");
         $stmt->bind_param("sssss", $clientName, $pixelId, $spreadsheetId, $spreadsheetUrl, $websiteUrl);
         
         if (!$stmt->execute()) {

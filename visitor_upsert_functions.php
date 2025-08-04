@@ -144,6 +144,53 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             return false;
         } else {
             debugLog("Successfully upserted visitor profile for $debug_context");
+            
+            // Parse emails into superpixel_emails table (if table exists and procedure exists)
+            if (isset($visitor_data['uuid'])) {
+                $uuid = $visitor_data['uuid'];
+                
+                // Check if the email parsing procedure exists
+                $proc_check = $mysqli->query("SHOW PROCEDURE STATUS WHERE Db = DATABASE() AND Name = 'parse_visitor_emails'");
+                if ($proc_check && $proc_check->num_rows > 0) {
+                    
+                    // Parse business emails
+                    if (!empty($visitor_data['business_email'])) {
+                        $call_sql = "CALL parse_visitor_emails(?, ?, 'business', 'business_email')";
+                        $stmt = $mysqli->prepare($call_sql);
+                        if ($stmt) {
+                            $stmt->bind_param("ss", $uuid, $visitor_data['business_email']);
+                            $stmt->execute();
+                            $stmt->close();
+                            debugLog("Parsed business emails for $debug_context");
+                        }
+                    }
+                    
+                    // Parse personal emails
+                    if (!empty($visitor_data['personal_emails'])) {
+                        $call_sql = "CALL parse_visitor_emails(?, ?, 'personal', 'personal_emails')";
+                        $stmt = $mysqli->prepare($call_sql);
+                        if ($stmt) {
+                            $stmt->bind_param("ss", $uuid, $visitor_data['personal_emails']);
+                            $stmt->execute();
+                            $stmt->close();
+                            debugLog("Parsed personal emails for $debug_context");
+                        }
+                    }
+                    
+                    // Parse deep verified emails
+                    if (!empty($visitor_data['deep_verified_emails'])) {
+                        $call_sql = "CALL parse_visitor_emails(?, ?, 'deep_verified', 'deep_verified_emails')";
+                        $stmt = $mysqli->prepare($call_sql);
+                        if ($stmt) {
+                            $stmt->bind_param("ss", $uuid, $visitor_data['deep_verified_emails']);
+                            $stmt->execute();
+                            $stmt->close();
+                            debugLog("Parsed deep verified emails for $debug_context");
+                        }
+                    }
+                }
+            }
+            
             return true;
         }
 

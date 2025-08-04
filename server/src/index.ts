@@ -139,8 +139,8 @@ app.post('/generate', async (req, res) => {
         return res.status(400).json({ error: 'Client name and website URL are required' });
     }
 
-    if (!client.match(/^[-_a-zA-Z0-9]+$/)) {
-        return res.status(400).json({ error: 'Client name can only contain letters, numbers, hyphens, and underscores' });
+    if (!client.match(/^[_a-zA-Z0-9]+$/)) {
+        return res.status(400).json({ error: 'Client name can only contain letters, numbers, and underscores (no hyphens)' });
     }
 
     try {
