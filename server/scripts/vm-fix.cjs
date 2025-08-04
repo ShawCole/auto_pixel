@@ -7,8 +7,8 @@ console.log('🔧 Running VM-specific fixes for selenium-webdriver...');
 const isVM = process.platform === 'linux';
 
 if (!isVM) {
-    console.log('🏠 Running on development machine - applying fixes anyway for compatibility');
-    // Don't exit - apply fixes regardless of platform
+    console.log('🏠 Running on development machine - skipping VM fixes');
+    process.exit(0);
 }
 
 console.log('🐧 Detected VM environment - applying selenium-webdriver fixes...');
