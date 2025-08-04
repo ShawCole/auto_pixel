@@ -1,5 +1,7 @@
 <?php
 // pixel_import.php for ThynkData - FINAL FIXED VERSION WITH PROPER FIELD MAPPING
+// Include standardized visitor functions
+require_once __DIR__ . '/visitor_upsert_functions.php';
 
 header('Content-Type: application/json');
 

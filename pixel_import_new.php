@@ -1,5 +1,7 @@
 <?php
 // pixel_import.php for ThynkData - FINAL FIXED VERSION WITH PROPER FIELD MAPPING
+1// Include standardized visitor functions
+require_once __DIR__ . '/visitor_upsert_functions.php';
 
 header('Content-Type: application/json');
 
@@ -244,7 +246,10 @@ try {
                 debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
 
 		// Step 2: Upsert visitor profile into superpixel_visitors (if UUID exists)
-		if (!empty($insert_data['uuid'])) {
+		upsertVisitorFromEvent($mysqli, $insert_data, "event_$eventIndex");
+		
+		// Skip the old inline visitor logic
+		if (false && !empty($insert_data['uuid'])) {
 		    // Extract only visitor profile fields (exclude event-specific fields)
 		    $visitor_fields = [
 			'uuid', 'first_name', 'last_name', 'personal_address', 'personal_city', 
