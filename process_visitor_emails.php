@@ -133,64 +133,104 @@ function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = 
             $placeholders = str_repeat('?,', count($all_emails) - 1) . '?';
             
             // STEP 1: Direct email lookup
-            $lookup_query = "SELECT Email, CRD, NPN, AgentID 
-                            FROM match_emails 
-                            WHERE Email IN ($placeholders)
-                            ORDER BY NPN DESC, CRD DESC
-                            LIMIT 1";
+            $email_query = "SELECT Email, CRD, NPN, AgentID FROM match_emails 
+                           WHERE Email IN ($placeholders) 
+                           ORDER BY NPN IS NOT NULL DESC, CRD IS NOT NULL DESC 
+                           LIMIT 1";
             
-            $stmt = $match_mysqli->prepare($lookup_query);
-            $stmt->bind_param(str_repeat('s', count($all_emails)), ...$all_emails);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($row = $result->fetch_assoc()) {
-                $results['crd'] = $row['CRD'];
-                $results['npn'] = $row['NPN'];
-                $agentId = $row['AgentID'];
+            $stmt = $match_mysqli->prepare($email_query);
+            if ($stmt) {
+                // Create type string for bind_param
+                $types = str_repeat('s', count($all_emails));
+                $stmt->bind_param($types, ...$all_emails);
+                $stmt->execute();
+                $result = $stmt->get_result();
                 
-                if ($debug) echo "Direct match found - CRD: {$row['CRD']}, NPN: {$row['NPN']}\n";
-                
-                // STEP 2: If we have CRD but no NPN, look for NPN using CRD
-                // Note: After running normalize_match_emails.php, this should rarely be needed
-                // as NPNs are propagated to all rows with the same CRD
-                if (!empty($results['crd']) && empty($results['npn'])) {
-                    $crd_query = "SELECT NPN FROM match_emails 
-                                 WHERE CRD = ? AND NPN IS NOT NULL 
-                                 LIMIT 1";
+                if ($row = $result->fetch_assoc()) {
+                    $results['crd'] = $row['CRD'];
+                    $results['npn'] = $row['NPN'];
+                    $agentId = $row['AgentID'];
                     
-                    $stmt2 = $match_mysqli->prepare($crd_query);
-                    $stmt2->bind_param("s", $results['crd']);
-                    $stmt2->execute();
-                    $result2 = $stmt2->get_result();
+                    if ($debug) echo "Direct match found - CRD: {$row['CRD']}, NPN: {$row['NPN']}\n";
                     
-                    if ($row2 = $result2->fetch_assoc()) {
-                        $results['npn'] = $row2['NPN'];
-                        if ($debug) echo "Found NPN via CRD lookup: {$row2['NPN']}\n";
+                    // STEP 2: If we have CRD but no NPN, look for NPN using CRD
+                    // Note: After running normalize_match_emails.php, this should rarely be needed
+                    // as NPNs are propagated to all rows with the same CRD
+                    if (!empty($results['crd']) && empty($results['npn'])) {
+                        $crd_query = "SELECT NPN FROM match_emails 
+                                     WHERE CRD = ? AND NPN IS NOT NULL 
+                                     LIMIT 1";
+                        
+                        $stmt2 = $match_mysqli->prepare($crd_query);
+                        $stmt2->bind_param("s", $results['crd']);
+                        $stmt2->execute();
+                        $result2 = $stmt2->get_result();
+                        
+                        if ($row2 = $result2->fetch_assoc()) {
+                            $results['npn'] = $row2['NPN'];
+                            if ($debug) echo "Found NPN via CRD lookup: {$row2['NPN']}\n";
+                        }
+                        $stmt2->close();
                     }
-                    $stmt2->close();
+                    
+                    // STEP 2B: If we have NPN but no CRD, look for CRD using NPN
+                    if (!empty($results['npn']) && empty($results['crd'])) {
+                        $npn_query = "SELECT CRD FROM match_emails 
+                                     WHERE NPN = ? AND CRD IS NOT NULL 
+                                     LIMIT 1";
+                        
+                        $stmt2b = $match_mysqli->prepare($npn_query);
+                        $stmt2b->bind_param("s", $results['npn']);
+                        $stmt2b->execute();
+                        $result2b = $stmt2b->get_result();
+                        
+                        if ($row2b = $result2b->fetch_assoc()) {
+                            $results['crd'] = $row2b['CRD'];
+                            if ($debug) echo "Found CRD via NPN lookup: {$row2b['CRD']}\n";
+                        }
+                        $stmt2b->close();
+                    }
+                    
+                    // STEP 3: If still no NPN but we have AgentID, try that
+                    // This is useful for emails without CRD but with AgentID
+                    if (empty($results['npn']) && !empty($agentId)) {
+                        $agent_query = "SELECT NPN FROM match_emails 
+                                       WHERE AgentID = ? AND NPN IS NOT NULL 
+                                       LIMIT 1";
+                        
+                        $stmt3 = $match_mysqli->prepare($agent_query);
+                        $stmt3->bind_param("s", $agentId);
+                        $stmt3->execute();
+                        $result3 = $stmt3->get_result();
+                        
+                        if ($row3 = $result3->fetch_assoc()) {
+                            $results['npn'] = $row3['NPN'];
+                            if ($debug) echo "Found NPN via AgentID lookup: {$row3['NPN']}\n";
+                        }
+                        $stmt3->close();
+                    }
+                    
+                    // STEP 3B: If still no CRD but we have AgentID, try that
+                    if (empty($results['crd']) && !empty($agentId)) {
+                        $agent_crd_query = "SELECT CRD FROM match_emails 
+                                           WHERE AgentID = ? AND CRD IS NOT NULL 
+                                           LIMIT 1";
+                        
+                        $stmt3b = $match_mysqli->prepare($agent_crd_query);
+                        $stmt3b->bind_param("s", $agentId);
+                        $stmt3b->execute();
+                        $result3b = $stmt3b->get_result();
+                        
+                        if ($row3b = $result3b->fetch_assoc()) {
+                            $results['crd'] = $row3b['CRD'];
+                            if ($debug) echo "Found CRD via AgentID lookup: {$row3b['CRD']}\n";
+                        }
+                        $stmt3b->close();
+                    }
                 }
                 
-                // STEP 3: If still no NPN but we have AgentID, try that
-                // This is useful for emails without CRD but with AgentID
-                if (empty($results['npn']) && !empty($agentId)) {
-                    $agent_query = "SELECT NPN FROM match_emails 
-                                   WHERE AgentID = ? AND NPN IS NOT NULL 
-                                   LIMIT 1";
-                    
-                    $stmt3 = $match_mysqli->prepare($agent_query);
-                    $stmt3->bind_param("s", $agentId);
-                    $stmt3->execute();
-                    $result3 = $stmt3->get_result();
-                    
-                    if ($row3 = $result3->fetch_assoc()) {
-                        $results['npn'] = $row3['NPN'];
-                        if ($debug) echo "Found NPN via AgentID lookup: {$row3['NPN']}\n";
-                    }
-                    $stmt3->close();
-                }
+                $stmt->close();
             }
-            $stmt->close();
             
             // Update visitor and resolution log tables if we found NPN/CRD
             if (!empty($results['npn']) || !empty($results['crd'])) {

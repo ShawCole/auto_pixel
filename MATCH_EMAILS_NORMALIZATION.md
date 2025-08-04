@@ -2,108 +2,107 @@
 
 ## Overview
 
-The `match_emails` table contains advisor email-to-credential mappings, but not all rows have NPNs even when they share the same CRD. The normalization process propagates NPNs to all rows with the same CRD when it's safe to do so.
+The `match_emails` table contains advisor email-to-credential mappings. Complete normalization involves **bidirectional propagation** of CRD, NPN, and AgentID values to maximize data completeness.
 
-## Key Insight
+## Complete Normalization Logic
 
-If a CRD has at least one NPN associated with it, and **all rows with that CRD have the same NPN** (when not NULL), then we can safely propagate that NPN to all rows with that CRD.
+### Bidirectional Propagation Rules:
 
-Example:
-```
-Before normalization:
-CRD    | NPN    | Email
-24504  | 610844 | james.bockenek@wachoviasec.com
-24504  | 610844 | james.bockenek@wellsfargoadvisors.com  
-24504  | NULL   | james.bockenek@wfadvisors.com         ← Missing NPN
+1. **CRD → NPN**: If rows share the same CRD and one has NPN, propagate to all
+2. **CRD → AgentID**: If rows share the same CRD and one has AgentID, propagate to all
+3. **NPN → CRD**: If rows share the same NPN and one has CRD, propagate to all
+4. **NPN → AgentID**: If rows share the same NPN and one has AgentID, propagate to all
+5. **AgentID → CRD**: If rows share the same AgentID and one has CRD, propagate to all
+6. **AgentID → NPN**: If rows share the same AgentID and one has NPN, propagate to all
 
-After normalization:
-CRD    | NPN    | Email
-24504  | 610844 | james.bockenek@wachoviasec.com
-24504  | 610844 | james.bockenek@wellsfargoadvisors.com
-24504  | 610844 | james.bockenek@wfadvisors.com         ← NPN filled in
-```
+### Safety Rules:
+- Only propagate when there's exactly ONE unique value (no conflicts)
+- Skip rows that already have values
+- Never overwrite existing data
 
 ## Running the Normalization
 
-### 1. Analyze First (Dry Run)
+### Initial One-Direction Normalization (Already Done)
 
-Always analyze before updating to see what will be changed:
-
+This normalized CRD → NPN only:
 ```bash
-php normalize_match_emails.php analyze
+php normalize_match_emails.php analyze  # Already run
+php normalize_match_emails.php update   # Already run - added 379,755 NPNs
 ```
 
-This will show:
-- How many CRDs have consistent NPNs that can be propagated
-- How many rows will be updated
-- Any CRDs with conflicting NPNs (these won't be touched)
-- Sample updates that would be made
+### Complete Bidirectional Normalization (NEW)
 
-### 2. Apply Updates
-
-Once you're satisfied with the analysis:
-
+This normalizes in ALL directions:
 ```bash
-php normalize_match_emails.php update
+# First analyze to see what will be updated
+php normalize_match_emails_complete.php analyze
+
+# Then apply all updates
+php normalize_match_emails_complete.php update
 ```
 
-This will:
-- Update all rows in batches of 1000 for performance
-- Show progress as it runs
-- Report total rows updated
+## Expected Impact
 
-## Expected Results
+Based on the data structure, complete normalization should:
 
-Based on the analysis:
-- **340,900 CRDs** have at least one known NPN
-- **381,091 additional NPNs** can be filled in via CRD lookup
-- This increases NPN coverage significantly
+1. **Fill missing CRDs** where we have NPNs
+2. **Fill missing NPNs** where we have CRDs (already done)
+3. **Fill missing AgentIDs** using CRD/NPN relationships
+4. **Maximize coverage** for all three identifiers
 
-## Safety Features
+## Example Scenarios
 
-The script will **NOT** update rows where:
-- A CRD has multiple different NPNs (conflicts)
-- The CRD is NULL
-- The row already has an NPN
-
-## Impact on Lookup Logic
+### Scenario 1: NPN → CRD Propagation
+```
+Before:
+Email                          | CRD  | NPN    | AgentID
+john.doe@advisor1.com         | 123  | 45678  | NULL
+john.doe@advisor2.com         | NULL | 45678  | NULL  ← Missing CRD
 
 After normalization:
-1. **Direct email lookups** are more likely to return NPNs immediately
-2. **CRD-based lookups** (Step 2 in our logic) become less necessary
-3. Overall NPN match rate increases significantly
+john.doe@advisor1.com         | 123  | 45678  | NULL
+john.doe@advisor2.com         | 123  | 45678  | NULL  ← CRD filled
+```
 
-## Monitoring
+### Scenario 2: AgentID Bridge
+```
+Before:
+advisor@firm1.com             | 123  | NULL   | 789
+advisor@firm2.com             | NULL | NULL   | 789   ← Missing both
+different@email.com           | NULL | 45678  | 789   ← Has NPN
 
-After normalization, you can verify the improvements:
+After normalization:
+advisor@firm1.com             | 123  | 45678  | 789   ← NPN filled via AgentID
+advisor@firm2.com             | 123  | 45678  | 789   ← Both filled via AgentID
+different@email.com           | 123  | 45678  | 789   ← CRD filled via AgentID
+```
 
+## Monitoring Progress
+
+Check coverage improvements:
 ```sql
--- Check NPN coverage
+-- Overall coverage stats
 SELECT 
-    COUNT(*) as total_rows,
-    COUNT(CASE WHEN NPN IS NOT NULL THEN 1 END) as rows_with_npn,
-    ROUND(COUNT(CASE WHEN NPN IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) as npn_coverage_pct
-FROM accupoint_solutions.match_emails
-WHERE CRD IS NOT NULL;
-
--- Check if any CRDs still have mixed NULL/non-NULL NPNs
-SELECT CRD, 
-       COUNT(*) as total_rows,
-       COUNT(CASE WHEN NPN IS NULL THEN 1 END) as null_npns,
-       COUNT(CASE WHEN NPN IS NOT NULL THEN 1 END) as non_null_npns
-FROM accupoint_solutions.match_emails
-WHERE CRD IS NOT NULL
-GROUP BY CRD
-HAVING null_npns > 0 AND non_null_npns > 0
-LIMIT 10;
+    COUNT(*) as total,
+    ROUND(COUNT(CASE WHEN CRD IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) as crd_pct,
+    ROUND(COUNT(CASE WHEN NPN IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) as npn_pct,
+    ROUND(COUNT(CASE WHEN AgentID IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) as agentid_pct,
+    ROUND(COUNT(CASE WHEN CRD IS NOT NULL AND NPN IS NOT NULL THEN 1 END) * 100.0 / COUNT(*), 2) as both_pct
+FROM accupoint_solutions.match_emails;
 ```
 
 ## Best Practices
 
-1. **Run periodically**: As new data is added to match_emails, run normalization monthly or quarterly
-2. **Monitor conflicts**: Keep an eye on CRDs with multiple NPNs - these may need manual review
-3. **Backup first**: Consider backing up the table before running large updates
+1. **Run Complete Normalization First**: Before any other data processing
+2. **Re-run Periodically**: As new data is added
+3. **Monitor Conflicts**: Review cases with multiple values for manual resolution
+4. **Leverage in Lookups**: The lookup logic now checks all relationships
 
-## Future Enhancements
+## Integration with Lookup System
 
-Consider creating triggers on the `match_emails` table to automatically propagate NPNs when new rows are inserted with a CRD that already has a known NPN. 
+After complete normalization, the `process_visitor_emails.php` lookup is more powerful:
+
+1. **Email match** → Get CRD/NPN/AgentID
+2. **If missing NPN** → Check via CRD or AgentID  
+3. **If missing CRD** → Check via NPN or AgentID
+4. **Maximum match rate** due to normalized data 
