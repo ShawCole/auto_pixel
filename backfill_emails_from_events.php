@@ -9,7 +9,6 @@
  * Usage: php backfill_emails_from_events.php <database_name> [debug]
  */
 
-require_once __DIR__ . '/db_config.php';
 require_once __DIR__ . '/process_visitor_emails.php';
 
 if ($argc < 2) {
@@ -19,8 +18,13 @@ if ($argc < 2) {
 $database = $argv[1];
 $debug = isset($argv[2]) && $argv[2] === 'debug';
 
+// Database configuration (consistent with other scripts)
+$host = '34.31.66.104';
+$user = 'root';
+$pass = 'AccuPoint01!';
+
 // Connect to database
-$mysqli = new mysqli($DB_CONFIG['host'], $DB_CONFIG['user'], $DB_CONFIG['pass'], $database);
+$mysqli = new mysqli($host, $user, $pass, $database);
 
 if ($mysqli->connect_error) {
     die("Connection failed: " . $mysqli->connect_error . "\n");

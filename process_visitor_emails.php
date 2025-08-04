@@ -5,10 +5,11 @@
  * This script focuses on NPN/CRD lookup but can also parse emails if needed
  */
 
-require_once __DIR__ . '/db_config.php';
-
 function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = false) {
-    global $DB_CONFIG;
+    // Database configuration (consistent with other scripts)
+    $host = '34.31.66.104';
+    $user = 'root';
+    $pass = 'AccuPoint01!';
     
     $results = [
         'emails_parsed' => 0,
@@ -21,9 +22,9 @@ function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = 
     
     // Connect to client database
     $client_mysqli = new mysqli(
-        $DB_CONFIG['host'],
-        $DB_CONFIG['user'],
-        $DB_CONFIG['pass'],
+        $host,
+        $user,
+        $pass,
         $client_db
     );
     
@@ -121,9 +122,9 @@ function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = 
     if (!empty($all_emails)) {
         // Connect to accupoint_solutions database
         $match_mysqli = new mysqli(
-            $DB_CONFIG['host'],
-            $DB_CONFIG['user'],
-            $DB_CONFIG['pass'],
+            $host,
+            $user,
+            $pass,
             'accupoint_solutions'
         );
         

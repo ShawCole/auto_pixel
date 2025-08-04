@@ -6,16 +6,20 @@
  * Usage: php normalize_match_emails.php [analyze|update]
  */
 
-require_once __DIR__ . '/db_config.php';
-
 $mode = isset($argv[1]) ? $argv[1] : 'analyze';
 
 if (!in_array($mode, ['analyze', 'update'])) {
     die("Usage: php normalize_match_emails.php [analyze|update]\n");
 }
 
+// Database configuration (consistent with other scripts)
+$host = '34.31.66.104';
+$user = 'root';
+$pass = 'AccuPoint01!';
+$dbname = 'accupoint_solutions';
+
 // Connect to accupoint_solutions database
-$mysqli = new mysqli($DB_CONFIG['host'], $DB_CONFIG['user'], $DB_CONFIG['pass'], 'accupoint_solutions');
+$mysqli = new mysqli($host, $user, $pass, $dbname);
 
 if ($mysqli->connect_error) {
     die("Connection failed: " . $mysqli->connect_error . "\n");
