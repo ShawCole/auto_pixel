@@ -87,7 +87,7 @@ while ($row = $result->fetch_assoc()) {
     }
     
     // Process emails for this UUID
-    $results = processVisitorEmails($database, $uuid, false);
+    $results = processVisitorEmails($database, $uuid, true, $debug);
     
     $emails_parsed += $results['emails_parsed'];
     if ($results['npn_found']) $npns_found++;
