@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar, Trash2, Search, AlertCircle } from 'lucide-react'
 
 interface Pixel {
@@ -226,38 +226,17 @@ export default function AdminPanel() {
 
     const industries = ['all', ...Array.from(new Set(pixels.map(p => p.industry).filter(Boolean)))]
 
-    // Smart tooltip component for truncated text
-    const TruncatedText = ({ text, className = "" }: { text: string; className?: string }) => {
-        const textRef = useRef<HTMLDivElement>(null)
-
-        const handleMouseEnter = () => {
-            const element = textRef.current
-            if (element && element.scrollWidth > element.clientWidth) {
-                const rect = element.getBoundingClientRect()
-                setTooltip({
-                    show: true,
-                    content: text,
-                    x: rect.left,
-                    y: rect.top
-                })
-            }
-        }
-
-        const handleMouseLeave = () => {
+    // Hide tooltip on scroll
+    useEffect(() => {
+        const handleScroll = () => {
             setTooltip({ show: false, content: '', x: 0, y: 0 })
         }
 
-        return (
-            <div
-                ref={textRef}
-                className={`truncate ${className}`}
-                onMouseEnter={handleMouseEnter}
-                onMouseLeave={handleMouseLeave}
-            >
-                {text}
-            </div>
-        )
-    }
+        window.addEventListener('scroll', handleScroll, true)
+        return () => window.removeEventListener('scroll', handleScroll, true)
+    }, [])
+
+
 
     return (
         <div className="p-8">
@@ -406,8 +385,31 @@ export default function AdminPanel() {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-sm text-gray-600" style={{ width: '200px' }}>
-                                                <TruncatedText text={pixel.website} />
+                                            <td
+                                                className="p-4 text-sm text-gray-600"
+                                                style={{ width: '200px' }}
+                                                onMouseEnter={() => {
+                                                    const textElement = document.querySelector(`#website-${pixel.id}`)
+                                                    if (textElement && textElement.scrollWidth > textElement.clientWidth) {
+                                                        const rect = textElement.getBoundingClientRect()
+                                                        setTooltip({
+                                                            show: true,
+                                                            content: pixel.website,
+                                                            x: rect.left,
+                                                            y: rect.top
+                                                        })
+                                                    }
+                                                }}
+                                                onMouseLeave={() => {
+                                                    setTooltip({ show: false, content: '', x: 0, y: 0 })
+                                                }}
+                                            >
+                                                <div
+                                                    id={`website-${pixel.id}`}
+                                                    className="truncate"
+                                                >
+                                                    {pixel.website}
+                                                </div>
                                             </td>
                                             <td className="p-4" style={{ width: '120px' }}>
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate">
