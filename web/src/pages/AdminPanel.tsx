@@ -230,7 +230,7 @@ export default function AdminPanel() {
     const TruncatedText = ({ text, className = "" }: { text: string; className?: string }) => {
         const textRef = useRef<HTMLDivElement>(null)
 
-        const handleMouseEnter = (e: React.MouseEvent) => {
+        const handleMouseEnter = () => {
             const element = textRef.current
             if (element && element.scrollWidth > element.clientWidth) {
                 const rect = element.getBoundingClientRect()
