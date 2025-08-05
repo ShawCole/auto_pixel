@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Calendar, Trash2, Search, AlertCircle } from 'lucide-react'
 
 interface Pixel {
@@ -27,6 +27,12 @@ export default function AdminPanel() {
     const [deletingPixel, setDeletingPixel] = useState<string | null>(null)
     const [deleteStep, setDeleteStep] = useState<'confirm' | 'downloading' | 'deleting' | 'complete'>('confirm')
     const [deleteProgress, setDeleteProgress] = useState<string>('')
+    const [tooltip, setTooltip] = useState<{ show: boolean; content: string; x: number; y: number }>({
+        show: false,
+        content: '',
+        x: 0,
+        y: 0
+    })
 
     // Mock data - replace with actual API call
     useEffect(() => {
@@ -220,6 +226,39 @@ export default function AdminPanel() {
 
     const industries = ['all', ...Array.from(new Set(pixels.map(p => p.industry).filter(Boolean)))]
 
+    // Smart tooltip component for truncated text
+    const TruncatedText = ({ text, className = "" }: { text: string; className?: string }) => {
+        const textRef = useRef<HTMLDivElement>(null)
+
+        const handleMouseEnter = (e: React.MouseEvent) => {
+            const element = textRef.current
+            if (element && element.scrollWidth > element.clientWidth) {
+                const rect = element.getBoundingClientRect()
+                setTooltip({
+                    show: true,
+                    content: text,
+                    x: rect.left,
+                    y: rect.top
+                })
+            }
+        }
+
+        const handleMouseLeave = () => {
+            setTooltip({ show: false, content: '', x: 0, y: 0 })
+        }
+
+        return (
+            <div
+                ref={textRef}
+                className={`truncate ${className}`}
+                onMouseEnter={handleMouseEnter}
+                onMouseLeave={handleMouseLeave}
+            >
+                {text}
+            </div>
+        )
+    }
+
     return (
         <div className="p-8">
             <div className="max-w-7xl mx-auto">
@@ -368,12 +407,7 @@ export default function AdminPanel() {
                                                 )}
                                             </td>
                                             <td className="p-4 text-sm text-gray-600" style={{ width: '200px' }}>
-                                                <div
-                                                    className="truncate cursor-help max-w-full overflow-hidden"
-                                                    title={pixel.website}
-                                                >
-                                                    {pixel.website}
-                                                </div>
+                                                <TruncatedText text={pixel.website} />
                                             </td>
                                             <td className="p-4" style={{ width: '120px' }}>
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate">
@@ -525,6 +559,21 @@ export default function AdminPanel() {
                                 <div className="mt-2 text-sm text-red-700">{error}</div>
                             </div>
                         </div>
+                    </div>
+                )}
+
+                {/* Custom Tooltip Overlay */}
+                {tooltip.show && (
+                    <div
+                        className="fixed z-50 bg-gray-900 text-white text-sm px-3 py-2 rounded-lg shadow-lg pointer-events-none"
+                        style={{
+                            left: tooltip.x,
+                            top: tooltip.y - 40,
+                            maxWidth: '300px',
+                            wordBreak: 'break-all'
+                        }}
+                    >
+                        {tooltip.content}
                     </div>
                 )}
             </div>
