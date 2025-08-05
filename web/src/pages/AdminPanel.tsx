@@ -314,7 +314,7 @@ export default function AdminPanel() {
 
                     {/* Pixels Table */}
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full table-fixed">
                             <thead>
                                 <tr className="border-b bg-gray-50">
                                     <th className="p-4 text-left">
@@ -326,7 +326,7 @@ export default function AdminPanel() {
                                         />
                                     </th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Client</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700 w-56">Website</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '200px' }}>Website</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Industry</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Events</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Visitors</th>
@@ -367,9 +367,9 @@ export default function AdminPanel() {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-sm text-gray-600 w-56">
+                                            <td className="p-4 text-sm text-gray-600" style={{ width: '200px' }}>
                                                 <div
-                                                    className="truncate cursor-help"
+                                                    className="truncate cursor-help max-w-full overflow-hidden"
                                                     title={pixel.website}
                                                 >
                                                     {pixel.website}
