@@ -287,8 +287,15 @@ function getAllSheets() {
     return $sheets;
 }
 
-// Main execution
-echo "🚀 FORCE SYNC ALL SHEETS STARTED 🚀\n";
+// Check for specific client argument
+$targetClient = null;
+if ($argc > 1) {
+    $targetClient = $argv[1];
+    echo "🎯 FORCE SYNC SINGLE CLIENT: $targetClient\n";
+} else {
+    echo "🚀 FORCE SYNC ALL SHEETS STARTED 🚀\n";
+}
+
 echo "Time: " . date('Y-m-d H:i:s') . "\n";
 echo "Mode: RAPID SYNC (minimal delays)\n";
 echo "=====================================\n\n";
@@ -299,7 +306,27 @@ if (empty($allSheets)) {
     exit(1);
 }
 
-echo "📊 Found " . count($allSheets) . " sheets to force sync\n\n";
+// Filter to specific client if specified
+if ($targetClient) {
+    $filteredSheets = array_filter($allSheets, function($sheet) use ($targetClient) {
+        return $sheet['client_name'] === $targetClient;
+    });
+    
+    if (empty($filteredSheets)) {
+        echo "❌ No sheet found for client: $targetClient\n";
+        echo "Available clients: " . implode(', ', array_column($allSheets, 'client_name')) . "\n";
+        exit(1);
+    }
+    
+    $allSheets = array_values($filteredSheets); // Re-index array
+}
+
+if ($targetClient) {
+    echo "📊 Found " . count($allSheets) . " sheet(s) for client '$targetClient'\n\n";
+} else {
+    echo "📊 Found " . count($allSheets) . " sheets to force sync\n";
+    echo "💡 Tip: Use 'php force_sync.php [CLIENT_NAME]' to sync only one client\n\n";
+}
 
 $successCount = 0;
 $totalSheets = count($allSheets);
@@ -325,13 +352,21 @@ $overallEndTime = microtime(true);
 $totalDuration = round($overallEndTime - $overallStartTime, 2);
 
 echo "\n=====================================\n";
-echo "🎉 FORCE SYNC COMPLETED! 🎉\n";
+if ($targetClient) {
+    echo "🎉 FORCE SYNC COMPLETED FOR '$targetClient'! 🎉\n";
+} else {
+    echo "🎉 FORCE SYNC COMPLETED! 🎉\n";
+}
 echo "📊 Results: $successCount/$totalSheets sheets synced successfully\n";
 echo "⏱️  Total time: {$totalDuration}s\n";
 echo "🚀 Average: " . round($totalDuration / $totalSheets, 2) . "s per sheet\n";
 
 if ($successCount === $totalSheets) {
-    echo "✅ ALL SHEETS SYNCED SUCCESSFULLY!\n";
+    if ($targetClient) {
+        echo "✅ CLIENT '$targetClient' SYNCED SUCCESSFULLY!\n";
+    } else {
+        echo "✅ ALL SHEETS SYNCED SUCCESSFULLY!\n";
+    }
     exit(0);
 } else {
     $failedCount = $totalSheets - $successCount;
