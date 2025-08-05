@@ -317,7 +317,7 @@ export default function AdminPanel() {
                         <table className="w-full table-fixed">
                             <thead>
                                 <tr className="border-b bg-gray-50">
-                                    <th className="p-4 text-left">
+                                    <th className="p-4 text-left" style={{ width: '50px' }}>
                                         <input
                                             type="checkbox"
                                             checked={selectedPixels.size === filteredPixels.length && filteredPixels.length > 0}
@@ -325,13 +325,13 @@ export default function AdminPanel() {
                                             className="rounded border-gray-300"
                                         />
                                     </th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Client</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '180px' }}>Client</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '200px' }}>Website</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Industry</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Events</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Visitors</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Created</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Actions</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '120px' }}>Industry</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '80px' }}>Events</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '80px' }}>Visitors</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '120px' }}>Created</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '140px' }}>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -350,7 +350,7 @@ export default function AdminPanel() {
                                 ) : (
                                     filteredPixels.map(pixel => (
                                         <tr key={pixel.id} className="border-b hover:bg-gray-50">
-                                            <td className="p-4">
+                                            <td className="p-4" style={{ width: '50px' }}>
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedPixels.has(pixel.id)}
@@ -358,8 +358,8 @@ export default function AdminPanel() {
                                                     className="rounded border-gray-300"
                                                 />
                                             </td>
-                                            <td className="p-4">
-                                                <div className="font-medium text-gray-900">{pixel.clientName}</div>
+                                            <td className="p-4" style={{ width: '180px' }}>
+                                                <div className="font-medium text-gray-900 truncate">{pixel.clientName}</div>
                                                 {pixel.deletionScheduled && (
                                                     <div className="text-xs text-red-600 mt-1 flex items-center gap-1">
                                                         <AlertCircle className="w-3 h-3" />
@@ -375,20 +375,20 @@ export default function AdminPanel() {
                                                     {pixel.website}
                                                 </div>
                                             </td>
-                                            <td className="p-4">
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                            <td className="p-4" style={{ width: '120px' }}>
+                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate">
                                                     {pixel.industry || 'Uncategorized'}
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-sm text-gray-900">{pixel.eventCount.toLocaleString()}</td>
-                                            <td className="p-4 text-sm text-gray-900">{pixel.visitorCount.toLocaleString()}</td>
-                                            <td className="p-4 text-sm text-gray-600">
-                                                <div className="flex items-center gap-1">
+                                            <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{pixel.eventCount.toLocaleString()}</td>
+                                            <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{pixel.visitorCount.toLocaleString()}</td>
+                                            <td className="p-4 text-sm text-gray-600" style={{ width: '120px' }}>
+                                                <div className="flex items-center gap-1 truncate">
                                                     <Calendar className="w-4 h-4" />
                                                     {new Date(pixel.createdAt).toLocaleDateString()}
                                                 </div>
                                             </td>
-                                            <td className="p-4">
+                                            <td className="p-4" style={{ width: '140px' }}>
                                                 <div className="flex items-center gap-2">
                                                     {pixel.sheetUrl && (
                                                         <a
