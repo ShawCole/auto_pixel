@@ -55,8 +55,8 @@ if (!empty($client_row['sheet_id']) && !empty($client_row['sheet_url'])) {
 // Google Sheets API setup
 $client = new Client();
 $client->setApplicationName('Auto-Pixel Sheet Manager');
-$client->setScopes([Sheets::SPREADSHEETS]);
-$client->setAuthConfig('/opt/auto-pixel/service-account-key.json');
+$client->setScopes([Sheets::SPREADSHEETS, 'https://www.googleapis.com/auth/drive']);
+$client->setAuthConfig('/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json');
 
 $service = new Sheets($client);
 
