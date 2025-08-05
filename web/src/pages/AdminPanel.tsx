@@ -326,7 +326,7 @@ export default function AdminPanel() {
                                         />
                                     </th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Client</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700">Website</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700 w-56">Website</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Industry</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Events</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700">Visitors</th>
