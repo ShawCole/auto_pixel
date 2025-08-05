@@ -367,7 +367,14 @@ export default function AdminPanel() {
                                                     </div>
                                                 )}
                                             </td>
-                                            <td className="p-4 text-sm text-gray-600">{pixel.website}</td>
+                                            <td className="p-4 text-sm text-gray-600 w-56">
+                                                <div
+                                                    className="truncate cursor-help"
+                                                    title={pixel.website}
+                                                >
+                                                    {pixel.website}
+                                                </div>
+                                            </td>
                                             <td className="p-4">
                                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                                     {pixel.industry || 'Uncategorized'}
