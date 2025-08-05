@@ -245,8 +245,12 @@ try {
                 
                 debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
                 
-                // Step 2: Upsert visitor profile into superpixel_visitors (if UUID exists)
-                upsertVisitorFromEvent($mysqli, $insert_data, "event_$eventIndex");
+                // Visitor creation/update is now handled automatically by database trigger
+                // The trigger 'after_resolution_log_insert_visitor_update' will:
+                // - Create new visitors for new UUIDs
+                // - Update existing visitors with new event data
+                // - Preserve business emails over personal emails
+                // - Track event counts and last seen timestamps
                 
                 // Skip the old inline visitor logic
                 if (false && !empty($insert_data['uuid'])) {
