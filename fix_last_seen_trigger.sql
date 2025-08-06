@@ -1,6 +1,5 @@
--- Comprehensive trigger update for superpixel_visitors table
--- This trigger ensures ALL fields from AudienceLab webhook are properly synced to visitors table
--- Compatible with all production databases
+-- Fix for last_seen_at column to properly track visitor activity time
+-- NOT the database update time
 
 DROP TRIGGER IF EXISTS after_resolution_log_insert_visitor_update;
 
@@ -190,4 +189,18 @@ END$$
 
 DELIMITER ;
 
-SELECT 'Trigger updated successfully!' as status; 
+-- Also fix existing records where last_seen_at is wrong
+-- This will update last_seen_at to match the most recent event_timestamp for each visitor
+UPDATE superpixel_visitors v
+JOIN (
+    SELECT 
+        uuid,
+        MAX(STR_TO_DATE(event_timestamp, '%Y-%m-%dT%H:%i:%sZ')) as latest_event
+    FROM superpixel_resolution_log
+    WHERE event_timestamp IS NOT NULL AND event_timestamp != ''
+    GROUP BY uuid
+) latest ON v.uuid = latest.uuid
+SET v.last_seen_at = latest.latest_event
+WHERE v.event_timestamp IS NOT NULL;
+
+SELECT 'Trigger and timestamps fixed successfully!' as status; 
