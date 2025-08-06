@@ -10,7 +10,7 @@ INNER JOIN (
         MAX(CASE 
             WHEN event_timestamp IS NOT NULL 
                 AND event_timestamp != '' 
-                AND event_timestamp LIKE '____-__-__T__:__:__%'
+                AND event_timestamp REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
             THEN event_timestamp 
             ELSE NULL 
         END) as latest_event_timestamp
@@ -21,6 +21,8 @@ INNER JOIN (
 SET 
     v.last_seen_at = CASE 
         WHEN latest_events.latest_event_timestamp IS NOT NULL 
+            AND latest_events.latest_event_timestamp != ''
+            AND latest_events.latest_event_timestamp REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
         THEN STR_TO_DATE(latest_events.latest_event_timestamp, '%Y-%m-%dT%H:%i:%sZ')
         ELSE latest_events.latest_created_at
     END
@@ -35,7 +37,7 @@ INNER JOIN (
         MIN(CASE 
             WHEN event_timestamp IS NOT NULL 
                 AND event_timestamp != '' 
-                AND event_timestamp LIKE '____-__-__T__:__:__%'
+                AND event_timestamp REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
             THEN event_timestamp 
             ELSE NULL 
         END) as earliest_event_timestamp
@@ -46,6 +48,8 @@ INNER JOIN (
 SET 
     v.first_seen_at = CASE 
         WHEN earliest_events.earliest_event_timestamp IS NOT NULL 
+            AND earliest_events.earliest_event_timestamp != ''
+            AND earliest_events.earliest_event_timestamp REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
         THEN STR_TO_DATE(earliest_events.earliest_event_timestamp, '%Y-%m-%dT%H:%i:%sZ')
         ELSE earliest_events.earliest_created_at
     END
