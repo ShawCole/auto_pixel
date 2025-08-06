@@ -195,12 +195,21 @@ UPDATE superpixel_visitors v
 JOIN (
     SELECT 
         uuid,
-        MAX(STR_TO_DATE(event_timestamp, '%Y-%m-%dT%H:%i:%sZ')) as latest_event
+        MAX(
+            CASE 
+                WHEN event_timestamp REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}' 
+                THEN STR_TO_DATE(event_timestamp, '%Y-%m-%dT%H:%i:%sZ')
+                ELSE NULL
+            END
+        ) as latest_event
     FROM superpixel_resolution_log
-    WHERE event_timestamp IS NOT NULL AND event_timestamp != ''
+    WHERE event_timestamp IS NOT NULL 
+        AND event_timestamp != ''
+        AND event_timestamp REGEXP '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}'
     GROUP BY uuid
+    HAVING latest_event IS NOT NULL
 ) latest ON v.uuid = latest.uuid
 SET v.last_seen_at = latest.latest_event
-WHERE v.event_timestamp IS NOT NULL;
+WHERE latest.latest_event IS NOT NULL;
 
 SELECT 'Trigger and timestamps fixed successfully!' as status; 
