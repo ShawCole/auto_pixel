@@ -87,19 +87,26 @@ $dbHost = '34.31.66.104';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 
-// List of client databases to update
+// List of actual production client databases
+// Based on the real database list, these appear to be the main client databases:
 $clientDatabases = [
-    'AcquireUp',
-    'CountryLifeFinancial',
-    'Emerge',
-    'FocusFinancialGroup',
-    'HorizonFinancial',
-    'MidWestFinancialGroup',
-    'SellMax',
-    'ThirdCoastAgency',
-    'UltimateLegacy',
-    'UniversalCapital'
+    'AcquireUp',           // Main client database
+    'Country_Life',        // Country Life Financial
+    'USA_Financial',       // USA Financial
+    'Close_Coach',         // Close Coach
+    'VettaFi',            // VettaFi
+    'Retirement_Results_ACTIVE_2',  // Retirement Results Active
+    'Retirement_Results_AWM',       // Retirement Results AWM
+    'AccuPoint_2',        // AccuPoint Solutions
+    // Add more production databases as needed
 ];
+
+// Optional: Check if you want to include test databases
+$includeTestDatabases = false;
+if ($includeTestDatabases) {
+    // Add test databases if needed for testing schema changes
+    $clientDatabases[] = 'TEST_NEW_COLUMNS';
+}
 
 try {
     $pdo = new PDO("mysql:host=$dbHost", $dbUser, $dbPass);
@@ -108,6 +115,8 @@ try {
     echo "=== ANALYZING DATABASE SCHEMAS ===\n\n";
     
     $alterStatements = [];
+    $databasesWithTable = [];
+    $databasesWithoutTable = [];
     
     foreach ($clientDatabases as $database) {
         echo "Checking database: $database\n";
@@ -124,9 +133,11 @@ try {
         
         if (empty($existingColumns)) {
             echo "  ⚠️  Table superpixel_resolution_log not found\n\n";
+            $databasesWithoutTable[] = $database;
             continue;
         }
         
+        $databasesWithTable[] = $database;
         $missingColumns = [];
         foreach ($newFieldsFromWebhook as $column => $type) {
             if (!in_array($column, $existingColumns)) {
@@ -177,7 +188,7 @@ try {
         echo "\n=== CHECKING superpixel_visitors TABLE ===\n\n";
         
         $visitorAlterStatements = [];
-        foreach ($clientDatabases as $database) {
+        foreach ($databasesWithTable as $database) {
             echo "Checking visitors table in: $database\n";
             
             $stmt = $pdo->query("
@@ -214,6 +225,11 @@ try {
             }
             
             if (!empty($missingColumns)) {
+                echo "  Missing visitor columns:\n";
+                foreach ($missingColumns as $column => $type) {
+                    echo "    - $column\n";
+                }
+                
                 $alterStatement = "ALTER TABLE `$database`.`superpixel_visitors`\n";
                 $addClauses = [];
                 
@@ -227,7 +243,10 @@ try {
                 
                 $alterStatement .= implode(",\n", $addClauses) . ";";
                 $visitorAlterStatements[$database] = $alterStatement;
+            } else {
+                echo "  ✅ All visitor columns already exist\n";
             }
+            echo "\n";
         }
         
         if (!empty($visitorAlterStatements)) {
@@ -240,13 +259,21 @@ try {
             }
             
             file_put_contents('add_visitor_columns.sql', $visitorSqlContent);
-            echo "\nVisitor table SQL saved to: add_visitor_columns.sql\n";
+            echo "Visitor table SQL saved to: add_visitor_columns.sql\n";
         }
     }
     
     echo "\n=== SUMMARY ===\n";
     echo "Total new fields available: " . count($newFieldsFromWebhook) . "\n";
     echo "Databases checked: " . count($clientDatabases) . "\n";
+    echo "Databases with superpixel_resolution_log table: " . count($databasesWithTable) . "\n";
+    if (!empty($databasesWithTable)) {
+        echo "  - " . implode("\n  - ", $databasesWithTable) . "\n";
+    }
+    echo "Databases without table: " . count($databasesWithoutTable) . "\n";
+    if (!empty($databasesWithoutTable)) {
+        echo "  - " . implode("\n  - ", $databasesWithoutTable) . "\n";
+    }
     
 } catch (Exception $e) {
     echo "Error: " . $e->getMessage() . "\n";
