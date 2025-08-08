@@ -158,7 +158,7 @@ try {
                 $insert_data['referrer'] = $eventData['referrer'] ?? null;
                 $insert_data['timestamp'] = $eventData['timestamp'] ?? null;
                 $insert_data['url'] = $eventData['url'] ?? null;
-//                 $insert_data['domain'] = isset($eventData['url']) ? parse_url($eventData['url'], PHP_URL_HOST) : null;
+                $insert_data['domain'] = isset($eventData['url']) ? parse_url($eventData['url'], PHP_URL_HOST) : null;
             }
             
             // Add default NPN/CRD values (will be updated by email processing)

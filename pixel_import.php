@@ -95,6 +95,8 @@ try {
         debugLog("Processing POST request for client: " . ($client ?: 'none'));
         
         $rawData = file_get_contents('php://input');
+	debugLog("=== New webhook request for client: " . ($client ?: 'none') . " ===");
+	debugLog("Raw input received (first 500 chars): " . substr($rawData, 0, 500));
         $decoded = json_decode($rawData, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {

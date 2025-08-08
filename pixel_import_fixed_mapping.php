@@ -14,7 +14,17 @@ function debugLog($message) {
     $timestamp = date('Y-m-d H:i:s');
     $logMessage = "[$timestamp] $message\n";
     error_log($logMessage, 3, __DIR__ . '/pixel_import_debug.log');
-}
+
+debugLog(
+    "Inbound request: method=" . ($_SERVER['REQUEST_METHOD'] ?? 'unknown') .
+    ", client=" . (isset($_GET['client']) ? preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['client']) : 'none') .
+    ", uri=" . ($_SERVER['REQUEST_URI'] ?? '') .
+    ", content-type=" . ($_SERVER['CONTENT_TYPE'] ?? '') .
+    ", content-length=" . ($_SERVER['CONTENT_LENGTH'] ?? '') .
+    ", ip=" . ($_SERVER['REMOTE_ADDR'] ?? '') .
+    ", ua=" . ($_SERVER['HTTP_USER_AGENT'] ?? '')
+);
+
 
 // Map AudienceLab's new UPPERCASE fields to our lowercase columns
 $FIELD_MAPPING = [
@@ -245,4 +255,5 @@ try {
     http_response_code(500);
     echo json_encode(['error' => 'Internal Server Error', 'message' => $e->getMessage()]);
 }
-?> 
+
+// no closing "?>" needed
