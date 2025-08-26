@@ -1,4 +1,6 @@
 <?php
+require_once __DIR__ . '/ingest_emails_from_event.php';
+require_once '/opt/auto-pixel/process_visitor_emails.php';
 // pixel_import.php for ThynkData - FINAL FIXED VERSION WITH PROPER FIELD MAPPING
 // Include standardized visitor functions
 require_once __DIR__ . '/visitor_upsert_functions.php';
@@ -12,6 +14,11 @@ $client = isset($_GET['client']) ? preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['cl
 $dbName = $client ?: (getenv('DB_NAME') ?: 'pixel');
 
 $logFile = '/var/www/hook.thynkdata.com/pixel_import_debug.log';
+
+// UUIDs that should never dedupe (test personas used across all DBs)
+$NON_DEDUPE_UUIDS = [
+  'dc0016d3803db4912441edb1b0', // Margaret Faz
+];
 
 // Logging function
 function debugLog($message) {
@@ -112,12 +119,12 @@ try {
             foreach ($events as $eventIndex => $event) {
                 debugLog("Processing event $eventIndex");
                 
-                $pixel_data = isset($event['resolution']) ? $event['resolution'] : [];
-                $event_data = isset($event['event_data']) ? $event['event_data'] : [];
-    
-                if (is_string($event_data)) {
-                    $event_data = json_decode($event_data, true) ?: [];
-                }
+		$pixel_data = isset($event['resolution']) ? $event['resolution'] : [];
+		if (is_string($pixel_data)) {
+		  $tmp = json_decode($pixel_data, true);
+		  if (is_array($tmp)) { $pixel_data = $tmp; }
+		}
+
                 
                 // FIXED: Map SimpleAudience UPPERCASE fields to lowercase database columns
 				$insert_data = array(
@@ -225,28 +232,162 @@ try {
                     // Other fields
                     "valid_phones" => isset($pixel_data['VALID_PHONES']) ? strval($pixel_data['VALID_PHONES']) : ''
                 );
-                
-                // Build SQL with safe escaping
-                $columns = [];
-                $values = [];
-    
-                foreach ($insert_data as $key => $value) {
-                    $columns[] = "`" . $mysqli->real_escape_string($key) . "`";
-                    $values[] = "'" . $mysqli->real_escape_string($value) . "'";
-                }
-                
-                // Step 1: Insert raw event into superpixel_resolution_log
-                $sql = "INSERT INTO superpixel_resolution_log (" . implode(",", $columns) . ") VALUES (" . implode(",", $values) . ")";
-                debugLog("Executing event SQL for event $eventIndex");
+/* Map nested event_data fields into insert_data before INSERT */
+if (isset($event["event_data"])) {
+  $ed = is_string($event["event_data"]) ? (json_decode($event["event_data"], true) ?? []) : $event["event_data"];
+  if (isset($ed["url"]))        { $insert_data["url"]        = (string)$ed["url"]; }
+  if (isset($ed["referrer"]))   { $insert_data["referrer"]   = (string)$ed["referrer"]; }
+  if (isset($ed["title"]))      { $insert_data["title"]      = (string)$ed["title"]; }
+  if (isset($ed["timestamp"]))  { $insert_data["timestamp"]  = (string)$ed["timestamp"]; }
+  if (array_key_exists("percentage", $ed)) { $insert_data["percentage"] = (string)$ed["percentage"]; }
+  if (isset($ed["element"])) {
+    $insert_data["element"] = is_string($ed["element"]) ? $ed["element"] : json_encode($ed["element"]);
+  }
+}
 
-                if (!$mysqli->query($sql)) {
-                    $error = "Event insert failed for event $eventIndex: " . $mysqli->error;
-                    debugLog($error);
-                    throw new Exception($error);
-                }
-                
-                debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
-                
+// Normalize array fields to JSON if needed
+if (isset($pixel_data["COMPANY_NAME_HISTORY"]) && (is_array($pixel_data["COMPANY_NAME_HISTORY"]) || is_object($pixel_data["COMPANY_NAME_HISTORY"]))) {
+  $insert_data["company_name_history"] = json_encode($pixel_data["COMPANY_NAME_HISTORY"]);
+}
+if (isset($pixel_data["JOB_TITLE_HISTORY"]) && (is_array($pixel_data["JOB_TITLE_HISTORY"]) || is_object($pixel_data["JOB_TITLE_HISTORY"]))) {
+  $insert_data["job_title_history"] = json_encode($pixel_data["JOB_TITLE_HISTORY"]);
+}
+
+// ROBUST history normalization (resolution.*)
+{
+  $rawCnh = $pixel_data["COMPANY_NAME_HISTORY"] ?? null;
+  if ($rawCnh !== null) {
+    if (is_array($rawCnh) || is_object($rawCnh)) {
+      $insert_data["company_name_history"] = json_encode($rawCnh, JSON_UNESCAPED_SLASHES);
+    } else {
+      $s = (string)$rawCnh;
+      if ($s !== "" && $s !== "Array") {
+        $insert_data["company_name_history"] = $s;
+      }
+    }
+  }
+  $rawJth = $pixel_data["JOB_TITLE_HISTORY"] ?? null;
+  if ($rawJth !== null) {
+    if (is_array($rawJth) || is_object($rawJth)) {
+      $insert_data["job_title_history"] = json_encode($rawJth, JSON_UNESCAPED_SLASHES);
+    } else {
+      $s = (string)$rawJth;
+      if ($s !== "" && $s !== "Array") {
+        $insert_data["job_title_history"] = $s;
+      }
+    }
+  }
+}
+
+		/* Dedupe bypass for whitelisted test personas */
+		if (empty($insert_data['uuid']) && isset($pixel_data['UUID'])) { $insert_data['uuid'] = (string)$pixel_data['UUID']; }
+		if (!empty($insert_data['uuid']) && in_array($insert_data['uuid'], $NON_DEDUPE_UUIDS, true)) {
+		  $token = 'wldup=' . gmdate('YmdHis') . '-' . substr(bin2hex(random_bytes(3)), 0, 6);
+		  $url = isset($insert_data['url']) ? (string)$insert_data['url'] : '';
+		  if ($url === '' || $url === null) {
+		    $insert_data['url'] = 'about:blank?' . $token;
+		  } else {
+		    $qPos = strpos($url, '?');
+		    if ($qPos === false) {
+		      $insert_data['url'] = $url . '?' . $token;
+		    } else {
+		      $insert_data['url'] = substr($url, 0, $qPos + 1) . $token . '&' . substr($url, $qPos + 1);
+		    }
+		    if (strlen($insert_data['url']) > 1024) {
+		      $insert_data['url'] = substr($insert_data['url'], 0, 1024);
+		    }
+		  }
+		  debugLog("Whitelist dedupe bypass applied for UUID {$insert_data['uuid']}");
+		}
+
+ 
+// Persist full raw event JSON for audit/replay (central table), dedup by hash
+try {
+  $rawJson = json_encode($event, JSON_UNESCAPED_SLASHES);
+  $payloadHash = hash("sha256", $rawJson);
+  $uuidRaw = $insert_data["uuid"] ?? "";
+  $evtTsRaw = isset($insert_data["event_timestamp"]) ? (string)$insert_data["event_timestamp"] : "";
+  $c = $mysqli->real_escape_string($client);
+  $u = $mysqli->real_escape_string($uuidRaw);
+  $t = $mysqli->real_escape_string($evtTsRaw);
+  $p = $mysqli->real_escape_string($rawJson);
+  $h = $mysqli->real_escape_string($payloadHash);
+  $mysqli->query("INSERT IGNORE INTO pixel.raw_events (client_name, uuid, event_timestamp, payload, payload_sha256)
+                  VALUES (\"$c\", \"$u\", \"$t\", \"$p\", \"$h\")");
+} catch (Throwable $e) {
+  debugLog("Raw event persist error: " . $e->getMessage());
+}
+ 
+		// Build SQL with safe escaping
+		$columns = [];
+		$values  = [];
+		foreach ($insert_data as $key => $value) {
+		  if (is_array($value) || is_object($value)) { $value = json_encode($value); }
+		  if (is_bool($value)) { $value = $value ? '1' : '0'; }
+		  $columns[] = "`" . $mysqli->real_escape_string($key) . "`";
+		  $values[]  = "'" . $mysqli->real_escape_string($value ?? '') . "'";
+		}
+
+                // Step 1: Insert raw event into superpixel_resolution_log
+                $sql = "INSERT IGNORE INTO superpixel_resolution_log (" . implode(",", $columns) . ") VALUES (" . implode(",", $values) . ")";
+		debugLog("Executing event SQL for event $eventIndex");
+		if (!$mysqli->query($sql)) {
+		  $error = "Event insert failed for event $eventIndex: " . $mysqli->error;
+		  debugLog($error);
+		  throw new Exception($error);
+		}
+		if ($mysqli->affected_rows === 0) {
+		  debugLog("Duplicate event skipped (no-op) for event $eventIndex");
+		  continue;
+		}
+
+		debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
+        // Parse emails now and populate NPN/CRD from match_emails for this UUID
+        $uuid = $insert_data["uuid"] ?? "";
+        if ($uuid !== "") {
+          try {
+            $emailResults = processVisitorEmails($client, $uuid, true, false);
+    ingestEmailsFromEvent($mysqli, $client, $uuid);
+          } catch (Throwable $e) {
+            debugLog("Email parse/NPN-CRD step error: " . $e->getMessage());
+          }
+        }
+
+		// fallback when trigger is missing
+		$triggerExists = false;
+		$chk = $mysqli->query("SELECT COUNT(*) c FROM information_schema.TRIGGERS WHERE TRIGGER_SCHEMA=DATABASE() AND TRIGGER_NAME='after_resolution_log_insert_visitor_update'");
+		if ($chk && ($row = $chk->fetch_assoc())) { $triggerExists = ((int)$row['c'] > 0); }
+		if (!$triggerExists && !empty($insert_data['uuid'])) {
+		  $uuid = $mysqli->real_escape_string($insert_data['uuid']);
+		  $url = $mysqli->real_escape_string($insert_data['url'] ?? '');
+		  $element = $mysqli->real_escape_string($insert_data['element'] ?? '');
+		  $percentage = isset($insert_data['percentage']) && preg_match('/^\d+$/', (string)$insert_data['percentage'])
+		                ? (int)$insert_data['percentage'] : 'NULL';
+		  $referrer = $mysqli->real_escape_string($insert_data['referrer'] ?? '');
+		  $evt_ts = $mysqli->real_escape_string($insert_data['event_timestamp'] ?? '');
+		  $evt_type = $mysqli->real_escape_string($insert_data['event_type'] ?? '');
+		
+		  $fallback = "
+		    INSERT INTO superpixel_visitors (uuid, url, element, percentage, referrer, event_timestamp, event_type, event_count, first_seen_at, last_seen_at)
+		    VALUES ('$uuid', '$url', '$element', $percentage, '$referrer', '$evt_ts', '$evt_type', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		    ON DUPLICATE KEY UPDATE
+		      url = IF('$url'<>'', '$url', url),
+		      element = IF('$element'<>'', '$element', element),
+		      percentage = IF($percentage IS NOT NULL, $percentage, percentage),
+		      referrer = IF('$referrer'<>'', '$referrer', referrer),
+		      event_timestamp = IF('$evt_ts'<>'', '$evt_ts', event_timestamp),
+		      event_type = IF('$evt_type'<>'', '$evt_type', event_type),
+		      event_count = event_count + 1,
+		      last_seen_at = CURRENT_TIMESTAMP
+		  ";
+		  if (!$mysqli->query($fallback)) {
+		    debugLog('Fallback visitor upsert failed: ' . $mysqli->error);
+		  } else {
+		    debugLog('Fallback visitor upsert applied (trigger missing)');
+		  }
+		}
+
+
                 // Visitor creation/update is now handled automatically by database trigger
                 // The trigger 'after_resolution_log_insert_visitor_update' will:
                 // - Create new visitors for new UUIDs
