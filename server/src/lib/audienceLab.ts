@@ -1,5 +1,8 @@
 import { Builder, By, until, WebDriver } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
 
 const { AUDLAB_USERNAME, AUDLAB_PASSWORD } = process.env;
 
@@ -102,9 +105,25 @@ export async function createPixel({ client, website }: { client: string, website
 
     log(`🚨 DEBUG: Final processed website: ${processedWebsite}`);
 
-    // Chrome options: optimized for VM deployment
+    // Prepare explicit, writable Chrome profile/cache directories to avoid
+    // "cannot create default profile directory" failures in sandboxed envs
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-prof-'));
+    const cacheDir = path.join(tmpBase, 'cache');
+    const userDataDir = path.join(tmpBase, 'user-data');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.mkdirSync(userDataDir, { recursive: true });
+
+    // Determine headless mode from env (default: headless true)
+    // Set HEADLESS=false or VISIBLE_BROWSER=true to run headed in development
+    const headlessEnv = (process.env.HEADLESS ?? '').toLowerCase();
+    const visibleBrowser = (process.env.VISIBLE_BROWSER ?? '').toLowerCase();
+    const RUN_HEADLESS = !(
+        headlessEnv === 'false' || headlessEnv === '0' || headlessEnv === 'no' ||
+        visibleBrowser === 'true' || visibleBrowser === '1'
+    );
+
+    // Chrome options: optimized for local/VM; conditionally headless
     const options = new chrome.Options()
-        .addArguments('--headless=new') // DISABLED for debugging - Enable headless mode for production
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
@@ -116,7 +135,8 @@ export async function createPixel({ client, website }: { client: string, website
         .addArguments('--disable-backgrounding-occluded-windows')
         .addArguments('--disable-renderer-backgrounding')
         .addArguments('--disable-features=VizDisplayCompositor')
-        .addArguments(`--user-data-dir=/tmp/chrome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`) // Unique user data directory
+        .addArguments(`--user-data-dir=${userDataDir}`)
+        .addArguments(`--disk-cache-dir=${cacheDir}`)
         .addArguments('--disable-background-networking')
         .addArguments('--disable-default-apps')
         .addArguments('--disable-sync')
@@ -124,6 +144,13 @@ export async function createPixel({ client, website }: { client: string, website
         .addArguments('--no-first-run')
         .addArguments('--safebrowsing-disable-auto-update')
         .addArguments('--disable-component-update');
+
+    if (RUN_HEADLESS) {
+        options.addArguments('--headless=new');
+        log('🧪 Running Chrome in HEADLESS mode (set HEADLESS=false or VISIBLE_BROWSER=true to run headed)');
+    } else {
+        log('🧪 Running Chrome in HEADED mode for debugging');
+    }
 
     // Only set Chrome path on macOS (development)
     if (process.platform === 'darwin') {

@@ -1,5 +1,8 @@
 import { Builder, By, until, WebDriver } from "selenium-webdriver";
 import chrome from "selenium-webdriver/chrome.js";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import mysql from "mysql2/promise";
 
 const { AUDLAB_USERNAME, AUDLAB_PASSWORD, DB_HOST, DB_USER, DB_PASS } = process.env;
@@ -31,9 +34,16 @@ export async function updateWebsiteUrls() {
         throw new Error("Missing AudienceLab credentials in environment variables");
     }
 
+    // Prepare explicit, writable Chrome profile/cache directories
+    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-prof-'));
+    const cacheDir = path.join(tmpBase, 'cache');
+    const userDataDir = path.join(tmpBase, 'user-data');
+    fs.mkdirSync(cacheDir, { recursive: true });
+    fs.mkdirSync(userDataDir, { recursive: true });
+
     // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
-        //.addArguments('--headless=new') // DISABLED for debugging - Enable headless mode for production
+        //.addArguments('--headless=new') // Keep visible for debugging; enable for prod
         .addArguments('--no-sandbox')
         .addArguments('--disable-dev-shm-usage')
         .addArguments('--disable-gpu')
@@ -45,7 +55,8 @@ export async function updateWebsiteUrls() {
         .addArguments('--disable-backgrounding-occluded-windows')
         .addArguments('--disable-renderer-backgrounding')
         .addArguments('--disable-features=VizDisplayCompositor')
-        .addArguments(`--user-data-dir=/tmp/chrome-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`) // Unique user data directory
+        .addArguments(`--user-data-dir=${userDataDir}`)
+        .addArguments(`--disk-cache-dir=${cacheDir}`)
         .addArguments('--disable-background-networking')
         .addArguments('--disable-default-apps')
         .addArguments('--disable-sync')

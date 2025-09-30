@@ -1,5 +1,8 @@
 import { Builder, By, until, WebDriver } from 'selenium-webdriver';
 import chrome from 'selenium-webdriver/chrome.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import mysql from 'mysql2/promise';
 import { RowDataPacket } from 'mysql2';
 
@@ -17,12 +20,21 @@ export async function deletePixelFromSimpleAudience(clientName: string): Promise
     try {
         console.log(`🚀 Starting pixel deletion for client: ${clientName}`);
 
+        // Prepare explicit, writable Chrome profile/cache directories
+        const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-prof-'));
+        const cacheDir = path.join(tmpBase, 'cache');
+        const userDataDir = path.join(tmpBase, 'user-data');
+        fs.mkdirSync(cacheDir, { recursive: true });
+        fs.mkdirSync(userDataDir, { recursive: true });
+
         // Setup Chrome options
         const options = new chrome.Options();
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
         options.addArguments('--window-size=1920,1080');
+        options.addArguments(`--user-data-dir=${userDataDir}`);
+        options.addArguments(`--disk-cache-dir=${cacheDir}`);
 
         // Create driver
         driver = await new Builder()

@@ -28,17 +28,13 @@ function debugLog($message) {
 
 // For GET requests (webhook tests)
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-    $testConn = new mysqli($dbHost, $dbUser, $dbPass);
-    if ($testConn->connect_error) {
-        debugLog("GET request - MySQL connection failed: " . $testConn->connect_error);
-        http_response_code(500);
-        echo json_encode(['error' => 'MySQL connection failed']);
-        exit;
-    }
-    $testConn->close();
-    
-    debugLog("GET request successful for client: " . ($client ?: 'none'));
-    echo json_encode(['status' => 'success', 'message' => 'Webhook endpoint is reachable']);
+    debugLog("GET webhook test received for client: " . ($client ?: 'none'));
+    echo json_encode([
+        'status' => 'success',
+        'message' => 'Webhook endpoint is reachable',
+        'client' => $client,
+        'mode' => 'webhook-test'
+    ]);
     exit;
 }
 
