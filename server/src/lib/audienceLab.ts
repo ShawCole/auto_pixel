@@ -833,7 +833,7 @@ export async function createPixel({ client, website }: { client: string, website
             log("⏳ Waiting for pixel creation to complete...");
             log("🔍 DEBUG: Current page title before delay:", await driver.getTitle());
             log("🔍 DEBUG: Current URL before delay:", await driver.getCurrentUrl());
-            await delay(1000); // Wait 1000ms for pixel creation process to complete
+            await delay(2000); // Wait a bit longer for pixel creation process to complete
             log("🔍 DEBUG: Current page title after delay:", await driver.getTitle());
             log("🔍 DEBUG: Current URL after delay:", await driver.getCurrentUrl());
 
@@ -1219,6 +1219,23 @@ export async function createPixel({ client, website }: { client: string, website
                     }
                 } catch (e) {
                     // ignore
+                }
+
+                if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+                    log("🔍 DEBUG: Strict regex fallback failed; scanning full page HTML...");
+                    try {
+                        const decodedFull = await driver.executeScript(
+                            "const t=document.createElement('textarea'); t.innerHTML=(document.documentElement.outerHTML||''); return t.value;"
+                        );
+                        const df: string = String(decodedFull ?? '');
+                        const m = df.match(/<script[^>]+src\s*=\s*\"(?:https?:)?\/\/[^\"]*identitypxl\.app\/pixels\/[^\"']+\/p\.js\"[^>]*>\s*<\/script>/i);
+                        if (m && m[0]) {
+                            finalCode = m[0];
+                            log("✅ Full-page HTML scan found identitypxl script tag");
+                        }
+                    } catch (e) {
+                        // ignore
+                    }
                 }
 
                 if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
