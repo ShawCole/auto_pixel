@@ -844,6 +844,17 @@ export async function createPixel({ client, website }: { client: string, website
             let attempts = 0;
             const maxAttempts = 6;
 
+            // Preferred XPath provided from live UI (works both headed/headless)
+            const preferredPreXPath = '/html/body/div[4]/form/div[2]/div/div[2]/div[2]/pre';
+            try {
+                await driver.wait(until.elementLocated(By.xpath(preferredPreXPath)), 2000);
+                pixelCodeElement = await driver.findElement(By.xpath(preferredPreXPath));
+                await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", pixelCodeElement);
+                log("✅ Pixel code found with preferred XPath");
+            } catch (e) {
+                // proceed to attempt loop
+            }
+
             while (!pixelCodeElement && attempts < maxAttempts) {
                 attempts++;
                 log(`🔍 DEBUG: Starting attempt ${attempts}/${maxAttempts} to find pixel code element...`);
@@ -1063,30 +1074,87 @@ export async function createPixel({ client, website }: { client: string, website
                 log("🔍 DEBUG: Could not get element class:", e);
             }
 
-            const pixelCode = await pixelCodeElement.getText();
-            log("✅ Pixel code extracted successfully");
-            log("🔍 DEBUG: Extracted pixel code details:");
-            log("🔍 DEBUG: - Length:", pixelCode?.length || 0);
-            log("🔍 DEBUG: - Is null/undefined:", pixelCode == null);
-            log("🔍 DEBUG: - Trimmed length:", pixelCode?.trim()?.length || 0);
-            log("🔍 DEBUG: - Preview (first 300 chars):", pixelCode?.substring(0, 300) || 'EMPTY');
-            log("🔍 DEBUG: - Full content:", pixelCode || 'EMPTY');
+            // Extract using JS to access textContent/innerText/innerHTML and decode entities
+            const raw = await driver.executeScript(
+                `const el = arguments[0];
+                 return {
+                   text: el.textContent || '',
+                   innerText: (el.innerText || ''),
+                   innerHTML: (el.innerHTML || '')
+                 };`,
+                pixelCodeElement
+            );
 
-            if (!pixelCode || pixelCode.trim().length === 0) {
-                log("❌ CRITICAL: Extracted pixel code is empty or contains only whitespace");
-                log("🔍 DEBUG: Attempting to get innerHTML as fallback...");
+            const decodedBest = await driver.executeScript(
+                `const pick = (o) => o.text && o.text.trim().length ? o.text : (o.innerText && o.innerText.trim().length ? o.innerText : o.innerHTML || '');
+                 const txt = pick(arguments[0]);
+                 const d = document.createElement('textarea');
+                 d.innerHTML = txt; // decode &lt; &gt; &amp; etc
+                 return d.value;`,
+                raw
+            );
+
+            const decodedBestStr: string = String(decodedBest ?? '');
+            let finalCode = decodedBestStr.trim();
+
+            // If still empty, try preferred XPath again and click Copy button then re-read
+            if (!finalCode) {
+                log("❌ Decoded code empty, trying Copy button fallback...");
                 try {
-                    const innerHTML = await pixelCodeElement.getAttribute('innerHTML');
-                    log("🔍 DEBUG: Element innerHTML:", innerHTML);
-                    const outerHTML = await pixelCodeElement.getAttribute('outerHTML');
-                    log("🔍 DEBUG: Element outerHTML:", outerHTML);
+                    const preferred = await driver.findElement(By.xpath(preferredPreXPath));
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", preferred);
+                } catch { }
+
+                try {
+                    const copyXPath = '/html/body/div[4]/form/div[2]/div/div[2]/div[2]/button';
+                    const copyBtn = await driver.findElement(By.xpath(copyXPath));
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", copyBtn);
+                    await delay(150);
+                    await driver.executeScript("arguments[0].click();", copyBtn);
+                    log("✅ Copy button clicked");
+                    await delay(300);
                 } catch (e) {
-                    log("🔍 DEBUG: Could not get element HTML:", e);
+                    log("⚠️ Copy button not found/clickable, continuing without clipboard");
                 }
+
+                try {
+                    // Re-read from the pre element after copy
+                    const pre = await driver.findElement(By.xpath(preferredPreXPath));
+                    const reread = await driver.executeScript(
+                        `const el = arguments[0];
+                         return {
+                           text: el.textContent || '',
+                           innerText: (el.innerText || ''),
+                           innerHTML: (el.innerHTML || '')
+                         };`,
+                        pre
+                    );
+                    const rereadDecoded = await driver.executeScript(
+                        `const pick = (o) => o.text && o.text.trim().length ? o.text : (o.innerText && o.innerText.trim().length ? o.innerText : o.innerHTML || '');
+                         const txt = pick(arguments[0]);
+                         const d = document.createElement('textarea');
+                         d.innerHTML = txt; return d.value;`,
+                        reread
+                    );
+                    finalCode = String(rereadDecoded ?? '').trim();
+                } catch (e) {
+                    // keep empty
+                }
+            }
+
+            // Log and validate
+            log("✅ Pixel code extracted successfully (post-decode)");
+            log("🔍 DEBUG: Extracted pixel code details:");
+            log("🔍 DEBUG: - Length:", finalCode.length);
+            log("🔍 DEBUG: - Starts with:", finalCode.substring(0, 30));
+            log("🔍 DEBUG: - Contains '<script':", finalCode.includes('<script'));
+
+            if (!finalCode || finalCode.trim().length === 0) {
+                log("❌ CRITICAL: Extracted pixel code remains empty after all fallbacks");
                 throw new Error("Extracted pixel code is empty or contains only whitespace");
             }
 
-            return { pixelCode: pixelCode.trim() };
+            return { pixelCode: finalCode };
         } else {
             throw new Error(`Webhook test failed - check webhook URL and endpoint`);
         }
