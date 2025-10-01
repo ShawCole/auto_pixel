@@ -1146,7 +1146,7 @@ export async function createPixel({ client, website }: { client: string, website
                             log("✅ Captured code from clipboard monkey‑patch");
                             finalCode = capturedStr;
                         }
-                    } catch {}
+                    } catch { }
                 } catch (e) {
                     log("⚠️ Copy button not found/clickable, continuing without clipboard");
                 }
