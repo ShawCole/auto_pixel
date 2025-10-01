@@ -846,13 +846,22 @@ export async function createPixel({ client, website }: { client: string, website
 
             // Preferred XPath provided from live UI (works both headed/headless)
             const preferredPreXPath = '/html/body/div[4]/form/div[2]/div/div[2]/div[2]/pre';
+            // Generic modal-anchored pre selector (div[role="dialog"])
+            const modalPreXPath = "//div[@role='dialog']//pre";
             try {
                 await driver.wait(until.elementLocated(By.xpath(preferredPreXPath)), 2000);
                 pixelCodeElement = await driver.findElement(By.xpath(preferredPreXPath));
                 await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", pixelCodeElement);
                 log("✅ Pixel code found with preferred XPath");
             } catch (e) {
-                // proceed to attempt loop
+                try {
+                    await driver.wait(until.elementLocated(By.xpath(modalPreXPath)), 1500);
+                    pixelCodeElement = await driver.findElement(By.xpath(modalPreXPath));
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", pixelCodeElement);
+                    log("✅ Pixel code found within modal pre element");
+                } catch (e2) {
+                    // proceed to attempt loop
+                }
             }
 
             while (!pixelCodeElement && attempts < maxAttempts) {
@@ -1149,9 +1158,47 @@ export async function createPixel({ client, website }: { client: string, website
             log("🔍 DEBUG: - Starts with:", finalCode.substring(0, 30));
             log("🔍 DEBUG: - Contains '<script':", finalCode.includes('<script'));
 
-            if (!finalCode || finalCode.trim().length === 0) {
+            // Accept only if it looks like a real script tag for identitypxl
+            const looksLikeScript = /<script[^>]*identitypxl\.app\/pixels\//i.test(finalCode) || /cdn\.v3\.identitypxl\.app\/pixels\//i.test(finalCode);
+
+            if (!finalCode || finalCode.trim().length === 0 || !looksLikeScript) {
                 log("❌ CRITICAL: Extracted pixel code remains empty after all fallbacks");
-                throw new Error("Extracted pixel code is empty or contains only whitespace");
+                log("🔍 DEBUG: Running strict regex search across modal for script tag...");
+
+                try {
+                    const strict = await driver.executeScript(
+                        `(() => {
+                            const decode = (s) => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
+                            const roots = Array.from(document.querySelectorAll('div[role="dialog"], form'));
+                            roots.push(document.body);
+                            for (const root of roots) {
+                                const nodes = root.querySelectorAll('pre, textarea, code, div');
+                                for (const el of nodes) {
+                                    let txt = (el.textContent || '').trim();
+                                    if (!txt) txt = (el.innerText || '').trim();
+                                    if (!txt) txt = (el.innerHTML || '').trim();
+                                    if (!txt) continue;
+                                    const dec = decode(txt);
+                                    if (/<script[^>]*identitypxl\.app\/pixels\//i.test(dec) || /cdn\.v3\.identitypxl\.app\/pixels\//i.test(dec)) {
+                                        return dec;
+                                    }
+                                }
+                            }
+                            return '';
+                        })();`
+                    );
+                    const strictStr: string = String(strict ?? '').trim();
+                    if (strictStr) {
+                        log("✅ Strict regex fallback found script tag");
+                        finalCode = strictStr;
+                    }
+                } catch (e) {
+                    // ignore
+                }
+
+                if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+                    throw new Error("Extracted pixel code is empty or invalid");
+                }
             }
 
             return { pixelCode: finalCode };
