@@ -1147,6 +1147,36 @@ export async function createPixel({ client, website }: { client: string, website
                             finalCode = capturedStr;
                         }
                     } catch { }
+
+                    // If still empty, attempt to read common attributes on the copy button
+                    if (!finalCode) {
+                        try {
+                            const attrVal = await driver.executeScript(
+                                "var b=arguments[0]; var v=(b.getAttribute && b.getAttribute('data-clipboard-text')) || (b.dataset? b.dataset.clipboardText : '') || ''; return v;",
+                                copyBtn
+                            );
+                            const attrStr: string = String(attrVal ?? '').trim();
+                            if (attrStr && /<script/i.test(attrStr) && /identitypxl/i.test(attrStr)) {
+                                log("✅ Found script in data-clipboard-text attribute");
+                                finalCode = attrStr;
+                            }
+                        } catch { }
+                    }
+
+                    // If still empty, read nearest pre/code/textarea around the button
+                    if (!finalCode) {
+                        try {
+                            const near = await driver.executeScript(
+                                "var b=arguments[0]; var el=b; for(var i=0;i<5 && el; i++){el=el.parentElement;} if(!el) el=document; var n=el.querySelector('pre, code, textarea'); var t=n?(n.textContent||n.innerText||n.innerHTML||''):''; var d=document.createElement('textarea'); d.innerHTML=t; return d.value;",
+                                copyBtn
+                            );
+                            const nearStr: string = String(near ?? '').trim();
+                            if (nearStr && /<script/i.test(nearStr) && /identitypxl/i.test(nearStr)) {
+                                log("✅ Extracted script from nearby code/pre element");
+                                finalCode = nearStr;
+                            }
+                        } catch { }
+                    }
                 } catch (e) {
                     log("⚠️ Copy button not found/clickable, continuing without clipboard");
                 }
