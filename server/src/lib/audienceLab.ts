@@ -272,6 +272,57 @@ export async function createPixel({ client, website }: { client: string, website
         log("✅ Pixels section opened");
         await delay(600); // Wait for pixels page to load
 
+		// Install network interceptors early to capture any response bodies
+		try {
+			await driver.executeScript(`(function(){
+				try {
+				  if (window.__TD_CAPTURED__) return; // idempotent
+				  window.__TD_CAPTURED__ = { pixel: '' };
+				  const save = async (resp) => {
+				    try {
+				      const clone = resp.clone ? resp.clone() : resp;
+				      const text = await clone.text();
+				      if (/identitypxl\\.app\\/pixels\\//i.test(text)) {
+				        window.__TD_CAPTURED__.pixel = text;
+				      }
+				    } catch(e) {}
+				  };
+				  // fetch
+				  try {
+				    const origFetch = window.fetch;
+				    if (origFetch) {
+				      window.fetch = async function(){
+				        const res = await origFetch.apply(this, arguments);
+				        try { save(res); } catch(_) {}
+				        return res;
+				      };
+				    }
+				  } catch(_) {}
+				  // XHR
+				  try {
+				    const XO = XMLHttpRequest && XMLHttpRequest.prototype;
+				    if (XO) {
+				      const origOpen = XO.open;
+				      const origSend = XO.send;
+				      XO.open = function(){ try { this.__td_url = arguments[1] || ''; } catch(_) {}; return origOpen.apply(this, arguments); };
+				      XO.send = function(){
+				        try { this.addEventListener('load', function(){
+				          try {
+				            const t = this && (this.responseText || '');
+				            if (/identitypxl\\.app\\/pixels\\//i.test(t)) { window.__TD_CAPTURED__.pixel = t; }
+				          } catch(_) {}
+				        }, true); } catch(_) {}
+				        return origSend.apply(this, arguments);
+				      };
+				    }
+				  } catch(_) {}
+				} catch(_) {}
+			})();`);
+			log("🛰️  Installed fetch/XHR interceptors for pixel capture");
+		} catch (e) {
+			log("⚠️ Failed to install network interceptors");
+		}
+
         // Step 5: Click the "create" button
         log("⏳ Waiting for create button...");
         const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
@@ -1304,7 +1355,7 @@ export async function createPixel({ client, website }: { client: string, website
 					}
 				}
 
-				// If still nothing, scan attributes across DOM for a pixel URL and synthesize
+					// If still nothing, scan attributes across DOM for a pixel URL and synthesize
 				if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
 					try {
 						const url = await driver.executeScript(`(() => {
@@ -1326,6 +1377,19 @@ export async function createPixel({ client, website }: { client: string, website
 						}
 					} catch {}
 				}
+
+					// LAST RESORT: use network-captured body to extract pixel URL
+					if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+						try {
+							const body = await driver.executeScript('return (window.__TD_CAPTURED__ && window.__TD_CAPTURED__.pixel) ? window.__TD_CAPTURED__.pixel : "";');
+							const bodyStr: string = String(body ?? '');
+							const m = bodyStr.match(/https?:\/\/[^\s"']*identitypxl\.app\/pixels\/[^\s"']*\/p\.js/i);
+							if (m && m[0]) {
+								finalCode = `<script src=\"${m[0]}\" async></script>`;
+								log("✅ Built script from network-captured response body");
+							}
+						} catch {}
+					}
 
                 if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
                     throw new Error("Extracted pixel code is empty or invalid");
