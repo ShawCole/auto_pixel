@@ -1117,11 +1117,36 @@ export async function createPixel({ client, website }: { client: string, website
                 try {
                     const copyXPath = '/html/body/div[4]/form/div[2]/div/div[2]/div[2]/button';
                     const copyBtn = await driver.findElement(By.xpath(copyXPath));
+                    // Monkey‑patch clipboard to capture what the app copies
+                    await driver.executeScript(`(function(){
+                        try {
+                          const w = window;
+                          if (!w.__THYNK_CAPTURED__) {
+                            w.__THYNK_CAPTURED__ = '';
+                            if (navigator.clipboard && navigator.clipboard.writeText) {
+                              const orig = navigator.clipboard.writeText.bind(navigator.clipboard);
+                              navigator.clipboard.writeText = async (t) => {
+                                try { w.__THYNK_CAPTURED__ = t || ''; } catch(e) {}
+                                try { return await orig(t); } catch(e) { return; }
+                              };
+                            }
+                          }
+                        } catch(e) {}
+                    })();`);
                     await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", copyBtn);
                     await delay(150);
                     await driver.executeScript("arguments[0].click();", copyBtn);
                     log("✅ Copy button clicked");
                     await delay(300);
+                    // Read captured clipboard if present
+                    try {
+                        const captured = await driver.executeScript('return window.__THYNK_CAPTURED__ || "";');
+                        const capturedStr: string = String(captured ?? '').trim();
+                        if (capturedStr && /<script/i.test(capturedStr) && /identitypxl/i.test(capturedStr)) {
+                            log("✅ Captured code from clipboard monkey‑patch");
+                            finalCode = capturedStr;
+                        }
+                    } catch {}
                 } catch (e) {
                     log("⚠️ Copy button not found/clickable, continuing without clipboard");
                 }
