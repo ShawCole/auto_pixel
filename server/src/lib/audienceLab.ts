@@ -1117,22 +1117,35 @@ export async function createPixel({ client, website }: { client: string, website
                 try {
                     const copyXPath = '/html/body/div[4]/form/div[2]/div/div[2]/div[2]/button';
                     const copyBtn = await driver.findElement(By.xpath(copyXPath));
-                    // Monkey‑patch clipboard to capture what the app copies
-                    await driver.executeScript(`(function(){
-                        try {
-                          const w = window;
-                          if (!w.__THYNK_CAPTURED__) {
-                            w.__THYNK_CAPTURED__ = '';
-                            if (navigator.clipboard && navigator.clipboard.writeText) {
-                              const orig = navigator.clipboard.writeText.bind(navigator.clipboard);
-                              navigator.clipboard.writeText = async (t) => {
-                                try { w.__THYNK_CAPTURED__ = t || ''; } catch(e) {}
-                                try { return await orig(t); } catch(e) { return; }
-                              };
-                            }
-                          }
-                        } catch(e) {}
-                    })();`);
+					// Monkey‑patch clipboard APIs and capture legacy copy events
+					await driver.executeScript(`(function(){
+						try {
+						  const w = window;
+						  if (!w.__THYNK_CAPTURED__) { w.__THYNK_CAPTURED__ = ''; }
+						  // Intercept modern async clipboard
+						  try {
+							if (navigator.clipboard && navigator.clipboard.writeText) {
+							  const orig = navigator.clipboard.writeText.bind(navigator.clipboard);
+							  navigator.clipboard.writeText = async (t) => {
+								try { w.__THYNK_CAPTURED__ = t || ''; } catch(_) {}
+								try { return await orig(t); } catch(_) { return; }
+							  };
+							}
+						  } catch(_) {}
+						  // Capture execCommand('copy') path
+						  try {
+							document.addEventListener('copy', function(e){
+							  try {
+								const dt = e.clipboardData || window.clipboardData;
+								if (dt) {
+								  const t = dt.getData('text/plain');
+								  if (t) { w.__THYNK_CAPTURED__ = t; }
+								}
+							  } catch(_) {}
+							}, true);
+						  } catch(_) {}
+						} catch(_) {}
+					})();`);
                     await driver.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", copyBtn);
                     await delay(150);
                     await driver.executeScript("arguments[0].click();", copyBtn);
@@ -1163,7 +1176,7 @@ export async function createPixel({ client, website }: { client: string, website
                         } catch { }
                     }
 
-                    // If still empty, read nearest pre/code/textarea around the button
+					// If still empty, read nearest pre/code/textarea around the button
                     if (!finalCode) {
                         try {
                             const near = await driver.executeScript(
@@ -1177,6 +1190,30 @@ export async function createPixel({ client, website }: { client: string, website
                             }
                         } catch { }
                     }
+
+					// If still empty, try execCommand('copy') from the pre element to trigger copy listener
+					if (!finalCode) {
+						try {
+							const preEl = await driver.findElement(By.xpath(preferredPreXPath)).catch(async () => {
+								try { return await driver.findElement(By.css('div[role="dialog"] pre, form pre, pre')); } catch { return undefined as any; }
+							});
+							if (preEl) {
+								await driver.executeScript(
+									`try { const el=arguments[0]; const r=document.createRange(); r.selectNode(el); const s=window.getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand && document.execCommand('copy'); } catch(_) {}`,
+									preEl
+								);
+								await delay(200);
+								try {
+									const captured2 = await driver.executeScript('return window.__THYNK_CAPTURED__ || "";');
+									const captured2Str: string = String(captured2 ?? '').trim();
+									if (captured2Str && /<script/i.test(captured2Str) && /identitypxl/i.test(captured2Str)) {
+										log("✅ Captured code via execCommand copy from pre");
+										finalCode = captured2Str;
+									}
+								} catch { }
+							}
+						} catch { }
+					}
                 } catch (e) {
                     log("⚠️ Copy button not found/clickable, continuing without clipboard");
                 }
@@ -1251,22 +1288,44 @@ export async function createPixel({ client, website }: { client: string, website
                     // ignore
                 }
 
-                if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
-                    log("🔍 DEBUG: Strict regex fallback failed; scanning full page HTML...");
-                    try {
-                        const decodedFull = await driver.executeScript(
-                            "const t=document.createElement('textarea'); t.innerHTML=(document.documentElement.outerHTML||''); return t.value;"
-                        );
-                        const df: string = String(decodedFull ?? '');
-                        const m = df.match(/<script[^>]+src\s*=\s*\"(?:https?:)?\/\/[^\"]*identitypxl\.app\/pixels\/[^\"']+\/p\.js\"[^>]*>\s*<\/script>/i);
-                        if (m && m[0]) {
-                            finalCode = m[0];
-                            log("✅ Full-page HTML scan found identitypxl script tag");
-                        }
-                    } catch (e) {
-                        // ignore
-                    }
-                }
+				if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+					log("🔍 DEBUG: Strict regex fallback failed; scanning full page HTML...");
+					try {
+						const decodedFull = await driver.executeScript("const t=document.createElement('textarea'); t.innerHTML=(document.documentElement.outerHTML||''); return t.value;");
+						const df: string = String(decodedFull ?? '');
+						// broader match: single/double quotes and any attribute order
+						const m = df.match(/<script[^>]+src\s*=\s*([\"\'])((?:https?:)?\/\/[^\s\"']*identitypxl\.app\/pixels\/[^\s\"']*\/p\.js)\1[^>]*>\s*<\/script>/i);
+						if (m && m[2]) {
+							finalCode = `<script src=\"${m[2]}\" async></script>`;
+							log("✅ Full-page HTML scan found identitypxl script tag");
+						}
+					} catch (e) {
+						// ignore
+					}
+				}
+
+				// If still nothing, scan attributes across DOM for a pixel URL and synthesize
+				if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+					try {
+						const url = await driver.executeScript(`(() => {
+							const re = /identitypxl\\.app\\/pixels\\/[^'\"\s<>]+\\/p\\.js/i;
+							for (const el of Array.from(document.querySelectorAll('*'))) {
+								for (const a of Array.from((el && el.attributes) ? el.attributes : [])) {
+									const v = a && a.value ? String(a.value) : '';
+									const m = v.match(re);
+									if (m && m[0]) return m[0];
+								}
+							}
+							return '';
+						})()`);
+						const urlStr: string = String(url ?? '').trim();
+						if (urlStr) {
+							const normalized: string = urlStr.replace(/^https?:\/\//i, '');
+							finalCode = `<script src=\"https://${normalized}\" async></script>`;
+							log("✅ Synthesized script tag from attribute URL");
+						}
+					} catch {}
+				}
 
                 if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
                     throw new Error("Extracted pixel code is empty or invalid");
