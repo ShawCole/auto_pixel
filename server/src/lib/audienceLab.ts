@@ -117,8 +117,10 @@ export async function createPixel({ client, website }: { client: string, website
     // Set HEADLESS=false or VISIBLE_BROWSER=true to run headed in development
     const headlessEnv = (process.env.HEADLESS ?? '').toLowerCase();
     const visibleBrowser = (process.env.VISIBLE_BROWSER ?? '').toLowerCase();
-    // TEMP: Force headed for local demo in Cursor. Set to true or use env to restore headless.
-    const RUN_HEADLESS = false;
+    const RUN_HEADLESS = !(
+        headlessEnv === 'false' || headlessEnv === '0' || headlessEnv === 'no' ||
+        visibleBrowser === 'true' || visibleBrowser === '1'
+    );
 
     // Chrome options: optimized for local/VM; conditionally headless
     const options = new chrome.Options()
@@ -840,7 +842,24 @@ export async function createPixel({ client, website }: { client: string, website
             log(`🔍 VERBOSE: Create button text: ${await createButton.getText()}`);
             log(`🔍 VERBOSE: Create button type: ${await createButton.getAttribute('type')}`);
             log(`🔍 VERBOSE: Create button class: ${await createButton.getAttribute('class')}`);
-            log(`🔍 VERBOSE: Create button enabled: ${await createButton.isEnabled()}`);
+            // Ensure Create is actually enabled before clicking
+            let createEnabled = await createButton.isEnabled();
+            if (!createEnabled) {
+                log("⏳ Waiting for Create button to become enabled...");
+                const enableWaitStart = Date.now();
+                const enableTimeoutMs = 15000;
+                while (Date.now() - enableWaitStart < enableTimeoutMs) {
+                    try {
+                        createButton = await driver.findElement(By.css('div[role="dialog"] button[type="submit"], div[role="dialog"] form button[type="submit"]'));
+                        createEnabled = await createButton.isEnabled();
+                        if (createEnabled) break;
+                    } catch {}
+                    await delay(200);
+                }
+                log(`🔍 VERBOSE: Create button enabled (post-wait): ${createEnabled}`);
+            } else {
+                log(`🔍 VERBOSE: Create button enabled: ${createEnabled}`);
+            }
             log(`🔍 VERBOSE: Create button displayed: ${await createButton.isDisplayed()}`);
 
             const createButtonRect = await createButton.getRect();
@@ -886,6 +905,39 @@ export async function createPixel({ client, website }: { client: string, website
             await delay(2000); // Wait a bit longer for pixel creation process to complete
             log("🔍 DEBUG: Current page title after delay:", await driver.getTitle());
             log("🔍 DEBUG: Current URL after delay:", await driver.getCurrentUrl());
+
+            // 9b. Explicitly navigate to Install step and choose Basic Install
+            try {
+                log("🧭 Navigating to Install step...");
+                // Click the Install tab/step if present
+                let installTab;
+                try {
+                    installTab = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Install')]"));
+                } catch {
+                    try { installTab = await driver.findElement(By.xpath("//div[@role='dialog']//button[contains(., 'Install')]")); } catch {}
+                }
+                if (installTab) {
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", installTab);
+                    await delay(150);
+                    await driver.executeScript("arguments[0].click();", installTab);
+                    log("✅ Install step opened");
+                } else {
+                    log("ℹ️ Install step tab not found; continuing");
+                }
+
+                // Click Basic Install option to render the <pre>
+                try {
+                    const basicBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Basic Install')]"));
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", basicBtn);
+                    await delay(120);
+                    await driver.executeScript("arguments[0].click();", basicBtn);
+                    log("✅ Basic Install selected");
+                } catch {
+                    log("ℹ️ Basic Install button not found; continuing");
+                }
+            } catch (e) {
+                log("⚠️ Could not navigate to Install/Basic Install section");
+            }
 
             // 10. Wait for pixel code to appear and extract it
             log("⏳ Waiting for pixel code to appear...");
