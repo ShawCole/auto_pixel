@@ -672,126 +672,12 @@ export async function createPixel({ client, website }: { client: string, website
             log("✅ Webhook URL entered with JavaScript");
         }
 
-        // 6. Click Test
-        log("🖱️  Clicking Test button...");
-        let testButton;
-        try {
-            testButton = await driver.findElement(By.xpath('/html/body/div[4]/form/div[2]/div/div/button'));
-            log("✅ Test button found with xpath");
-        } catch (e) {
-            try {
-                // Try finding by button text
-                testButton = await driver.findElement(By.xpath("//button[contains(text(), 'Test')]"));
-                log("✅ Test button found by text");
-            } catch (e2) {
-                try {
-                    // Try finding button near the webhook input
-                    testButton = await driver.findElement(By.css('form button[type="button"], form button:not([type="submit"])'));
-                    log("✅ Test button found with CSS selector");
-                } catch (e3) {
-                    // Try finding any button that's not the main submit button
-                    const buttons = await driver.findElements(By.css('form button'));
-                    if (buttons.length >= 2) {
-                        testButton = buttons[0]; // Take the first button (likely the test button)
-                        log("✅ Test button found as first button");
-                    } else {
-                        throw new Error("Could not find Test button");
-                    }
-                }
-            }
-        }
-
-        await testButton.click();
-        log("✅ Test button clicked");
-
-        // 7. Wait for webhook test completion (look for DOM changes instead of toast)
-        log("⏳ Waiting for webhook test to complete...");
-        let testCompleted = false;
-        let isSuccess = false;
-        const testStart = Date.now();
-        const testTimeout = 15000; // 15 seconds
-
-        while (Date.now() - testStart < testTimeout && !testCompleted) {
-            try {
-                // Look for Create button becoming enabled/visible (indicates success)
-                const createButtons = await driver.findElements(By.xpath("//button[contains(text(), 'Create')]"));
-                for (const button of createButtons) {
-                    const isEnabled = await button.isEnabled();
-                    const isDisplayed = await button.isDisplayed();
-                    if (isEnabled && isDisplayed) {
-                        log("✅ Create button is now enabled - webhook test successful!");
-                        testCompleted = true;
-                        isSuccess = true;
-                        break;
-                    }
-                }
-
-                // Also check for any error indicators in the form
-                if (!testCompleted) {
-                    const errorElements = await driver.findElements(By.css('div[class*="error"], span[class*="error"], .text-red-500, [role="alert"]'));
-                    for (const errorEl of errorElements) {
-                        const isDisplayed = await errorEl.isDisplayed();
-                        if (isDisplayed) {
-                            const errorText = await errorEl.getText();
-                            if (errorText && errorText.trim()) {
-                                log(`❌ Error detected: ${errorText}`);
-                                testCompleted = true;
-                                isSuccess = false;
-                                break;
-                            }
-                        }
-                    }
-                }
-
-                // Check if test button is still in loading state
-                if (!testCompleted) {
-                    const testButtons = await driver.findElements(By.xpath("//button[contains(text(), 'Test')]"));
-                    for (const button of testButtons) {
-                        const buttonText = await button.getText();
-                        const isEnabled = await button.isEnabled();
-                        // If button is disabled or shows loading text, test is still running
-                        if (!isEnabled || buttonText.toLowerCase().includes('testing')) {
-                            // Still testing, continue waiting
-                            break;
-                        }
-                    }
-                }
-
-            } catch (e) {
-                // Continue checking
-            }
-
-            if (!testCompleted) {
-                await delay(250); // Wait 250ms before checking again
-            }
-        }
-
-        if (!testCompleted) {
-            // Don't assume success - webhook test actually failed
-            log("❌ Webhook test timeout reached - test failed");
-            isSuccess = false;
-
-            // Check if Create button is actually enabled before proceeding
-            try {
-                const createButtons = await driver.findElements(By.xpath("//button[contains(text(), 'Create')]"));
-                for (const button of createButtons) {
-                    const isEnabled = await button.isEnabled();
-                    if (isEnabled) {
-                        log("✅ Create button is enabled despite timeout - proceeding");
-                        isSuccess = true;
-                        break;
-                    }
-                }
-                if (!isSuccess) {
-                    log("❌ Create button is still disabled - webhook test definitely failed");
-                }
-            } catch (e) {
-                log("❌ Could not check Create button state");
-            }
-        }
+        // 6. Skip Test (workaround slow UI): proceed directly to Create step
+        log("⏭️ Skipping webhook Test step; proceeding directly to Create");
+        const isSuccess = true;
 
         if (isSuccess) {
-            log("✅ Webhook test completed successfully");
+            log("✅ Proceeding to Create without waiting for Test result");
             // 8. Click Create button (specifically in modal to avoid background buttons)
             let createButton;
             let createButtonSelector = '';
@@ -853,7 +739,7 @@ export async function createPixel({ client, website }: { client: string, website
                         createButton = await driver.findElement(By.css('div[role="dialog"] button[type="submit"], div[role="dialog"] form button[type="submit"]'));
                         createEnabled = await createButton.isEnabled();
                         if (createEnabled) break;
-                    } catch {}
+                    } catch { }
                     await delay(200);
                 }
                 log(`🔍 VERBOSE: Create button enabled (post-wait): ${createEnabled}`);
@@ -914,7 +800,7 @@ export async function createPixel({ client, website }: { client: string, website
                 try {
                     installTab = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Install')]"));
                 } catch {
-                    try { installTab = await driver.findElement(By.xpath("//div[@role='dialog']//button[contains(., 'Install')]")); } catch {}
+                    try { installTab = await driver.findElement(By.xpath("//div[@role='dialog']//button[contains(., 'Install')]")); } catch { }
                 }
                 if (installTab) {
                     await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", installTab);
@@ -937,6 +823,31 @@ export async function createPixel({ client, website }: { client: string, website
                 }
             } catch (e) {
                 log("⚠️ Could not navigate to Install/Basic Install section");
+            }
+
+            // 9c. After creating the pixel, open row actions for most recent pixel and click the Webhook button (XPath provided), then Test and validate DB later if desired
+            try {
+                log("🧭 Opening row actions to access Webhook dialog for the new pixel...");
+                // Try the provided absolute XPath first (most recent row, 3rd button)
+                let rowActionBtn;
+                try {
+                    rowActionBtn = await driver.findElement(By.xpath('/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr[1]/td[4]/div/button[3]'));
+                } catch {
+                    // Fallback: find first row and the button labeled Webhook
+                    try {
+                        rowActionBtn = await driver.findElement(By.xpath("(//table//tbody//tr)[1]//button[contains(., 'Webhook') or @title='Webhook']"));
+                    } catch {}
+                }
+                if (rowActionBtn) {
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", rowActionBtn);
+                    await delay(120);
+                    await driver.executeScript("arguments[0].click();", rowActionBtn);
+                    log("✅ Webhook row action opened");
+                } else {
+                    log("ℹ️ Could not find row Webhook button; continuing without row test");
+                }
+            } catch (e) {
+                log("⚠️ Failed to open row actions/Webhook dialog");
             }
 
             // 10. Wait for pixel code to appear and extract it
