@@ -117,10 +117,8 @@ export async function createPixel({ client, website }: { client: string, website
     // Set HEADLESS=false or VISIBLE_BROWSER=true to run headed in development
     const headlessEnv = (process.env.HEADLESS ?? '').toLowerCase();
     const visibleBrowser = (process.env.VISIBLE_BROWSER ?? '').toLowerCase();
-    const RUN_HEADLESS = !(
-        headlessEnv === 'false' || headlessEnv === '0' || headlessEnv === 'no' ||
-        visibleBrowser === 'true' || visibleBrowser === '1'
-    );
+    // TEMP: Force headed for local demo in Cursor. Set to true or use env to restore headless.
+    const RUN_HEADLESS = false;
 
     // Chrome options: optimized for local/VM; conditionally headless
     const options = new chrome.Options()
@@ -1380,16 +1378,16 @@ export async function createPixel({ client, website }: { client: string, website
                 }
 
                 // LAST RESORT: use network-captured body to extract pixel URL
-					if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+                if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
                     try {
                         const body = await driver.executeScript('return (window.__TD_CAPTURED__ && window.__TD_CAPTURED__.pixel) ? window.__TD_CAPTURED__.pixel : "";');
                         const bodyStr: string = String(body ?? '');
                         const m = bodyStr.match(/https?:\/\/[^\s"']*identitypxl\.app\/pixels\/[^\s"']*\/p\.js/i);
-							if (m && m[0]) {
+                        if (m && m[0]) {
                             finalCode = `<script src=\"${m[0]}\" async></script>`;
                             log("✅ Built script from network-captured response body");
                         }
-						} catch (e) { log('⚠️ Network body parse failed'); }
+                    } catch (e) { log('⚠️ Network body parse failed'); }
                 }
 
                 // FINAL FALLBACK: emulate console snippet by joining visible text and extracting full <script> tag
@@ -1414,7 +1412,7 @@ export async function createPixel({ client, website }: { client: string, website
                             finalCode = s;
                             log("✅ Extracted full script tag from joined page text (console-equivalent)");
                         }
-						} catch (e) { log('⚠️ Console-equivalent extraction failed'); }
+                    } catch (e) { log('⚠️ Console-equivalent extraction failed'); }
                 }
 
                 if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
