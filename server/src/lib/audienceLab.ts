@@ -137,6 +137,7 @@ export async function createPixel({ client, website }: { client: string, website
         .addArguments('--disable-features=VizDisplayCompositor')
         .addArguments(`--user-data-dir=${userDataDir}`)
         .addArguments(`--disk-cache-dir=${cacheDir}`)
+        .addArguments('--remote-debugging-port=9223')
         .addArguments('--disable-background-networking')
         .addArguments('--disable-default-apps')
         .addArguments('--disable-sync')
@@ -1379,22 +1380,22 @@ export async function createPixel({ client, website }: { client: string, website
                 }
 
                 // LAST RESORT: use network-captured body to extract pixel URL
-                if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+					if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
                     try {
                         const body = await driver.executeScript('return (window.__TD_CAPTURED__ && window.__TD_CAPTURED__.pixel) ? window.__TD_CAPTURED__.pixel : "";');
                         const bodyStr: string = String(body ?? '');
                         const m = bodyStr.match(/https?:\/\/[^\s"']*identitypxl\.app\/pixels\/[^\s"']*\/p\.js/i);
-                        if (m && m[0]) {
+							if (m && m[0]) {
                             finalCode = `<script src=\"${m[0]}\" async></script>`;
                             log("✅ Built script from network-captured response body");
                         }
-                    } catch { }
+						} catch (e) { log('⚠️ Network body parse failed'); }
                 }
 
-					// FINAL FALLBACK: emulate console snippet by joining visible text and extracting full <script> tag
-					if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
-						try {
-							const scriptFromJoined = await driver.executeScript(`(() => {
+                // FINAL FALLBACK: emulate console snippet by joining visible text and extracting full <script> tag
+                if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
+                    try {
+                        const scriptFromJoined = await driver.executeScript(`(() => {
 								const decode = (s) => { const t = document.createElement('textarea'); t.innerHTML = s || ''; return t.value; };
 								let buf = '';
 								const els = Array.from(document.querySelectorAll('pre,code,textarea,div,body,*'));
@@ -1408,13 +1409,13 @@ export async function createPixel({ client, website }: { client: string, website
 								const m = decoded.match(/<script[^>]+src=["'](https?:\\/\\/(?:cdn\\.)?v3\\.identitypxl\\.app\\/pixels\\/[^"']+\\/p\\.js)["'][^>]*>\\s*<\\/script>/i);
 								return m && m[0] ? m[0] : '';
 							})()`);
-							const s: string = String(scriptFromJoined ?? '').trim();
-							if (s) {
-								finalCode = s;
-								log("✅ Extracted full script tag from joined page text (console-equivalent)");
-							}
-						} catch { }
-					}
+                        const s: string = String(scriptFromJoined ?? '').trim();
+                        if (s) {
+                            finalCode = s;
+                            log("✅ Extracted full script tag from joined page text (console-equivalent)");
+                        }
+						} catch (e) { log('⚠️ Console-equivalent extraction failed'); }
+                }
 
                 if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
                     throw new Error("Extracted pixel code is empty or invalid");
