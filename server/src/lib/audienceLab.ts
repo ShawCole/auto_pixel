@@ -3,8 +3,9 @@ import chrome from "selenium-webdriver/chrome.js";
 import fs from "fs";
 import os from "os";
 import path from "path";
+import mysql from "mysql2/promise";
 
-const { AUDLAB_USERNAME, AUDLAB_PASSWORD } = process.env;
+const { AUDLAB_USERNAME, AUDLAB_PASSWORD, DB_HOST, DB_USER, DB_PASS } = process.env;
 
 // Enable verbose logging
 const DEBUG = process.env.DEBUG === '*' || process.env.NODE_ENV === 'development';
@@ -836,7 +837,7 @@ export async function createPixel({ client, website }: { client: string, website
                     // Fallback: find first row and the button labeled Webhook
                     try {
                         rowActionBtn = await driver.findElement(By.xpath("(//table//tbody//tr)[1]//button[contains(., 'Webhook') or @title='Webhook']"));
-                    } catch {}
+                    } catch { }
                 }
                 if (rowActionBtn) {
                     await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", rowActionBtn);
@@ -1381,6 +1382,95 @@ export async function createPixel({ client, website }: { client: string, website
                 if (!finalCode || !(/<script/i.test(finalCode) && /identitypxl/i.test(finalCode))) {
                     throw new Error("Extracted pixel code is empty or invalid");
                 }
+            }
+
+            // Close the install modal to access the table row actions
+            try {
+                log("🧭 Closing Install modal to access row actions...");
+                let closeBtn;
+                try { closeBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Finish') or contains(normalize-space(.), 'Close') or @aria-label='Close']")); } catch {}
+                if (closeBtn) {
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", closeBtn);
+                    await delay(120);
+                    await driver.executeScript("arguments[0].click();", closeBtn);
+                } else {
+                    // Fallback: press Escape
+                    await driver.executeScript("document.dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape'}));");
+                }
+                await delay(300);
+            } catch (e) {
+                log("⚠️ Could not close Install modal; continuing");
+            }
+
+            // Open the Webhook dialog from the most recent row and Test; verify DB row
+            try {
+                log("🧭 Opening Webhook dialog for newest pixel row...");
+                let rowWebhookBtn;
+                try {
+                    rowWebhookBtn = await driver.findElement(By.xpath('/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr[1]/td[4]/div/button[3]'));
+                } catch {
+                    try { rowWebhookBtn = await driver.findElement(By.xpath("(//table//tbody//tr)[1]//button[contains(., 'Webhook') or @title='Webhook']")); } catch {}
+                }
+                if (rowWebhookBtn) {
+                    await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", rowWebhookBtn);
+                    await delay(120);
+                    await driver.executeScript("arguments[0].click();", rowWebhookBtn);
+                    log("✅ Row Webhook dialog opened");
+
+                    // Ensure webhook URL remains populated; if empty, fill and optionally click Add
+                    try {
+                        const input = await driver.findElement(By.css('input[placeholder*="http"], input[name*="webhook"], input[type="url"]'));
+                        const current = (await input.getAttribute('value')) || '';
+                        log(`🔍 Row webhook input value: ${current}`);
+                        if (!current.trim()) {
+                            const hook = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
+                            await driver.executeScript("arguments[0].value='';", input);
+                            await delay(100);
+                            await input.sendKeys(hook);
+                            // Click Add if present to save
+                            try {
+                                const addBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Add')]"));
+                                await driver.executeScript("arguments[0].click();", addBtn);
+                                log("✅ Webhook URL added/saved on row dialog");
+                                await delay(300);
+                            } catch {}
+                        }
+                    } catch (e) { log("⚠️ Could not verify/fill row webhook URL"); }
+
+                    // Click Test and verify DB entry
+                    try {
+                        const testBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Test')]"));
+                        await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", testBtn);
+                        await delay(120);
+                        await driver.executeScript("arguments[0].click();", testBtn);
+                        log("✅ Row Webhook Test clicked");
+                    } catch (e) { log("⚠️ Row Webhook Test button not found"); }
+
+                    // Verify DB row in superpixel_resolution_log for the client database
+                    try {
+                        if (DB_HOST && DB_USER && DB_PASS) {
+                            const conn = await mysql.createConnection({ host: DB_HOST, user: DB_USER, password: DB_PASS, database: client, connectTimeout: 15000 });
+                            const start = Date.now();
+                            let found = false;
+                            while (Date.now() - start < 15000 && !found) {
+                                try {
+                                    const [rows] = await conn.query("SELECT id FROM superpixel_resolution_log ORDER BY id DESC LIMIT 1");
+                                    if (Array.isArray(rows) && (rows as any[]).length > 0) { found = true; break; }
+                                } catch {}
+                                await delay(500);
+                            }
+                            await conn.end();
+                            if (found) { log("✅ Verified webhook test row in superpixel_resolution_log"); }
+                            else { log("⚠️ No webhook test row detected within timeout"); }
+                        } else {
+                            log("ℹ️ DB env not configured; skipping DB verification");
+                        }
+                    } catch (e) { log("⚠️ DB verification failed"); }
+                } else {
+                    log("ℹ️ Could not find row Webhook action");
+                }
+            } catch (e) {
+                log("⚠️ Failed to open and test row Webhook dialog");
             }
 
             return { pixelCode: finalCode };
