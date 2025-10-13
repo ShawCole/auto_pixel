@@ -25,10 +25,13 @@ async function createGoogleSheet(client: string, pixelId: string, website: strin
         log(`📊 Creating Google Sheet for client: ${client} with website: ${website}`);
 
         // Use different command based on environment
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        const phpCommand = isDevelopment
-            ? `php ../web/create_client_sheet.php "${client}" "${pixelId}" "${website}"`
-            : `sudo -u www-data php /opt/auto-pixel/create_client_sheet.php "${client}" "${pixelId}" "${website}"`;
+        const isProduction = process.env.NODE_ENV === 'production';
+        const phpBin = process.env.PHP_BIN || 'php';
+        log('🔧 PHP binary for sheet creation:', { phpBin });
+        // In dev (mac/local), run local script without sudo; in prod (VM), run system path under www-data
+        const phpCommand = isProduction
+            ? `sudo -u www-data ${phpBin} /opt/auto-pixel/create_client_sheet.php "${client}" "${pixelId}" "${website}"`
+            : `${phpBin} ../create_client_sheet.php "${client}" "${pixelId}" "${website}"`;
 
         const { stdout, stderr } = await execAsync(phpCommand);
 
@@ -57,10 +60,12 @@ async function triggerFullSync(): Promise<void> {
         log(`🔄 Triggering full dynamic sync to include new sheets`);
 
         // Use different command based on environment
-        const isDevelopment = process.env.NODE_ENV === 'development';
-        const syncCommand = isDevelopment
-            ? `php ../web/dynamic_sync.php`
-            : `sudo -u www-data php /opt/auto-pixel/dynamic_sync.php`;
+        const isProduction = process.env.NODE_ENV === 'production';
+        const phpBin = process.env.PHP_BIN || 'php';
+        log('🔧 PHP binary for dynamic sync:', { phpBin });
+        const syncCommand = isProduction
+            ? `sudo -u www-data ${phpBin} /opt/auto-pixel/dynamic_sync.php`
+            : `${phpBin} ../dynamic_sync.php`;
 
         // Execute sync in background (don't wait for completion)
         exec(syncCommand, (error, stdout, stderr) => {
@@ -176,6 +181,12 @@ app.post('/generate', async (req, res) => {
         }
 
         log("✅ Pixel generated successfully with code");
+        if (typeof (result as any).webhookVerified !== 'undefined') {
+            log(`📗 Webhook verification status: ${(result as any).webhookVerified ? 'VERIFIED' : 'NOT VERIFIED'}`);
+        }
+        if (typeof (result as any).webhookTestUuidVerified !== 'undefined') {
+            log(`📘 Test UUID verification status: ${(result as any).webhookTestUuidVerified ? 'VERIFIED' : 'NOT VERIFIED'}`);
+        }
 
         // Generate a unique pixel ID for tracking
         const pixelId = `${client.toLowerCase()}-pixel-${Date.now()}`;
@@ -203,7 +214,10 @@ app.post('/generate', async (req, res) => {
             pixelSnippet: result.pixelCode,
             sheetUrl: sheetUrl,
             message: `Pixel generated successfully for ${client}`,
-            databaseSetup: !skipDatabase
+            databaseSetup: !skipDatabase,
+            webhookVerified: (result as any).webhookVerified === true,
+            webhookTestUuidVerified: (result as any).webhookTestUuidVerified === true,
+            webhookRowSample: (result as any).webhookRowSample || null
         });
     } catch (error: any) {
         log("💥 Error during pixel generation:", {
@@ -546,6 +560,56 @@ app.post("/admin/pixels/:pixelId/delete-from-simpleaudience", async (req, res) =
     } catch (error: any) {
         log("❌ Error deleting pixel from SimpleAudience:", error);
         res.status(500).json({ error: "Failed to delete pixel from SimpleAudience" });
+    }
+});
+
+// Combined deletion: SimpleAudience + DROP DATABASE + remove pixel_sheets row
+app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
+    try {
+        const { pixelId } = req.params;
+
+        log(`🧹 Combined delete for pixel: ${pixelId}`);
+
+        // Get client name from pixel_sheets
+        const mysql = await import("mysql2/promise");
+        const connection = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: 'pixel',
+            connectTimeout: 30000
+        });
+
+        let clientName: string | null = null;
+        try {
+            const [rows] = await connection.execute<RowDataPacket[]>(
+                'SELECT client_name FROM pixel_sheets WHERE id = ?',
+                [pixelId]
+            );
+            if ((rows as any[]).length === 0) {
+                return res.status(404).json({ error: "Pixel not found" });
+            }
+            clientName = (rows as any[])[0].client_name as string;
+        } finally {
+            await connection.end();
+        }
+
+        // Step 1: Delete in SimpleAudience
+        const sa = await deletePixelFromSimpleAudience(clientName!);
+        if (!sa.success) {
+            return res.status(502).json({ error: sa.message });
+        }
+
+        // Step 2: Drop DB and remove metadata
+        const db = await deleteClientFromDatabase(clientName!);
+        if (!db.success) {
+            return res.status(500).json({ error: db.message, simpleAudience: sa });
+        }
+
+        res.json({ success: true, simpleAudience: sa, database: db });
+    } catch (error: any) {
+        log("❌ Error in combined delete:", error);
+        res.status(500).json({ error: error.message || 'Failed combined delete' });
     }
 });
 

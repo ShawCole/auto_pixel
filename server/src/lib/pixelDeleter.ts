@@ -29,6 +29,8 @@ export async function deletePixelFromSimpleAudience(clientName: string): Promise
 
         // Setup Chrome options
         const options = new chrome.Options();
+        // Run headless in VM
+        options.addArguments('--headless=new');
         options.addArguments('--no-sandbox');
         options.addArguments('--disable-dev-shm-usage');
         options.addArguments('--disable-gpu');
@@ -140,17 +142,46 @@ export async function deletePixelFromSimpleAudience(clientName: string): Promise
             };
         }
 
-        // Click the delete button for the first matching row
+        // Click the delete button for the first matching row (prefer exact row 1 path, fallback to generic)
         console.log('🗑️ Clicking delete button...');
-        const deleteButton = await driver.findElement(By.xpath('/html/body/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr/td[4]/div/button[4]'));
+        let deleteButton;
+        try {
+            deleteButton = await driver.findElement(By.xpath('/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr[1]/td[4]/div/button[4]'));
+        } catch {
+            deleteButton = await driver.findElement(By.xpath('/html/body/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr/td[4]/div/button[4]'));
+        }
         await deleteButton.click();
 
-        // Wait for confirmation dialog and click confirm delete
-        await driver.wait(until.elementLocated(By.xpath('/html/body/div[3]/div[2]/button[2]')), 5000);
-        await driver.findElement(By.xpath('/html/body/div[3]/div[2]/button[2]')).click();
+        // Wait for confirmation dialog and click confirm delete (use robust selector)
+        console.log('⚠️ Waiting for delete confirmation dialog...');
+        try {
+            const confirmBtn = await driver.wait(
+                until.elementLocated(By.xpath("//div[@role='dialog']//button[normalize-space()='Delete']")),
+                5000
+            );
+            await confirmBtn.click();
+        } catch {
+            try {
+                await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]/div[2]/button[2]')), 2000);
+                await driver.findElement(By.xpath('/html/body/div[4]/div[2]/button[2]')).click();
+            } catch {
+                await driver.wait(until.elementLocated(By.xpath('/html/body/div[3]/div[2]/button[2]')), 2000);
+                await driver.findElement(By.xpath('/html/body/div[3]/div[2]/button[2]')).click();
+            }
+        }
 
-        // Wait for deletion to complete
-        await driver.sleep(3000);
+        // Wait for success toast (Sonner), allow a brief delay for processing
+        console.log('⏳ Waiting for deletion toast...');
+        try {
+            const toast = await driver.wait(
+                until.elementLocated(By.css('li[data-type="success"] div[data-title]')),
+                10000
+            );
+            const toastText = (await toast.getText()).trim();
+            console.log(`✅ Deletion toast detected: ${toastText || 'success'}`);
+        } catch {
+            console.log('⚠️ Success toast not detected within timeout; proceeding based on flow.');
+        }
 
         console.log('✅ Pixel successfully deleted from SimpleAudience');
 
@@ -242,21 +273,14 @@ export async function deleteClientFromDatabase(clientName: string): Promise<{ su
             [clientName]
         );
 
-        // Delete from client's superpixel_visitors table
-        await connection.execute(
-            `DELETE FROM \`${clientName}\`.superpixel_visitors`
-        );
-
-        // Delete from client's superpixel_resolution_log table
-        await connection.execute(
-            `DELETE FROM \`${clientName}\`.superpixel_resolution_log`
-        );
+        // Drop entire client database for full cleanup
+        await connection.execute(`DROP DATABASE IF EXISTS \`${clientName}\``);
 
         console.log('✅ Client data successfully deleted from database');
 
         return {
             success: true,
-            message: `Client '${clientName}' successfully deleted from database`
+            message: `Client '${clientName}' successfully deleted from database and metadata`
         };
 
     } catch (error: any) {
