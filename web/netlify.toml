@@ -8,12 +8,6 @@
 
 # Proxy API endpoints to the backend
 [[redirects]]
-  from = "/admin/*"
-  to = "https://api.thynkdata.com/admin/:splat"
-  status = 200
-  force = true
-
-[[redirects]]
   from = "/generate"
   to = "https://api.thynkdata.com/generate"
   status = 200
