@@ -19,6 +19,23 @@ function log(message: string, data?: any) {
     }
 }
 
+// Deletion lock configuration: comma-separated list of client names or pixel IDs
+const deleteLockedClientsEnv = process.env.DELETE_LOCKED_CLIENTS || '';
+const deleteLockedIdentifiers = new Set(
+    deleteLockedClientsEnv
+        .split(',')
+        .map(s => s.trim().toLowerCase())
+        .filter(Boolean)
+);
+
+function isDeletionLockedByEnv(clientName: string | null | undefined, pixelIdentifier?: string | null): boolean {
+    const nameKey = (clientName || '').toLowerCase();
+    const idKey = (pixelIdentifier || '').toLowerCase();
+    const lockedByName = (!!nameKey) && deleteLockedIdentifiers.has(nameKey);
+    const lockedById = (!!idKey) && deleteLockedIdentifiers.has(idKey);
+    return lockedByName || lockedById;
+}
+
 // Function to create Google Sheet for client
 async function createGoogleSheet(client: string, pixelId: string, website: string): Promise<{ sheetUrl?: string; error?: string }> {
     try {
@@ -338,7 +355,8 @@ app.get("/admin/pixels", async (req, res) => {
                 eventCount: parseInt(row.eventCount) || 0,
                 visitorCount: parseInt(row.visitorCount) || 0,
                 deletionScheduled: row.deletionScheduled ? row.deletionScheduled.toISOString() : null,
-                lastSyncAt: row.lastSyncAt ? row.lastSyncAt.toISOString() : null
+                lastSyncAt: row.lastSyncAt ? row.lastSyncAt.toISOString() : null,
+                deleteLocked: isDeletionLockedByEnv(row.clientName, row.id?.toString() || row.pixelId)
             }));
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
@@ -542,6 +560,10 @@ app.post("/admin/pixels/:pixelId/delete-from-simpleaudience", async (req, res) =
             }
 
             const clientName = rows[0].client_name;
+            // Enforce deletion lock
+            if (isDeletionLockedByEnv(clientName, pixelId)) {
+                return res.status(423).json({ error: "Deletion is locked for this pixel" });
+            }
             const result = await deletePixelFromSimpleAudience(clientName);
 
             if (result.success) {
@@ -594,6 +616,11 @@ app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
             await connection.end();
         }
 
+        // Enforce deletion lock
+        if (isDeletionLockedByEnv(clientName!, pixelId)) {
+            return res.status(423).json({ error: "Deletion is locked for this pixel" });
+        }
+
         // Step 1: Delete in SimpleAudience
         const sa = await deletePixelFromSimpleAudience(clientName!);
         if (!sa.success) {
@@ -641,6 +668,10 @@ app.post("/admin/pixels/:pixelId/delete-from-database", async (req, res) => {
             }
 
             const clientName = rows[0].client_name;
+            // Enforce deletion lock
+            if (isDeletionLockedByEnv(clientName, pixelId)) {
+                return res.status(423).json({ error: "Deletion is locked for this pixel" });
+            }
             const result = await deleteClientFromDatabase(clientName);
 
             if (result.success) {

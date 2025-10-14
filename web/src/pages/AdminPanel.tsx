@@ -11,6 +11,7 @@ interface Pixel {
     eventCount: number
     visitorCount: number
     deletionScheduled?: string
+    deleteLocked?: boolean
 }
 
 export default function AdminPanel() {
@@ -438,10 +439,13 @@ export default function AdminPanel() {
                                                     )}
                                                     <button
                                                         onClick={() => {
+                                                            if (pixel.deleteLocked) return
                                                             setDeletingPixel(pixel.id)
                                                             setShowAdvancedDeleteDialog(true)
                                                         }}
-                                                        className="text-red-600 hover:text-red-800 text-sm font-medium"
+                                                        className={`text-sm font-medium ${pixel.deleteLocked ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:text-red-800'}`}
+                                                        disabled={!!pixel.deleteLocked}
+                                                        title={pixel.deleteLocked ? 'Deletion disabled for this pixel' : 'Delete'}
                                                     >
                                                         Delete
                                                     </button>
