@@ -19,21 +19,23 @@ function log(message: string, data?: any) {
     }
 }
 
-// Deletion lock configuration: comma-separated list of client names or pixel IDs
-const deleteLockedClientsEnv = process.env.DELETE_LOCKED_CLIENTS || '';
-const deleteLockedIdentifiers = new Set(
-    deleteLockedClientsEnv
-        .split(',')
-        .map(s => s.trim().toLowerCase())
-        .filter(Boolean)
-);
-
-function isDeletionLockedByEnv(clientName: string | null | undefined, pixelIdentifier?: string | null): boolean {
-    const nameKey = (clientName || '').toLowerCase();
-    const idKey = (pixelIdentifier || '').toLowerCase();
-    const lockedByName = (!!nameKey) && deleteLockedIdentifiers.has(nameKey);
-    const lockedById = (!!idKey) && deleteLockedIdentifiers.has(idKey);
-    return lockedByName || lockedById;
+// Ensure admin metadata schema (adds deletable column if missing)
+async function ensureDeletableColumn(connection: any): Promise<void> {
+    try {
+        const [cols] = await connection.execute(
+            "SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pixel_sheets' AND COLUMN_NAME = 'deletable'",
+            ['pixel']
+        );
+        const cnt = Number((cols as any[])[0].cnt ?? (cols as any[])[0].CNT ?? 0);
+        if (cnt === 0) {
+            await connection.execute(
+                "ALTER TABLE pixel_sheets ADD COLUMN deletable TINYINT(1) NOT NULL DEFAULT 1 AFTER client_website"
+            );
+            log("🛠️ Added 'deletable' column to pixel.pixel_sheets (default: 1)");
+        }
+    } catch (err: any) {
+        log("⚠️ ensureDeletableColumn error:", { message: err.message });
+    }
 }
 
 // Function to create Google Sheet for client
@@ -307,6 +309,8 @@ app.get("/admin/pixels", async (req, res) => {
         log("✅ Database connection established");
 
         try {
+            // Ensure schema has deletable column
+            await ensureDeletableColumn(connection);
             // Query pixel_sheets table with stats
             const query = `
                 SELECT 
@@ -316,6 +320,7 @@ app.get("/admin/pixels", async (req, res) => {
                     ps.sheet_id as sheetId,
                     ps.sheet_url as sheetUrl,
                     ps.client_website as clientWebsite,
+                    COALESCE(ps.deletable, 1) as deletable,
                     ps.created_at as createdAt,
                     ps.last_sync_at as lastSyncAt,
                     'Uncategorized' as industry,
@@ -356,7 +361,7 @@ app.get("/admin/pixels", async (req, res) => {
                 visitorCount: parseInt(row.visitorCount) || 0,
                 deletionScheduled: row.deletionScheduled ? row.deletionScheduled.toISOString() : null,
                 lastSyncAt: row.lastSyncAt ? row.lastSyncAt.toISOString() : null,
-                deleteLocked: isDeletionLockedByEnv(row.clientName, row.id?.toString() || row.pixelId)
+                deleteLocked: !(row.deletable === 1 || row.deletable === '1')
             }));
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
@@ -560,8 +565,13 @@ app.post("/admin/pixels/:pixelId/delete-from-simpleaudience", async (req, res) =
             }
 
             const clientName = rows[0].client_name;
-            // Enforce deletion lock
-            if (isDeletionLockedByEnv(clientName, pixelId)) {
+            // Check DB-backed deletable flag
+            const [lockRows] = await connection.execute<RowDataPacket[]>(
+                'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
+                [pixelId]
+            );
+            const deletable = Number((lockRows as any[])[0]?.deletable) === 1;
+            if (!deletable) {
                 return res.status(423).json({ error: "Deletion is locked for this pixel" });
             }
             const result = await deletePixelFromSimpleAudience(clientName);
@@ -616,9 +626,29 @@ app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
             await connection.end();
         }
 
-        // Enforce deletion lock
-        if (isDeletionLockedByEnv(clientName!, pixelId)) {
-            return res.status(423).json({ error: "Deletion is locked for this pixel" });
+        // Enforce DB-backed deletable flag
+        {
+            const mysql = await import("mysql2/promise");
+            const conn = await mysql.createConnection({
+                host: process.env.DB_HOST,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASS,
+                database: 'pixel',
+                connectTimeout: 30000
+            });
+            try {
+                const [lockRows] = await conn.execute<RowDataPacket[]>(
+                    'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
+                    [pixelId]
+                );
+                const deletable = Number((lockRows as any[])[0]?.deletable) === 1;
+                if (!deletable) {
+                    await conn.end();
+                    return res.status(423).json({ error: "Deletion is locked for this pixel" });
+                }
+            } finally {
+                await conn.end();
+            }
         }
 
         // Step 1: Delete in SimpleAudience
@@ -668,8 +698,13 @@ app.post("/admin/pixels/:pixelId/delete-from-database", async (req, res) => {
             }
 
             const clientName = rows[0].client_name;
-            // Enforce deletion lock
-            if (isDeletionLockedByEnv(clientName, pixelId)) {
+            // Enforce DB-backed deletable flag
+            const [lockRows] = await connection.execute<RowDataPacket[]>(
+                'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
+                [pixelId]
+            );
+            const deletable = Number((lockRows as any[])[0]?.deletable) === 1;
+            if (!deletable) {
                 return res.status(423).json({ error: "Deletion is locked for this pixel" });
             }
             const result = await deleteClientFromDatabase(clientName);
