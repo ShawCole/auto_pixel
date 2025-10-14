@@ -728,6 +728,77 @@ app.post("/admin/pixels/:pixelId/delete-from-database", async (req, res) => {
     }
 });
 
+// Update deletable flag for a pixel (lock/unlock deletion)
+app.post("/admin/pixels/:pixelId/deletable", async (req, res) => {
+    try {
+        const { pixelId } = req.params;
+        const { deletable, lock } = req.body as { deletable?: any; lock?: any };
+
+        function parseToDeletable(value: any): number | null {
+            if (typeof value === 'boolean') return value ? 1 : 0;
+            if (typeof value === 'number') return value ? 1 : 0;
+            if (typeof value === 'string') {
+                const v = value.trim().toLowerCase();
+                if (["1", "true", "yes", "y"].includes(v)) return 1;
+                if (["0", "false", "no", "n"].includes(v)) return 0;
+            }
+            return null;
+        }
+
+        let desired: number | null = parseToDeletable(deletable);
+        const lockParsed = parseToDeletable(lock);
+        if (desired === null && lockParsed !== null) {
+            desired = lockParsed === 1 ? 0 : 1; // lock=true => deletable=0
+        }
+
+        if (desired === null) {
+            return res.status(400).json({ error: "Provide 'deletable' (true/false/1/0) or 'lock' (true/false)" });
+        }
+
+        log(`🔒 Setting deletable for pixel ${pixelId} to ${desired}`);
+
+        const mysql = await import("mysql2/promise");
+        const connection = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: 'pixel',
+            connectTimeout: 30000
+        });
+
+        try {
+            await ensureDeletableColumn(connection);
+
+            const [rows] = await connection.execute<RowDataPacket[]>(
+                'SELECT id FROM pixel_sheets WHERE id = ?',
+                [pixelId]
+            );
+            if ((rows as any[]).length === 0) {
+                return res.status(404).json({ error: "Pixel not found" });
+            }
+
+            await connection.execute(
+                'UPDATE pixel_sheets SET deletable = ? WHERE id = ?',
+                [desired, pixelId]
+            );
+
+            return res.json({
+                success: true,
+                pixelId,
+                deletable: desired === 1,
+                deleteLocked: desired !== 1
+            });
+
+        } finally {
+            await connection.end();
+        }
+
+    } catch (error: any) {
+        log("❌ Error updating deletable flag:", error);
+        res.status(500).json({ error: "Failed to update deletable flag" });
+    }
+});
+
 // Health check endpoint
 app.get("/health", (req, res) => {
     log("🏥 Health check requested");
