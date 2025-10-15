@@ -19,6 +19,7 @@ export default function AdminPanel() {
     const [filteredPixels, setFilteredPixels] = useState<Pixel[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [success, setSuccess] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [industryFilter, setIndustryFilter] = useState('all')
     const [sortBy, setSortBy] = useState<'date' | 'name' | 'events'>('date')
@@ -211,25 +212,26 @@ export default function AdminPanel() {
         }
     }
 
-    const handleRefresh = async (pixelId: string) => {
+    const handleRefresh = async (pixel: Pixel) => {
         try {
-            setSyncing(prev => new Set(prev).add(pixelId))
+            setSyncing(prev => new Set(prev).add(pixel.id))
             const apiUrl = import.meta.env.VITE_API_URL ||
                 (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://api.thynkdata.com')
 
-            const res = await fetch(`${apiUrl}/admin/pixels/${pixelId}/sync`, { method: 'POST' })
+            const res = await fetch(`${apiUrl}/admin/pixels/${pixel.id}/sync`, { method: 'POST' })
             if (!res.ok) {
                 const text = await res.text().catch(() => '')
                 throw new Error(text || 'Failed to start sync')
             }
 
-            // Optionally, we could poll status here; for now we just fire-and-forget
+            setSuccess(`Sync started for ${pixel.clientName}`)
+            setTimeout(() => setSuccess(null), 3000)
         } catch (err: any) {
             setError(err.message || 'Failed to start sync')
         } finally {
             setSyncing(prev => {
                 const next = new Set(prev)
-                next.delete(pixelId)
+                next.delete(pixel.id)
                 return next
             })
         }
@@ -458,13 +460,13 @@ export default function AdminPanel() {
                                             <td className="p-4" style={{ width: '140px' }}>
                                                 <div className="flex items-center gap-2">
                                                     <button
-                                                        onClick={() => handleRefresh(pixel.id)}
+                                                        onClick={() => handleRefresh(pixel)}
                                                         onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, 'Refresh')}
                                                         onMouseLeave={hideTooltip}
                                                         className={`w-8 h-8 rounded-md border flex items-center justify-center transition-colors ${syncing.has(pixel.id)
                                                             ? 'text-gray-300 border-gray-200 cursor-not-allowed'
-                                                            : 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300'}`}
-                                                        disabled={syncing.has(pixel.id)}
+                                                            : (pixel.sheetUrl ? 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300' : 'text-gray-300 border-gray-200 cursor-not-allowed')}`}
+                                                        disabled={syncing.has(pixel.id) || !pixel.sheetUrl}
                                                         aria-label="Refresh"
                                                     >
                                                         <RefreshCw className="w-4 h-4" />
@@ -612,6 +614,23 @@ export default function AdminPanel() {
                             <div className="ml-3">
                                 <h3 className="text-sm font-medium text-red-800">Error</h3>
                                 <div className="mt-2 text-sm text-red-700">{error}</div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Success Display */}
+                {success && (
+                    <div className="fixed bottom-4 right-4 bg-green-50 border border-green-200 rounded-lg p-4 max-w-md">
+                        <div className="flex">
+                            <div className="flex-shrink-0">
+                                <svg className="h-5 w-5 text-green-500" viewBox="0 0 20 20" fill="currentColor">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 10-1.414 1.414L9 13.414l4.707-4.707z" clipRule="evenodd" />
+                                </svg>
+                            </div>
+                            <div className="ml-3">
+                                <h3 className="text-sm font-medium text-green-800">Success</h3>
+                                <div className="mt-2 text-sm text-green-700">{success}</div>
                             </div>
                         </div>
                     </div>
