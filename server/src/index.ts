@@ -6,6 +6,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { ensureClientSchema } from "./lib/db.js";
 import { createPixel } from "./lib/audienceLab.js";
+import fs from "fs";
+import path from "path";
 
 // Enable verbose logging
 const DEBUG = process.env.DEBUG === '*' || process.env.NODE_ENV === 'development';
@@ -16,6 +18,30 @@ function log(message: string, data?: any) {
     console.log(`[${timestamp}] ${message}`);
     if (data && DEBUG) {
         console.log(JSON.stringify(data, null, 2));
+    }
+}
+
+// Sync helpers and configuration
+const isProduction = process.env.NODE_ENV === 'production';
+const PHP_BIN = process.env.PHP_BIN || 'php';
+const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || "/var/log/auto-pixel";
+const SYNC_LOCK_DIR = process.env.SYNC_LOCK_DIR || "/opt/auto-pixel/.sync-locks";
+
+function ensureDir(p: string) {
+    try { fs.mkdirSync(p, { recursive: true }); } catch {}
+}
+
+function readTail(filePath: string, maxBytes = 2048): string {
+    try {
+        const stats = fs.statSync(filePath);
+        const start = Math.max(0, stats.size - maxBytes);
+        const fd = fs.openSync(filePath, 'r');
+        const buf = Buffer.alloc(stats.size - start);
+        fs.readSync(fd, buf, 0, buf.length, start);
+        fs.closeSync(fd);
+        return buf.toString('utf8');
+    } catch {
+        return "";
     }
 }
 
@@ -280,6 +306,56 @@ app.post("/admin/update-website-urls", async (req, res) => {
         });
     }
 });
+
+// Smart Sync helpers
+async function startSmartSyncForClient(clientName: string): Promise<{ started: boolean; logPath: string; command: string }> {
+    ensureDir(SYNC_LOG_DIR);
+    ensureDir(SYNC_LOCK_DIR);
+
+    const lockPath = path.join(SYNC_LOCK_DIR, `${clientName}.lock`);
+    if (fs.existsSync(lockPath)) {
+        const m = fs.readFileSync(lockPath, 'utf8').trim();
+        throw new Error(`Sync already in progress for ${clientName}${m ? ` (pid ${m})` : ''}`);
+    }
+
+    const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
+    const phpScript = isProduction ? "/opt/auto-pixel/smart_sync.php" : "../smart_sync.php";
+    const cmd = isProduction
+        ? `sudo -u www-data ${PHP_BIN} ${phpScript} --client=${clientName}`
+        : `${PHP_BIN} ${phpScript} --client=${clientName}`;
+
+    const spawnCmd = `nohup ${cmd} >> ${logPath} 2>&1 & echo $!`;
+
+    return await new Promise((resolve, reject) => {
+        exec(spawnCmd, (err, stdout) => {
+            if (err) return reject(err);
+            const pid = (stdout || "").toString().trim();
+            try { fs.writeFileSync(lockPath, pid); } catch {}
+            resolve({ started: true, logPath, command: cmd });
+        });
+    });
+}
+
+async function getClientByPixelId(pixelId: string): Promise<{ clientName: string; sheetId: string | null }> {
+    const mysql = await import("mysql2/promise");
+    const connection = await mysql.createConnection({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASS,
+        database: 'pixel',
+        connectTimeout: 30000
+    });
+    try {
+        const [rows] = await connection.execute<any[]>(
+            "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE id = ?",
+            [pixelId]
+        );
+        if (!(rows as any[]).length) throw new Error("Pixel not found");
+        return { clientName: (rows as any[])[0].clientName, sheetId: (rows as any[])[0].sheetId || null };
+    } finally {
+        await connection.end();
+    }
+}
 
 // Get all pixels with stats
 app.get("/admin/pixels", async (req, res) => {
@@ -796,6 +872,79 @@ app.post("/admin/pixels/:pixelId/deletable", async (req, res) => {
     } catch (error: any) {
         log("❌ Error updating deletable flag:", error);
         res.status(500).json({ error: "Failed to update deletable flag" });
+    }
+});
+
+// POST /admin/pixels/:pixelId/sync -> start smart_sync.php --client=<client>
+app.post("/admin/pixels/:pixelId/sync", async (req, res) => {
+    try {
+        const { pixelId } = req.params;
+        const { clientName, sheetId } = await getClientByPixelId(pixelId);
+
+        if (!sheetId) {
+            return res.status(400).json({ error: "No Google Sheet connected for this client" });
+        }
+
+        if (isProduction) {
+            if (!fs.existsSync("/opt/auto-pixel/smart_sync.php")) {
+                return res.status(500).json({ error: "smart_sync.php not found on VM (/opt/auto-pixel/smart_sync.php)" });
+            }
+            if (!fs.existsSync("/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json")) {
+                return res.status(500).json({ error: "Google credentials missing at /etc/auto-pixel/..." });
+            }
+        }
+
+        const { started, logPath, command } = await startSmartSyncForClient(clientName);
+        res.json({ started, client: clientName, logPath, command });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message || "Failed to start sync" });
+    }
+});
+
+// GET /admin/pixels/:pixelId/sync/status -> inProgress, lastSyncAt, log tail
+app.get("/admin/pixels/:pixelId/sync/status", async (req, res) => {
+    try {
+        const { pixelId } = req.params;
+        const { clientName } = await getClientByPixelId(pixelId);
+
+        const lockPath = path.join(SYNC_LOCK_DIR, `${clientName}.lock`);
+        const inProgress = fs.existsSync(lockPath);
+        const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
+        const logsPreview = readTail(logPath, 4000);
+
+        const mysql = await import("mysql2/promise");
+        const connection = await mysql.createConnection({
+            host: process.env.DB_HOST,
+            user: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: 'pixel',
+            connectTimeout: 30000
+        });
+
+        let lastSyncAt: string | null = null;
+        try {
+            const [rows] = await connection.execute<any[]>(
+                "SELECT last_sync_at FROM pixel_sheets WHERE id = ?",
+                [pixelId]
+            );
+            if ((rows as any[]).length && (rows as any[])[0].last_sync_at) {
+                lastSyncAt = new Date((rows as any[])[0].last_sync_at).toISOString();
+            }
+        } finally {
+            await connection.end();
+        }
+
+        res.json({ client: clientName, inProgress, lastSyncAt, logPath, logsPreview });
+
+        // Best-effort cleanup: if pid no longer exists, remove lock
+        if (inProgress) {
+            try {
+                const pid = fs.readFileSync(lockPath, 'utf8').trim();
+                if (pid && !fs.existsSync(`/proc/${pid}`)) fs.unlinkSync(lockPath);
+            } catch {}
+        }
+    } catch (e: any) {
+        res.status(500).json({ error: e.message || "Failed to read sync status" });
     }
 });
 
