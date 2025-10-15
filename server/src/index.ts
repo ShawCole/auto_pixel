@@ -28,7 +28,7 @@ const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || "/var/log/auto-pixel";
 const SYNC_LOCK_DIR = process.env.SYNC_LOCK_DIR || "/opt/auto-pixel/.sync-locks";
 
 function ensureDir(p: string) {
-    try { fs.mkdirSync(p, { recursive: true }); } catch {}
+    try { fs.mkdirSync(p, { recursive: true }); } catch { }
 }
 
 function readTail(filePath: string, maxBytes = 2048): string {
@@ -330,7 +330,7 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
         exec(spawnCmd, (err, stdout) => {
             if (err) return reject(err);
             const pid = (stdout || "").toString().trim();
-            try { fs.writeFileSync(lockPath, pid); } catch {}
+            try { fs.writeFileSync(lockPath, pid); } catch { }
             resolve({ started: true, logPath, command: cmd });
         });
     });
@@ -351,6 +351,30 @@ async function getClientByPixelId(pixelId: string): Promise<{ clientName: string
             [pixelId]
         );
         if (!(rows as any[]).length) throw new Error("Pixel not found");
+        return { clientName: (rows as any[])[0].clientName, sheetId: (rows as any[])[0].sheetId || null };
+    } finally {
+        await connection.end();
+    }
+}
+
+async function getClientByName(clientName: string): Promise<{ clientName: string; sheetId: string | null }> {
+    const mysql = await import("mysql2/promise");
+    const connection = await mysql.createConnection({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASS,
+        database: 'pixel',
+        connectTimeout: 30000
+    });
+    try {
+        const [rows] = await connection.execute<any[]>(
+            "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE client_name = ?",
+            [clientName]
+        );
+        if (!(rows as any[]).length) {
+            // No sheet row yet; allow sync to run anyway but report sheetId null
+            return { clientName, sheetId: null };
+        }
         return { clientName: (rows as any[])[0].clientName, sheetId: (rows as any[])[0].sheetId || null };
     } finally {
         await connection.end();
@@ -901,6 +925,32 @@ app.post("/admin/pixels/:pixelId/sync", async (req, res) => {
     }
 });
 
+// POST /admin/sheets/sync { client: "ClientName" } -> start smart_sync for explicit client
+app.post("/admin/sheets/sync", async (req, res) => {
+    try {
+        const { client } = req.body || {};
+        if (!client || typeof client !== 'string') {
+            return res.status(400).json({ error: "Provide body { client: <ClientName> }" });
+        }
+
+        const { clientName, sheetId } = await getClientByName(client);
+
+        if (isProduction) {
+            if (!fs.existsSync("/opt/auto-pixel/smart_sync.php")) {
+                return res.status(500).json({ error: "smart_sync.php not found on VM (/opt/auto-pixel/smart_sync.php)" });
+            }
+            if (!fs.existsSync("/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json")) {
+                return res.status(500).json({ error: "Google credentials missing at /etc/auto-pixel/..." });
+            }
+        }
+
+        const { started, logPath, command } = await startSmartSyncForClient(clientName);
+        res.json({ started, client: clientName, sheetId, logPath, command });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message || "Failed to start client sync" });
+    }
+});
+
 // GET /admin/pixels/:pixelId/sync/status -> inProgress, lastSyncAt, log tail
 app.get("/admin/pixels/:pixelId/sync/status", async (req, res) => {
     try {
@@ -941,7 +991,7 @@ app.get("/admin/pixels/:pixelId/sync/status", async (req, res) => {
             try {
                 const pid = fs.readFileSync(lockPath, 'utf8').trim();
                 if (pid && !fs.existsSync(`/proc/${pid}`)) fs.unlinkSync(lockPath);
-            } catch {}
+            } catch { }
         }
     } catch (e: any) {
         res.status(500).json({ error: e.message || "Failed to read sync status" });
