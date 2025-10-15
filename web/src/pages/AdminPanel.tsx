@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Trash2, Search, AlertCircle, RefreshCw } from 'lucide-react'
+import { Calendar, Trash2, Search, AlertCircle, RefreshCw, FileSpreadsheet } from 'lucide-react'
 
 interface Pixel {
     id: string
@@ -35,6 +35,11 @@ export default function AdminPanel() {
         y: 0
     })
     const [syncing, setSyncing] = useState<Set<string>>(new Set())
+    const hideTooltip = () => setTooltip({ show: false, content: '', x: 0, y: 0 })
+    const showTooltip = (el: HTMLElement, content: string) => {
+        const rect = el.getBoundingClientRect()
+        setTooltip({ show: true, content, x: rect.left + rect.width / 2, y: rect.top })
+    }
 
     // Mock data - replace with actual API call
     useEffect(() => {
@@ -454,34 +459,44 @@ export default function AdminPanel() {
                                                 <div className="flex items-center gap-2">
                                                     <button
                                                         onClick={() => handleRefresh(pixel.id)}
-                                                        className={`text-sm font-medium ${syncing.has(pixel.id) ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'} flex items-center gap-1`}
+                                                        onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, 'Refresh')}
+                                                        onMouseLeave={hideTooltip}
+                                                        className={`w-8 h-8 rounded-md border flex items-center justify-center transition-colors ${syncing.has(pixel.id)
+                                                            ? 'text-gray-300 border-gray-200 cursor-not-allowed'
+                                                            : 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300'}`}
                                                         disabled={syncing.has(pixel.id)}
-                                                        title="Trigger Google Sheet refresh"
+                                                        aria-label="Refresh"
                                                     >
                                                         <RefreshCw className="w-4 h-4" />
-                                                        {syncing.has(pixel.id) ? 'Refreshing…' : 'Refresh'}
                                                     </button>
+
                                                     {pixel.sheetUrl && (
-                                                        <a
-                                                            href={pixel.sheetUrl}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+                                                        <button
+                                                            onClick={() => window.open(pixel.sheetUrl as string, '_blank', 'noopener,noreferrer')}
+                                                            onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, 'View Sheet')}
+                                                            onMouseLeave={hideTooltip}
+                                                            className="w-8 h-8 rounded-md border flex items-center justify-center transition-colors text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300"
+                                                            aria-label="View Sheet"
                                                         >
-                                                            View Sheet
-                                                        </a>
+                                                            <FileSpreadsheet className="w-4 h-4" />
+                                                        </button>
                                                     )}
+
                                                     <button
                                                         onClick={() => {
                                                             if (pixel.deleteLocked) return
                                                             setDeletingPixel(pixel.id)
                                                             setShowAdvancedDeleteDialog(true)
                                                         }}
-                                                        className={`text-sm font-medium ${pixel.deleteLocked ? 'text-gray-300 cursor-not-allowed' : 'text-red-600 hover:text-red-800'}`}
+                                                        onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, pixel.deleteLocked ? 'Deletion disabled' : 'Delete')}
+                                                        onMouseLeave={hideTooltip}
+                                                        className={`w-8 h-8 rounded-md border flex items-center justify-center transition-colors ${pixel.deleteLocked
+                                                            ? 'text-gray-300 border-gray-200 cursor-not-allowed'
+                                                            : 'text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300'}`}
                                                         disabled={!!pixel.deleteLocked}
-                                                        title={pixel.deleteLocked ? 'Deletion disabled for this pixel' : 'Delete'}
+                                                        aria-label="Delete"
                                                     >
-                                                        Delete
+                                                        <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             </td>
