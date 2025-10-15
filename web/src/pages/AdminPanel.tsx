@@ -624,6 +624,7 @@ export default function AdminPanel() {
                         style={{
                             left: tooltip.x,
                             top: tooltip.y - 40,
+                            transform: 'translateX(-50%)',
                             maxWidth: '300px',
                             wordBreak: 'break-all'
                         }}
