@@ -52,7 +52,7 @@ function watchPidAndCleanupLock(pidStr: string, lockPath: string, clientName: st
                     fs.unlinkSync(lockPath);
                     log(`🧹 Cleared sync lock for ${clientName} (process ${pidStr} ended)`);
                 }
-            } catch {}
+            } catch { }
             clearInterval(interval);
         }
     }, 5000);
@@ -344,7 +344,7 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
         const m = fs.readFileSync(lockPath, 'utf8').trim();
         // If PID is stale, remove the lock and continue; otherwise deny
         if (!m || !isPidAlive(m) || !fs.existsSync(`/proc/${m}`)) {
-            try { fs.unlinkSync(lockPath); } catch {}
+            try { fs.unlinkSync(lockPath); } catch { }
             log(`🧹 Removed stale sync lock for ${clientName}${m ? ` (pid ${m})` : ''}`);
         } else {
             throw new Error(`Sync already in progress for ${clientName}${m ? ` (pid ${m})` : ''}`);
@@ -939,9 +939,9 @@ app.post("/admin/pixels/:pixelId/sync", async (req, res) => {
     try {
         const { pixelId } = req.params;
         const { clientName, sheetId } = await getClientByPixelId(pixelId);
-
+        // Allow sync even if no sheet is connected; the PHP script will handle/log
         if (!sheetId) {
-            return res.status(400).json({ error: "No Google Sheet connected for this client" });
+            log(`ℹ️ No sheet connected for ${clientName}; starting sync anyway`);
         }
 
         if (isProduction) {
@@ -954,7 +954,7 @@ app.post("/admin/pixels/:pixelId/sync", async (req, res) => {
         }
 
         const { started, logPath, command } = await startSmartSyncForClient(clientName);
-        res.json({ started, client: clientName, logPath, command });
+        res.json({ started, client: clientName, sheetId: sheetId || null, logPath, command });
     } catch (e: any) {
         res.status(500).json({ error: e.message || "Failed to start sync" });
     }

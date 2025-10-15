@@ -465,8 +465,8 @@ export default function AdminPanel() {
                                                         onMouseLeave={hideTooltip}
                                                         className={`w-8 h-8 rounded-md border flex items-center justify-center transition-colors ${syncing.has(pixel.id)
                                                             ? 'text-gray-300 border-gray-200 cursor-not-allowed'
-                                                            : (pixel.sheetUrl ? 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300' : 'text-gray-300 border-gray-200 cursor-not-allowed')}`}
-                                                        disabled={syncing.has(pixel.id) || !pixel.sheetUrl}
+                                                            : 'text-blue-600 border-blue-200 hover:bg-blue-50 hover:border-blue-300'}`}
+                                                        disabled={syncing.has(pixel.id)}
                                                         aria-label="Refresh"
                                                     >
                                                         <RefreshCw className="w-4 h-4" />
