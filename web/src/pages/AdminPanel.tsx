@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Trash2, Search, AlertCircle } from 'lucide-react'
+import { Calendar, Trash2, Search, AlertCircle, RefreshCw } from 'lucide-react'
 
 interface Pixel {
     id: string
@@ -34,6 +34,7 @@ export default function AdminPanel() {
         x: 0,
         y: 0
     })
+    const [syncing, setSyncing] = useState<Set<string>>(new Set())
 
     // Mock data - replace with actual API call
     useEffect(() => {
@@ -202,6 +203,30 @@ export default function AdminPanel() {
             setError(err.message || 'Failed to delete pixel')
             setDeleteStep('confirm')
             setDeleteProgress('')
+        }
+    }
+
+    const handleRefresh = async (pixelId: string) => {
+        try {
+            setSyncing(prev => new Set(prev).add(pixelId))
+            const apiUrl = import.meta.env.VITE_API_URL ||
+                (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://api.thynkdata.com')
+
+            const res = await fetch(`${apiUrl}/admin/pixels/${pixelId}/sync`, { method: 'POST' })
+            if (!res.ok) {
+                const text = await res.text().catch(() => '')
+                throw new Error(text || 'Failed to start sync')
+            }
+
+            // Optionally, we could poll status here; for now we just fire-and-forget
+        } catch (err: any) {
+            setError(err.message || 'Failed to start sync')
+        } finally {
+            setSyncing(prev => {
+                const next = new Set(prev)
+                next.delete(pixelId)
+                return next
+            })
         }
     }
 
@@ -427,6 +452,15 @@ export default function AdminPanel() {
                                             </td>
                                             <td className="p-4" style={{ width: '140px' }}>
                                                 <div className="flex items-center gap-2">
+                                                    <button
+                                                        onClick={() => handleRefresh(pixel.id)}
+                                                        className={`text-sm font-medium ${syncing.has(pixel.id) ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'} flex items-center gap-1`}
+                                                        disabled={syncing.has(pixel.id)}
+                                                        title="Trigger Google Sheet refresh"
+                                                    >
+                                                        <RefreshCw className="w-4 h-4" />
+                                                        {syncing.has(pixel.id) ? 'Refreshing…' : 'Refresh'}
+                                                    </button>
                                                     {pixel.sheetUrl && (
                                                         <a
                                                             href={pixel.sheetUrl}
