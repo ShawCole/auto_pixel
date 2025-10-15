@@ -31,6 +31,33 @@ function ensureDir(p: string) {
     try { fs.mkdirSync(p, { recursive: true }); } catch { }
 }
 
+function isPidAlive(pidStr: string): boolean {
+    const n = Number(pidStr);
+    if (!n || Number.isNaN(n)) return false;
+    try {
+        process.kill(n, 0);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function watchPidAndCleanupLock(pidStr: string, lockPath: string, clientName: string) {
+    const n = Number(pidStr);
+    if (!n || Number.isNaN(n)) return;
+    const interval = setInterval(() => {
+        if (!isPidAlive(pidStr) || !fs.existsSync(`/proc/${pidStr}`)) {
+            try {
+                if (fs.existsSync(lockPath)) {
+                    fs.unlinkSync(lockPath);
+                    log(`🧹 Cleared sync lock for ${clientName} (process ${pidStr} ended)`);
+                }
+            } catch {}
+            clearInterval(interval);
+        }
+    }, 5000);
+}
+
 function readTail(filePath: string, maxBytes = 2048): string {
     try {
         const stats = fs.statSync(filePath);
@@ -315,7 +342,13 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
     const lockPath = path.join(SYNC_LOCK_DIR, `${clientName}.lock`);
     if (fs.existsSync(lockPath)) {
         const m = fs.readFileSync(lockPath, 'utf8').trim();
-        throw new Error(`Sync already in progress for ${clientName}${m ? ` (pid ${m})` : ''}`);
+        // If PID is stale, remove the lock and continue; otherwise deny
+        if (!m || !isPidAlive(m) || !fs.existsSync(`/proc/${m}`)) {
+            try { fs.unlinkSync(lockPath); } catch {}
+            log(`🧹 Removed stale sync lock for ${clientName}${m ? ` (pid ${m})` : ''}`);
+        } else {
+            throw new Error(`Sync already in progress for ${clientName}${m ? ` (pid ${m})` : ''}`);
+        }
     }
 
     const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
@@ -331,6 +364,8 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
             if (err) return reject(err);
             const pid = (stdout || "").toString().trim();
             try { fs.writeFileSync(lockPath, pid); } catch { }
+            // Start watcher to clean the lock once the process ends
+            watchPidAndCleanupLock(pid, lockPath, clientName);
             resolve({ started: true, logPath, command: cmd });
         });
     });
