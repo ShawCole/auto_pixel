@@ -303,7 +303,8 @@ app.post('/generate', async (req, res) => {
                 }
 
                 const pixelIdFromScript = extractPixelIdFromScript(pixelScript) || '';
-                const sheetId = extractSheetId(sheetUrl) || '';
+                // Always provide a non-null sheet_id to satisfy NOT NULL constraint
+                const sheetId = extractSheetId(sheetUrl) || `PENDING_${Date.now()}`;
 
                 const mysql = await import("mysql2/promise");
                 const connection = await mysql.createConnection({
