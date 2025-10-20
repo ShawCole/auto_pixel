@@ -1481,6 +1481,8 @@ export async function createPixel({ client, website }: { client: string, website
                                 await delay(500);
                             }
                             await conn.end();
+                            // If test UUID is verified, consider webhook verified as well
+                            if (webhookTestUuidVerified) { webhookVerified = true; }
                             log(`📗 DB poll result: webhookVerified=${webhookVerified}, webhookTestUuidVerified=${webhookTestUuidVerified}`);
                             // If UI-based Test did not verify, send programmatic webhook test and re-poll
                             if (!webhookTestUuidVerified) {
@@ -1767,6 +1769,7 @@ export async function createPixel({ client, website }: { client: string, website
                             await delay(500);
                         }
                         await conn3.end();
+                        if (webhookTestUuidVerified) { webhookVerified = true; }
                         log(`📘 GLOBAL fallback poll result: webhookTestUuidVerified=${webhookTestUuidVerified}`);
                     } else {
                         log("ℹ️ DB env not configured; skipping GLOBAL fallback DB verification");

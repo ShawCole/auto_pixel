@@ -282,6 +282,61 @@ app.post('/generate', async (req, res) => {
             log("⚠️ Failed to create Google Sheet but continuing:", sheetResult.error);
         }
 
+        // Upsert central pixel.metadata row in pixel.pixel_sheets
+        try {
+            async function upsertPixelSheetRow(params: { client: string; website: string; pixelScript: string; sheetUrl?: string }) {
+                const { client, website, pixelScript, sheetUrl } = params;
+
+                function extractPixelIdFromScript(snippet: string): string | null {
+                    try {
+                        const m = snippet.match(/\bhttps?:\/\/(?:cdn\.)?v3\.identitypxl\.app\/pixels\/([^\/'"\s]+)\/p\.js/i);
+                        return m && m[1] ? m[1] : null;
+                    } catch { return null; }
+                }
+
+                function extractSheetId(url?: string): string | null {
+                    if (!url) return null;
+                    try {
+                        const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+                        return m && m[1] ? m[1] : null;
+                    } catch { return null; }
+                }
+
+                const pixelIdFromScript = extractPixelIdFromScript(pixelScript) || '';
+                const sheetId = extractSheetId(sheetUrl) || '';
+
+                const mysql = await import("mysql2/promise");
+                const connection = await mysql.createConnection({
+                    host: process.env.DB_HOST,
+                    user: process.env.DB_USER,
+                    password: process.env.DB_PASS,
+                    database: 'pixel',
+                    connectTimeout: 30000
+                });
+                try {
+                    const sql = `
+                        INSERT INTO pixel_sheets
+                            (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
+                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                        ON DUPLICATE KEY UPDATE
+                            client_website = VALUES(client_website),
+                            pixel_id = IF(VALUES(pixel_id) <> '', VALUES(pixel_id), pixel_id),
+                            pixel_script = VALUES(pixel_script),
+                            sheet_id = IF(VALUES(sheet_id) <> '', VALUES(sheet_id), sheet_id),
+                            sheet_url = IF(VALUES(sheet_url) <> '', VALUES(sheet_url), sheet_url)
+                    `;
+                    await connection.execute(sql, [client, website, pixelIdFromScript, pixelScript, sheetId, sheetUrl || '']);
+                    log("✅ Upserted pixel_sheets row", { client, website, pixelIdFromScript, sheetId, hasSheetUrl: !!sheetUrl });
+                } finally {
+                    await connection.end();
+                }
+            }
+
+            await upsertPixelSheetRow({ client, website, pixelScript: result.pixelCode, sheetUrl });
+        } catch (metaErr: any) {
+            log("⚠️ Failed to upsert pixel_sheets row:", { message: metaErr?.message });
+        }
+
         res.json({
             pixelSnippet: result.pixelCode,
             sheetUrl: sheetUrl,
