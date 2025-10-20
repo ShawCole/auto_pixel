@@ -95,3 +95,7 @@ geckodriver
 *.db
 *.sqlite
 *.sqlite3 
+
+# Local datasets (do not commit)
+AcquireUp/
+TruVestments/

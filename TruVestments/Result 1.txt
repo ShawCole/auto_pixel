@@ -1,1 +1,0 @@
-"Db"	"Name"	"Type"	"Language"	"Definer"	"Modified"	"Created"	"Security_type"	"Comment"	"character_set_client"	"collation_connection"	"Database Collation"
