@@ -10,7 +10,8 @@ use Google\Service\Drive;
 $dbHost = '34.31.66.104';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+// Prefer explicit env override, fall back to standard path on servers
+$credentialsPath = getenv('GOOGLE_APPLICATION_CREDENTIALS') ?: '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
 
 // Get client name, pixel ID, and website URL from command line arguments
 if ($argc < 4) {

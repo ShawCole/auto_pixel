@@ -29,17 +29,17 @@ interface PixelData {
     client_website: string | null;
 }
 
-export async function updateWebsiteUrls() {
-    if (!AUDLAB_USERNAME || !AUDLAB_PASSWORD) {
-        throw new Error("Missing AudienceLab credentials in environment variables");
+async function createChromeDriver(preferUserDataDir: boolean): Promise<WebDriver> {
+    // Prepare explicit, writable Chrome profile/cache directories (optional)
+    let cacheDir: string | undefined;
+    let userDataDir: string | undefined;
+    if (preferUserDataDir) {
+        const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-prof-'));
+        cacheDir = path.join(tmpBase, 'cache');
+        userDataDir = path.join(tmpBase, 'user-data');
+        fs.mkdirSync(cacheDir, { recursive: true });
+        fs.mkdirSync(userDataDir, { recursive: true });
     }
-
-    // Prepare explicit, writable Chrome profile/cache directories
-    const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'chrome-prof-'));
-    const cacheDir = path.join(tmpBase, 'cache');
-    const userDataDir = path.join(tmpBase, 'user-data');
-    fs.mkdirSync(cacheDir, { recursive: true });
-    fs.mkdirSync(userDataDir, { recursive: true });
 
     // Chrome options: optimized for VM deployment
     const options = new chrome.Options()
@@ -55,8 +55,6 @@ export async function updateWebsiteUrls() {
         .addArguments('--disable-backgrounding-occluded-windows')
         .addArguments('--disable-renderer-backgrounding')
         .addArguments('--disable-features=VizDisplayCompositor')
-        .addArguments(`--user-data-dir=${userDataDir}`)
-        .addArguments(`--disk-cache-dir=${cacheDir}`)
         .addArguments('--disable-background-networking')
         .addArguments('--disable-default-apps')
         .addArguments('--disable-sync')
@@ -65,17 +63,44 @@ export async function updateWebsiteUrls() {
         .addArguments('--safebrowsing-disable-auto-update')
         .addArguments('--disable-component-update');
 
+    if (preferUserDataDir && userDataDir) {
+        options.addArguments(`--user-data-dir=${userDataDir}`);
+    }
+    if (preferUserDataDir && cacheDir) {
+        options.addArguments(`--disk-cache-dir=${cacheDir}`);
+    }
+
     // Only set Chrome path on macOS (development)
     if (process.platform === 'darwin') {
         const chromePath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
         options.setBinaryPath(chromePath);
     }
 
-    log("🚀 Initializing Chrome WebDriver...");
-    const driver = await new Builder()
+    return await new Builder()
         .forBrowser("chrome")
         .setChromeOptions(options as any)
         .build();
+}
+
+export async function updateWebsiteUrls() {
+    if (!AUDLAB_USERNAME || !AUDLAB_PASSWORD) {
+        throw new Error("Missing AudienceLab credentials in environment variables");
+    }
+
+    log("🚀 Initializing Chrome WebDriver...");
+    let driver: WebDriver | null = null;
+    try {
+        // First try with a unique user-data-dir to avoid permission issues
+        driver = await createChromeDriver(true);
+    } catch (e: any) {
+        const msg = (e && e.message) ? e.message : String(e);
+        if (/user data directory is already in use/i.test(msg)) {
+            log("⚠️ Chrome profile in use, retrying without --user-data-dir");
+            driver = await createChromeDriver(false);
+        } else {
+            throw e;
+        }
+    }
 
     try {
         log("✅ Chrome WebDriver initialized successfully");
@@ -212,17 +237,29 @@ export async function updateWebsiteUrls() {
                 // Wait for search results
                 await delay(3000);
 
-                // Try to find the website URL in the first row
+                // Find the row matching the client_name and read its website column
                 try {
-                    const websiteCell = await driver.wait(
-                        until.elementLocated(By.xpath("/html/body/div/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr[1]/td[2]")),
-                        5000
-                    );
+                    let trimmedUrl = "";
 
-                    const websiteUrl = await websiteCell.getText();
-                    const trimmedUrl = websiteUrl.trim();
+                    // Prefer robust CSS selection over brittle absolute XPaths
+                    const rows = await driver.findElements(By.css("table tbody tr"));
 
-                    if (trimmedUrl && trimmedUrl !== "N/A" && trimmedUrl !== "" && trimmedUrl !== "-") {
+                    for (const row of rows) {
+                        try {
+                            const nameCell = await row.findElement(By.css("td:nth-child(1)"));
+                            const nameText = (await nameCell.getText()).trim();
+                            if (nameText && nameText.toLowerCase() === pixel.client_name.toLowerCase()) {
+                                const websiteCell = await row.findElement(By.css("td:nth-child(2)"));
+                                trimmedUrl = (await websiteCell.getText()).trim();
+                                log(`🔎 Matched row for ${pixel.client_name}; website cell: "${trimmedUrl}"`);
+                                break;
+                            }
+                        } catch (_) {
+                            // Continue scanning rows
+                        }
+                    }
+
+                    if (trimmedUrl && trimmedUrl !== "N/A" && trimmedUrl !== "-" && trimmedUrl !== "") {
                         log(`✅ Found website URL for ${pixel.client_name}: ${trimmedUrl}`);
 
                         // Update database
@@ -230,11 +267,26 @@ export async function updateWebsiteUrls() {
                         updatedCount++;
                         log(`✅ Updated pixel ID ${pixel.id} with website URL: ${trimmedUrl}`);
                     } else {
-                        log(`⚠️ No valid website URL found for ${pixel.client_name} (value: "${trimmedUrl}")`);
-                        failedCount++;
+                        // Fallback: take website from first row if search likely narrowed results
+                        try {
+                            const firstRowWebsite = await driver.findElement(By.css("table tbody tr:first-child td:nth-child(2)"));
+                            const firstUrl = (await firstRowWebsite.getText()).trim();
+                            if (firstUrl && firstUrl !== "N/A" && firstUrl !== "-" && firstUrl !== "") {
+                                log(`🔁 Fallback used for ${pixel.client_name}: ${firstUrl}`);
+                                await updatePixelWebsite(pixel.id, firstUrl);
+                                updatedCount++;
+                                log(`✅ Updated pixel ID ${pixel.id} with website URL via fallback: ${firstUrl}`);
+                            } else {
+                                log(`⚠️ No valid website URL found for ${pixel.client_name} (value: "${trimmedUrl}")`);
+                                failedCount++;
+                            }
+                        } catch (_) {
+                            log(`⚠️ No valid website URL found for ${pixel.client_name} (value: "${trimmedUrl}")`);
+                            failedCount++;
+                        }
                     }
                 } catch (searchError) {
-                    log(`❌ No search results found for ${pixel.client_name}: ${searchError}`);
+                    log(`❌ Error reading search results for ${pixel.client_name}: ${searchError}`);
                     failedCount++;
                 }
 

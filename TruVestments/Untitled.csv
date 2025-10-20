@@ -1,0 +1,481 @@
+"Id","User","Host","db","Command","Time","State","Info"
+"5","event_scheduler","localhost",,"Daemon","1","Waiting for next activation",
+"47326483","pixel_rw","35.196.36.229:60870","pixel_v2","Sleep","35","",
+"50357715","root","127.0.0.1:57176",,"Sleep","29","",
+"51527500","root","146.148.83.186:39598",,"Query","13536","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51528225","root","146.148.83.186:37528",,"Query","13131","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51528944","root","146.148.83.186:57380",,"Query","12805","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51529430","root","146.148.83.186:41056",,"Query","12526","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51530394","root","146.148.83.186:49244",,"Query","12251","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51531063","root","146.148.83.186:44760",,"Query","11877","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51531845","root","146.148.83.186:34048",,"Query","11545","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51533024","root","146.148.83.186:40242",,"Query","11241","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51533786","root","146.148.83.186:58398",,"Query","10931","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51534473","root","146.148.83.186:58112",,"Query","10616","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51535216","root","146.148.83.186:39014",,"Query","10363","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51535840","root","146.148.83.186:48668",,"Query","10051","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51536600","root","146.148.83.186:36302",,"Query","9758","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51537484","root","146.148.83.186:57276",,"Query","9453","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51537641","root","146.148.83.186:49540",,"Query","9157","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51537769","root","146.148.83.186:33986",,"Query","8773","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51538028","root","146.148.83.186:57424",,"Query","8502","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51538131","root","146.148.83.186:43022",,"Query","8175","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51538272","root","146.148.83.186:34474",,"Query","7900","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51538543","root","146.148.83.186:55440",,"Query","7612","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51538653","root","146.148.83.186:60066",,"Query","7209","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51538805","root","146.148.83.186:36312",,"Query","6900","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51539144","root","146.148.83.186:51512",,"Query","6552","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51539811","root","146.148.83.186:47162",,"Query","6231","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51540470","root","146.148.83.186:54860",,"Query","5947","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51541500","root","146.148.83.186:43846",,"Query","5583","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51542223","root","146.148.83.186:52754",,"Query","5252","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51542304","root","68.133.7.44:55774","VettaFi","Query","6020","System lock","CREATE TEMPORARY TABLE tmp_consolidated_profile AS
+SELECT
+    uuid,
+    MAX(NULLIF(first_name, '')) AS first_name,
+    MAX(NULLIF(last_name, '')) AS last_name,
+    MAX(NULLIF(personal_address, '')) AS personal_address,
+    MAX(NULLIF(personal_city, '')) AS personal_city,
+    MAX(NULLIF(personal_state, '')) AS personal_state,
+    MAX(NULLIF(personal_zip, '')) AS personal_zip,
+    MAX(NULLIF(personal_zip4, '')) AS personal_zip4,
+    MAX(NULLIF(age_range, '')) AS age_range,
+    MAX(NULLIF(children, '')) AS children,
+    MAX(NULLIF(gender, '')) AS gender,
+    MAX(NULLIF(homeowner, '')) AS homeowner,
+    MAX(NULLIF(married, '')) AS married,
+    MAX(NULLIF(net_worth, '')) AS net_worth,
+    MAX(NULLIF(income_range, '')) AS income_range,
+    MAX(NULLIF(direct_number, '')) AS direct_number,
+    MAX(NULLIF(direct_number_dnc, '')) AS direct_number_dnc,
+    MAX(NULLIF(mobile_phone, '')) AS mobile_phone,
+    MAX(NULLIF(mobile_phone_dnc, '')) AS mobile_phone_dnc,
+    MAX(NULLIF(personal_phone, '')) AS personal_phone,
+    MAX(NULLIF(personal_phone_dnc, '')) AS personal_phone_dnc,
+    MAX(NULLIF(business_email, '')) AS business_email,
+    MAX(NULLIF(personal_emails, '')) AS personal_emails,
+    MAX(NULLIF(deep_verified_emails, '')) AS deep_verified_emails,
+    MAX(NULLIF(sha256_personal_email, '')) AS sha256_personal_email,
+    MAX(NULLIF(sha256_business_email, '')) AS sha256_business_email,
+    MAX(NULLIF(hem_sha256, '')) AS hem_sha256,
+    MAX(NULLIF(job_title, '')) AS job_title,
+    MAX(NULLIF(headline, '')) AS headline,
+    MAX(NULLIF(department, '')) AS department,
+    MAX(NULLIF(seniority_level, '')) AS seniority_level,
+    MAX(NULLIF(inferred_years_experience, '')) AS inferred_years_experience,
+    MAX(NULLIF(company_address, '')) AS company_address,
+    MAX(NULLIF(company_description, '')) AS company_description,
+    MAX(NULLIF(company_domain, '')) AS company_domain,
+    MAX(NULLIF(company_employee_count, '')) AS company_employee_count,
+    MAX(NULLIF(company_linkedin_url, '')) AS company_linkedin_url,
+    MAX(NULLIF(company_name, '')) AS company_name,
+    MAX(NULLIF(company_phone, '')) AS company_phone,
+    MAX(NULLIF(company_revenue, '')) AS company_revenue,
+    MAX(NULLIF(company_sic, '')) AS company_sic,
+    MAX(NULLIF(company_naics, '')) AS company_naics,
+    MAX(NULLIF(company_city, '')) AS company_city,
+    MAX(NULLIF(company_state, '')) AS company_state,
+    MAX(NULLIF(company_zip, '')) AS company_zip,
+    MAX(NULLIF(company_industry, '')) AS company_industry,
+    MAX(NULLIF(linkedin_url, '')) AS linkedin_url,
+    MAX(NULLIF(twitter_url, '')) AS twitter_url,
+    MAX(NULLIF(facebook_url, '')) AS facebook_url,
+    MAX(NULLIF(social_connections, '')) AS social_connections,
+    MAX(NULLIF(skills, '')) AS skills,
+    MAX(NULLIF(interests, '')) AS interests,
+    MAX(NULLIF(skiptrace_match_score, '')) AS skiptrace_match_score,
+    MAX(NULLIF(skiptrace_name, '')) AS skiptrace_name,
+    MAX(NULLIF(skiptrace_address, '')) AS skiptrace_address,
+    MAX(NULLIF(skiptrace_city, '')) AS skiptrace_city,
+    MAX(NULLIF(skiptrace_state, '')) AS skiptrace_state,
+    MAX(NULLIF(skiptrace_zip, '')) AS skiptrace_zip,
+    MAX(NULLIF(skiptrace_landline_numbers, '')) AS skiptrace_landline_numbers,
+    MAX(NULLIF(skiptrace_wireless_numbers, '')) AS skiptrace_wireless_numbers,
+    MAX(NULLIF(skiptrace_credit_rating, '')) AS skiptrace_credit_rating,
+    MAX(NULLIF(skiptrace_dnc, '')) AS skiptrace_dnc,
+    MAX(NULLIF(skiptrace_exact_age, '')) AS skiptrace_exact_age,
+    MAX(NULLIF(skiptrace_ethnic_code, '')) AS skiptrace_ethnic_code,
+    MAX(NULLIF(skiptrace_language_code, '')) AS skiptrace_language_code,
+    MAX(NULLIF(skiptrace_ip, '')) AS skiptrace_ip,
+    MAX(NULLIF(skiptrace_b2b_address, '')) AS skiptrace_b2b_address,
+    MAX(NULLIF(skiptrace_b2b_phone, '')) AS skiptrace_b2b_phone,
+    MAX(NULLIF(skiptrace_b2b_source, '')) AS skiptrace_b2b_source,
+    MAX(NULLIF(skiptrace_b2b_website, '')) AS skiptrace_b2b_website,
+    MAX(NULLIF(valid_phones, '')) AS valid_phones,
+    MAX(NULLIF(npn, '')) AS npn,
+    MAX(NULLIF(crd, '')) AS crd
+FROM superpixel_resolution_log
+WHERE uuid IS NOT NULL AND uuid <> '' AND uuid <> 'null'
+GROUP BY uuid"
+"51543127","root","146.148.83.186:51028",,"Query","4906","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51544131","root","146.148.83.186:41996",,"Query","4590","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51544911","root","146.148.83.186:54490",,"Query","4228","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51545583","root","146.148.83.186:33414",,"Query","3905","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51546661","root","146.148.83.186:47942",,"Query","3527","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51547615","root","146.148.83.186:39354",,"Query","3193","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51548540","root","146.148.83.186:48910",,"Query","2883","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51550003","root","146.148.83.186:47582",,"Query","2614","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51550664","root","146.148.83.186:54138",,"Query","2293","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51550837","root","146.148.83.186:32780",,"Query","1979","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51551131","root","146.148.83.186:53262",,"Query","1657","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51551296","root","146.148.83.186:49858",,"Query","1346","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51551505","root","146.148.83.186:59118",,"Query","1023","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51552128","root","146.148.83.186:53330",,"Query","695","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51552270","root","146.148.83.186:42162",,"Query","371","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51552440","root","146.148.83.186:35174",,"Query","16","executing","SET @test_evt_at := (
+  SELECT MAX(created_at)
+  FROM `VettaFi`.superpixel_resolution_log
+  WHERE created_at >= @now - INTERVAL @test_days DAY
+    AND (
+      LOWER(uuid)         LIKE 'test%'
+    )
+)"
+"51552715","root","146.148.83.186:52140",,"Query","806","executing","SET @last_src_ts := (
+  SELECT MAX(STR_TO_DATE(SUBSTRING_INDEX(REPLACE(REPLACE(event_timestamp,'T',' '),'Z',''), '.', 1),'%Y-%m-%d %H:%i:%s'))
+  FROM `VettaFi`.superpixel_resolution_log
+)"
+"51552862","root","146.148.83.186:33560",,"Query","523","executing","SET @last_src_ts := (
+  SELECT MAX(STR_TO_DATE(SUBSTRING_INDEX(REPLACE(REPLACE(event_timestamp,'T',' '),'Z',''), '.', 1),'%Y-%m-%d %H:%i:%s'))
+  FROM `VettaFi`.superpixel_resolution_log
+)"
+"51553108","root","146.148.83.186:48792",,"Query","275","executing","SET @lambda_evt := (
+  SELECT COALESCE(SUM(cnt) / (60 * NULLIF(COUNT(DISTINCT d),0)), 0)
+  FROM (
+    SELECT DATE(created_at) AS d, COUNT(*) AS cnt
+    FROM `VettaFi`.superpixel_resolution_log
+    WHERE created_at >= @now - INTERVAL @lookback_days DAY
+      AND WEEKDAY(created_at)=@dow AND HOUR(created_at)=@hr
+    GROUP BY DATE(created_at)
+  ) x
+)"
+"51553153","root","187.189.49.72:17750",,"Sleep","323","",
+"51553213","root","127.0.0.1:51010",,"Sleep","296","",
+"51553219","root","187.189.49.72:17955","VettaFi","Sleep","1","",
+"51553272","root","187.189.49.72:18112","VettaFi","Query","0","init","SHOW FULL PROCESSLIST"
+"51553276","root","127.0.0.1:52004",,"Sleep","0","",
+"51553313","root","127.0.0.1:53802",,"Sleep","29","",
+"51553320","root","127.0.0.1:60270",,"Sleep","14","",
+"51553376","root","146.148.83.186:32964",,"Query","42","executing","SET @lambda_raw := (
+  SELECT COALESCE(SUM(cnt) / (60 * NULLIF(COUNT(DISTINCT d),0)), 0)
+  FROM (
+    SELECT DATE(stored_at) AS d, COUNT(*) AS cnt
+    FROM pixel.raw_events
+    WHERE client_name=@client
+      AND stored_at >= @now - INTERVAL @lookback_days DAY
+      AND WEEKDAY(stored_at)=@dow AND HOUR(stored_at)=@hr
+    GROUP BY DATE(stored_at)
+  ) x
+)"
+"51553378","root","146.148.83.186:32978","VettaFi","Sleep","38","",
+"51553381","root","127.0.0.1:40176",,"Sleep","29","",
+"51553385","root","146.148.83.186:35188","VettaFi","Sleep","22","",
+"51553388","root","146.148.83.186:37268","VettaFi","Sleep","16","",
+"51553389","root","146.148.83.186:37276","accupoint_solutions","Execute","16","executing","SELECT Email, CRD, NPN, AgentID FROM match_emails 
+                           WHERE Email IN ('daria.uhlig@yahoo.com','dkelly-uhlig@cs.com','dkelly-uhlig@juno.com','dkellyu@aol.com','dkellyu@msn.com') 
+                           ORDER BY NPN IS NOT NULL DESC, CRD IS NOT NULL DESC 
+                           LIMIT 1"
+"51553390","root","146.148.83.186:37278","VettaFi","Sleep","16","",
+"51553391","root","146.148.83.186:37282","accupoint_solutions","Execute","16","executing","SELECT Email, CRD, NPN, AgentID FROM match_emails 
+                           WHERE Email IN ('abchaha@hotmail.com','charles.chen@skymantics.com','charles@bigsaving.net','charleschen13@yahoo.com','charleschenclc@gmail.com','charlie.auburn@gmail.com','koraner@netscape.com','misschase@optonline.net','tccruelron@aol.com','yawencheng@yahoo.com') 
+                           ORDER BY NPN IS NOT NULL DESC, CRD IS NOT NULL DESC 
+                           LIMIT 1"
+"51553393","root","146.148.83.186:37298","VettaFi","Sleep","8","",
+"51553394","root","146.148.83.186:37300","VettaFi","Sleep","8","",
+"51553395","root","146.148.83.186:37310","accupoint_solutions","Execute","8","executing","SELECT Email, CRD, NPN, AgentID FROM match_emails 
+                           WHERE Email IN ('bushover.tom@yahoo.com','cm2howard@aol.com','dannymiller652@gmail.com','dannymiller764@gmail.com','ju2tinm@yahoo.com','millertimr56@yahoo.com','milrtime78@hotmail.com') 
+                           ORDER BY NPN IS NOT NULL DESC, CRD IS NOT NULL DESC 
+                           LIMIT 1"
