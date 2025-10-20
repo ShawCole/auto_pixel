@@ -306,6 +306,7 @@ app.post('/generate', async (req, res) => {
                 // Always provide a non-null sheet_id to satisfy NOT NULL constraint
                 const sheetId = extractSheetId(sheetUrl) || `PENDING_${Date.now()}`;
 
+                log("🧾 Preparing pixel_sheets upsert", { client, website });
                 const mysql = await import("mysql2/promise");
                 const connection = await mysql.createConnection({
                     host: process.env.DB_HOST,
@@ -315,6 +316,7 @@ app.post('/generate', async (req, res) => {
                     connectTimeout: 30000
                 });
                 try {
+                    log("🧾 Executing pixel_sheets upsert", { pixelIdFromScript, sheetId, hasSheetUrl: !!sheetUrl });
                     const sql = `
                         INSERT INTO pixel_sheets
                             (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
