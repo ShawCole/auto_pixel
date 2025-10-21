@@ -334,19 +334,34 @@ export async function createPixel({ client, website }: { client: string, website
         // Step 5: Click the "create" button
         log("⏳ Waiting for create button...");
         const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
-        await driver.wait(until.elementLocated(By.xpath(createBtnXPath)), 5000);
+        const createBtnLocator = By.xpath(createBtnXPath);
+        await driver.wait(until.elementLocated(createBtnLocator), 15000);
+        let createButton = await driver.findElement(createBtnLocator);
+        await driver.wait(until.elementIsVisible(createButton), 15000);
         log("✅ Create button found");
 
-        // Wait for the button to be enabled
+        // Wait for the button to be interactable (enabled + not aria-disabled + not loading)
         log("⏳ Waiting for create button to be enabled...");
-        let createButton = await driver.findElement(By.xpath(createBtnXPath));
-        await driver.wait(until.elementIsEnabled(createButton), 5000);
-        log("✅ Create button is enabled");
+        let enabled = false;
+        for (let i = 0; i < 40; i++) { // ~20s total
+            try {
+                const isEnabled = await createButton.isEnabled();
+                const ariaDisabled = (await createButton.getAttribute('aria-disabled')) || '';
+                const className = (await createButton.getAttribute('class')) || '';
+                if (isEnabled && ariaDisabled !== 'true' && !/disabled|loading/i.test(className)) { enabled = true; break; }
+            } catch { }
+            await delay(500);
+        }
+        if (!enabled) {
+            log("⚠️ Create button still disabled; attempting JS enable");
+            try { await driver.executeScript("arguments[0].removeAttribute('disabled'); arguments[0].setAttribute('aria-disabled','false');", createButton); } catch { }
+        }
 
+        await driver.executeScript("arguments[0].scrollIntoView({block:'center'});", createButton);
         await delay(200); // Brief wait
 
         log("🖱️  Clicking create pixel button...");
-        createButton = await driver.findElement(By.xpath(createBtnXPath)); // Re-find to ensure fresh reference
+        createButton = await driver.findElement(createBtnLocator); // Re-find to ensure fresh reference
         log(`🔍 VERBOSE: Create button found with XPath: ${createBtnXPath}`);
         log(`🔍 VERBOSE: Create button tag: ${await createButton.getTagName()}`);
         log(`🔍 VERBOSE: Create button text: ${await createButton.getText()}`);
@@ -355,7 +370,12 @@ export async function createPixel({ client, website }: { client: string, website
         log(`🔍 VERBOSE: Create button enabled: ${await createButton.isEnabled()}`);
         log(`🔍 VERBOSE: Create button displayed: ${await createButton.isDisplayed()}`);
 
-        await createButton.click();
+        try {
+            await createButton.click();
+        } catch (clickErr) {
+            log("⚠️ Selenium click failed, trying JS click...");
+            await driver.executeScript("arguments[0].click();", createButton);
+        }
         log("✅ Create button clicked");
         await delay(200); // Wait for modal to load
 

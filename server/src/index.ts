@@ -223,6 +223,32 @@ app.post('/generate', async (req, res) => {
     try {
         log(`🎯 Starting pixel generation for client: ${client}`);
 
+        // Guard: prevent duplicate client_name entries in pixel.pixel_sheets
+        try {
+            const mysql = await import("mysql2/promise");
+            const connection = await mysql.createConnection({
+                host: process.env.DB_HOST,
+                user: process.env.DB_USER,
+                password: process.env.DB_PASS,
+                database: 'pixel',
+                connectTimeout: 30000
+            });
+            try {
+                const [rows] = await connection.execute<any[]>(
+                    'SELECT id FROM pixel_sheets WHERE client_name = ? LIMIT 1',
+                    [client]
+                );
+                if ((rows as any[]).length) {
+                    log('⛔ Client already exists in pixel_sheets', { client, existingId: (rows as any[])[0].id });
+                    return res.status(409).json({ error: 'Client already exists in pixel_sheets', client, existingId: (rows as any[])[0].id });
+                }
+            } finally {
+                await connection.end();
+            }
+        } catch (dupErr: any) {
+            log('⚠️ Duplicate check failed (continuing):', { message: dupErr?.message });
+        }
+
         // Skip database setup if explicitly requested or if database env vars are missing
         const { DB_HOST, DB_USER, DB_PASS, TEMPLATE_DB, TEMPLATE_TABLE } = process.env;
         const skipDatabase = process.env.SKIP_DATABASE === 'true' ||
