@@ -113,7 +113,7 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
         return true;
     }
     
-    // Updated headers with all new columns
+    // Updated headers with all new columns (including Business Emails)
     $headers = [
         'UUID', 
         'First Name', 
@@ -121,6 +121,7 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
         'Company', 
         'Job Title', 
         'Emails', 
+        'Business Emails',
         'Phone',
         'Personal Address',
         'City', 
@@ -141,7 +142,7 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     
     $allData = array_merge([$headers], $visitors);
     
-    // Update range to include all columns (A to V)
+    // Update range to include all columns (A to V). Note: We added 'Business Emails' after 'Emails'.
     $range = 'Visitors!A1:V' . count($allData);
     $body = new ValueRange(['values' => $allData]);
     
@@ -159,7 +160,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     global $EVENTS_LIMIT;
     echo "Syncing events for $clientName (limit: $EVENTS_LIMIT)...\n";
     
-    // Get recent events with new columns
+    // Get recent events with new columns (including Business Emails)
     $sql = "SELECT 
             event_timestamp, 
             event_type,
@@ -173,6 +174,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             company_name, 
             job_title, 
             personal_emails, 
+            business_email,
             mobile_phone, 
             personal_city, 
             personal_state,
@@ -205,6 +207,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['company_name'] ?? '',
             $row['job_title'] ?? '',
             $row['personal_emails'] ?? '',
+            $row['business_email'] ?? '',
             $row['mobile_phone'] ?? '',
             $row['personal_city'] ?? '',
             $row['personal_state'] ?? '',
@@ -219,7 +222,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
         return true;
     }
     
-    // Updated headers with new columns
+    // Updated headers with new columns (including Business Emails)
             $headers = [
         'Timestamp', 
         'Event Type', 
@@ -233,6 +236,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
         'Company', 
         'Job Title', 
         'Emails', 
+        'Business Emails',
         'Phone',
         'City', 
         'State',

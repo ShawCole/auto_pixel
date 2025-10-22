@@ -127,7 +127,7 @@ async function createGoogleSheet(client: string, pixelId: string, website: strin
 }
 
 // Function to trigger full dynamic sync after new pixel creation
-async function triggerFullSync(): Promise<void> {
+async function triggerFullSync(clientNameForImmediate?: string): Promise<void> {
     try {
         log(`🔄 Triggering full dynamic sync to include new sheets`);
 
@@ -135,9 +135,14 @@ async function triggerFullSync(): Promise<void> {
         const isProduction = process.env.NODE_ENV === 'production';
         const phpBin = process.env.PHP_BIN || 'php';
         log('🔧 PHP binary for dynamic sync:', { phpBin });
+        // Prefer smart_sync (supports new headers and both tabs) and allow immediate single-client sync
         const syncCommand = isProduction
-            ? `sudo -u www-data ${phpBin} /opt/auto-pixel/dynamic_sync.php`
-            : `${phpBin} ../dynamic_sync.php`;
+            ? (clientNameForImmediate
+                ? `sudo -u www-data ${phpBin} /opt/auto-pixel/smart_sync.php --client=${clientNameForImmediate}`
+                : `sudo -u www-data ${phpBin} /opt/auto-pixel/smart_sync.php`)
+            : (clientNameForImmediate
+                ? `${phpBin} ../smart_sync.php --client=${clientNameForImmediate}`
+                : `${phpBin} ../smart_sync.php`);
 
         // Execute sync in background (don't wait for completion)
         exec(syncCommand, (error, stdout, stderr) => {

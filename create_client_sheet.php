@@ -52,7 +52,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
                         'sheetId' => 0,
                         'gridProperties' => [
                             'rowCount' => 10010,  // 10,000 visitors + header + buffer
-                            'columnCount' => 12,
+                            'columnCount' => 22,  // Expanded columns (A:V)
                             'frozenRowCount' => 1,
                         ],
                     ],
@@ -63,7 +63,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
                         'sheetId' => 1,
                         'gridProperties' => [
                             'rowCount' => 100010,  // 100,000 events + header + buffer
-                            'columnCount' => 8,
+                            'columnCount' => 18,   // Expanded columns (A:R)
                             'frozenRowCount' => 1,
                         ],
                     ],
@@ -77,7 +77,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
         
         // Set up headers for Visitors sheet with all new columns
         $visitorsHeaders = [[
-            'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 'Phone',
+            'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 'Business Emails', 'Phone',
             'Personal Address', 'City', 'State', 'Zip', 'First Seen', 'Last Seen', 'Event Count',
             'Last Visited URL', 'Last Element', 'Last Percentage', 'Last Referrer',
             'Last Timestamp', 'Last Event', 'NPN', 'CRD'
@@ -95,7 +95,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
         // Set up headers for Events sheet with all new columns
         $eventsHeaders = [[
             'Timestamp', 'Event Type', 'URL', 'Element', 'Referrer', 'IP Address', 
-            'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 
+            'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 'Business Emails',
             'Phone', 'City', 'State', 'HemSha256', 'NPN', 'CRD'
         ]];
         
