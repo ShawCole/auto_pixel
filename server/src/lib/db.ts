@@ -277,140 +277,58 @@ export async function ensureClientSchema(client: string) {
             // Continue - PHP scripts can still parse emails
         }
 
-        // Create rich visitor update trigger to hydrate superpixel_visitors from superpixel_resolution_log
+        // Create minimal rich visitor update trigger in the client's DB context
         log(`🔧 Creating rich visitor update trigger in database '${client}'...`);
         try {
-            // Drop if exists
-            const dropVisitorTrigger = `DROP TRIGGER IF EXISTS \`${client}\`.after_resolution_log_insert_visitor_update`;
-            await root.execute(dropVisitorTrigger);
+            await root.execute(`USE \`${client}\``);
 
-            // Rich trigger: fully hydrate/update visitor profile and last activity from resolution log
-            const richVisitorTrigger =
-                "CREATE TRIGGER `" + client + "`.after_resolution_log_insert_visitor_update\n" +
-                "AFTER INSERT ON `" + client + "`.superpixel_resolution_log\n" +
-                "FOR EACH ROW\n" +
-                "BEGIN\n" +
-                "  IF NEW.uuid IS NOT NULL AND NEW.uuid <> '' AND NEW.uuid <> 'null' THEN\n" +
-                "    IF EXISTS (SELECT 1 FROM `" + client + "`.superpixel_visitors WHERE uuid = NEW.uuid) THEN\n" +
-                "      UPDATE `" + client + "`.superpixel_visitors\n" +
-                "      SET\n" +
-                "        first_name = COALESCE(NULLIF(first_name,''), NEW.first_name),\n" +
-                "        last_name  = COALESCE(NULLIF(last_name ,''), NEW.last_name),\n" +
-                "        business_email = CASE WHEN business_email IS NOT NULL AND business_email <> '' THEN business_email ELSE NEW.business_email END,\n" +
-                "        personal_emails = COALESCE(NULLIF(personal_emails,''), NEW.personal_emails),\n" +
-                "        deep_verified_emails = COALESCE(NULLIF(deep_verified_emails,''), NEW.deep_verified_emails),\n" +
-                "        sha256_personal_email = COALESCE(NULLIF(sha256_personal_email,''), NEW.sha256_personal_email),\n" +
-                "        sha256_business_email = COALESCE(NULLIF(sha256_business_email,''), NEW.sha256_business_email),\n" +
-                "        hem_sha256 = COALESCE(NULLIF(hem_sha256,''), NEW.hem_sha256),\n" +
-                "        direct_number = COALESCE(NULLIF(direct_number,''), NEW.direct_number),\n" +
-                "        direct_number_dnc = COALESCE(NULLIF(direct_number_dnc,''), NEW.direct_number_dnc),\n" +
-                "        mobile_phone = COALESCE(NULLIF(mobile_phone,''), NEW.mobile_phone),\n" +
-                "        mobile_phone_dnc = COALESCE(NULLIF(mobile_phone_dnc,''), NEW.mobile_phone_dnc),\n" +
-                "        personal_phone = COALESCE(NULLIF(personal_phone,''), NEW.personal_phone),\n" +
-                "        personal_phone_dnc = COALESCE(NULLIF(personal_phone_dnc,''), NEW.personal_phone_dnc),\n" +
-                "        personal_address = COALESCE(NULLIF(personal_address,''), NEW.personal_address),\n" +
-                "        personal_city = COALESCE(NULLIF(personal_city,''), NEW.personal_city),\n" +
-                "        personal_state = COALESCE(NULLIF(personal_state,''), NEW.personal_state),\n" +
-                "        personal_zip = COALESCE(NULLIF(personal_zip,''), NEW.personal_zip),\n" +
-                "        personal_zip4 = COALESCE(NULLIF(personal_zip4,''), NEW.personal_zip4),\n" +
-                "        age_range = COALESCE(NULLIF(age_range,''), NEW.age_range),\n" +
-                "        children = COALESCE(NULLIF(children,''), NEW.children),\n" +
-                "        gender = COALESCE(NULLIF(gender,''), NEW.gender),\n" +
-                "        homeowner = COALESCE(NULLIF(homeowner,''), NEW.homeowner),\n" +
-                "        married = COALESCE(NULLIF(married,''), NEW.married),\n" +
-                "        net_worth = COALESCE(NULLIF(net_worth,''), NEW.net_worth),\n" +
-                "        income_range = COALESCE(NULLIF(income_range,''), NEW.income_range),\n" +
-                "        job_title = COALESCE(NULLIF(job_title,''), NEW.job_title),\n" +
-                "        headline = COALESCE(NULLIF(headline,''), NEW.headline),\n" +
-                "        department = COALESCE(NULLIF(department,''), NEW.department),\n" +
-                "        seniority_level = COALESCE(NULLIF(seniority_level,''), NEW.seniority_level),\n" +
-                "        inferred_years_experience = COALESCE(NULLIF(inferred_years_experience,''), NEW.inferred_years_experience),\n" +
-                "        company_address = COALESCE(NULLIF(company_address,''), NEW.company_address),\n" +
-                "        company_description = COALESCE(NULLIF(company_description,''), NEW.company_description),\n" +
-                "        company_domain = COALESCE(NULLIF(company_domain,''), NEW.company_domain),\n" +
-                "        company_employee_count = COALESCE(NULLIF(company_employee_count,''), NEW.company_employee_count),\n" +
-                "        company_linkedin_url = COALESCE(NULLIF(company_linkedin_url,''), NEW.company_linkedin_url),\n" +
-                "        company_name = COALESCE(NULLIF(company_name,''), NEW.company_name),\n" +
-                "        company_phone = COALESCE(NULLIF(company_phone,''), NEW.company_phone),\n" +
-                "        company_revenue = COALESCE(NULLIF(company_revenue,''), NEW.company_revenue),\n" +
-                "        company_sic = COALESCE(NULLIF(company_sic,''), NEW.company_sic),\n" +
-                "        company_naics = COALESCE(NULLIF(company_naics,''), NEW.company_naics),\n" +
-                "        company_city = COALESCE(NULLIF(company_city,''), NEW.company_city),\n" +
-                "        company_state = COALESCE(NULLIF(company_state,''), NEW.company_state),\n" +
-                "        company_zip = COALESCE(NULLIF(company_zip,''), NEW.company_zip),\n" +
-                "        company_industry = COALESCE(NULLIF(company_industry,''), NEW.company_industry),\n" +
-                "        linkedin_url = COALESCE(NULLIF(linkedin_url,''), NEW.linkedin_url),\n" +
-                "        twitter_url = COALESCE(NULLIF(twitter_url ,''), NEW.twitter_url),\n" +
-                "        facebook_url = COALESCE(NULLIF(facebook_url,''), NEW.facebook_url),\n" +
-                "        social_connections = COALESCE(NULLIF(social_connections,''), NEW.social_connections),\n" +
-                "        skills = COALESCE(NULLIF(skills,''), NEW.skills),\n" +
-                "        interests = COALESCE(NULLIF(interests,''), NEW.interests),\n" +
-                "        skiptrace_match_score = COALESCE(NULLIF(skiptrace_match_score,''), NEW.skiptrace_match_score),\n" +
-                "        skiptrace_name = COALESCE(NULLIF(skiptrace_name,''), NEW.skiptrace_name),\n" +
-                "        skiptrace_address = COALESCE(NULLIF(skiptrace_address,''), NEW.skiptrace_address),\n" +
-                "        skiptrace_city = COALESCE(NULLIF(skiptrace_city,''), NEW.skiptrace_city),\n" +
-                "        skiptrace_state = COALESCE(NULLIF(skiptrace_state,''), NEW.skiptrace_state),\n" +
-                "        skiptrace_zip = COALESCE(NULLIF(skiptrace_zip,''), NEW.skiptrace_zip),\n" +
-                "        skiptrace_landline_numbers = COALESCE(NULLIF(skiptrace_landline_numbers,''), NEW.skiptrace_landline_numbers),\n" +
-                "        skiptrace_wireless_numbers = COALESCE(NULLIF(skiptrace_wireless_numbers,''), NEW.skiptrace_wireless_numbers),\n" +
-                "        skiptrace_credit_rating = COALESCE(NULLIF(skiptrace_credit_rating,''), NEW.skiptrace_credit_rating),\n" +
-                "        skiptrace_dnc = COALESCE(NULLIF(skiptrace_dnc,''), NEW.skiptrace_dnc),\n" +
-                "        skiptrace_exact_age = COALESCE(NULLIF(skiptrace_exact_age,''), NEW.skiptrace_exact_age),\n" +
-                "        skiptrace_ethnic_code = COALESCE(NULLIF(skiptrace_ethnic_code,''), NEW.skiptrace_ethnic_code),\n" +
-                "        skiptrace_language_code = COALESCE(NULLIF(skiptrace_language_code,''), NEW.skiptrace_language_code),\n" +
-                "        skiptrace_ip = COALESCE(NULLIF(skiptrace_ip,''), NEW.skiptrace_ip),\n" +
-                "        skiptrace_b2b_address = COALESCE(NULLIF(skiptrace_b2b_address,''), NEW.skiptrace_b2b_address),\n" +
-                "        skiptrace_b2b_phone = COALESCE(NULLIF(skiptrace_b2b_phone,''), NEW.skiptrace_b2b_phone),\n" +
-                "        skiptrace_b2b_source = COALESCE(NULLIF(skiptrace_b2b_source,''), NEW.skiptrace_b2b_source),\n" +
-                "        skiptrace_b2b_website = COALESCE(NULLIF(skiptrace_b2b_website,''), NEW.skiptrace_b2b_website),\n" +
-                "        npn  = COALESCE(NULLIF(npn,''), NEW.npn),\n" +
-                "        crd  = COALESCE(NULLIF(crd,''), NEW.crd),\n" +
-                "        title = COALESCE(NULLIF(title,''), NEW.title),\n" +
-                "        url = CASE WHEN NEW.url IS NOT NULL AND NEW.url <> '' THEN NEW.url ELSE url END,\n" +
-                "        element = CASE WHEN NEW.element IS NOT NULL AND NEW.element <> '' THEN NEW.element ELSE element END,\n" +
-                "        percentage = CASE WHEN NEW.percentage IS NOT NULL AND NEW.percentage <> '' THEN CAST(NEW.percentage AS SIGNED) ELSE percentage END,\n" +
-                "        referrer = CASE WHEN NEW.referrer IS NOT NULL AND NEW.referrer <> '' THEN NEW.referrer ELSE referrer END,\n" +
-                "        event_timestamp = CASE WHEN NEW.event_timestamp IS NOT NULL AND NEW.event_timestamp <> '' THEN NEW.event_timestamp ELSE event_timestamp END,\n" +
-                "        event_type = CASE WHEN NEW.event_type IS NOT NULL AND NEW.event_type <> '' THEN NEW.event_type ELSE event_type END,\n" +
-                "        event_count = event_count + 1,\n" +
-                "        last_seen_at = CURRENT_TIMESTAMP\n" +
-                "      WHERE uuid = NEW.uuid;\n" +
-                "    ELSE\n" +
-                "      INSERT INTO `" + client + "`.superpixel_visitors (\n" +
-                "        uuid, first_name, last_name,\n" +
-                "        personal_address, personal_city, personal_state, personal_zip, personal_zip4,\n" +
-                "        age_range, children, gender, homeowner, married, net_worth, income_range,\n" +
-                "        direct_number, direct_number_dnc, mobile_phone, mobile_phone_dnc, personal_phone, personal_phone_dnc,\n" +
-                "        business_email, personal_emails, deep_verified_emails, sha256_personal_email, sha256_business_email,\n" +
-                "        hem_sha256, job_title, headline, department, seniority_level, inferred_years_experience,\n" +
-                "        company_address, company_description, company_domain, company_employee_count, company_linkedin_url,\n" +
-                "        company_name, company_phone, company_revenue, company_sic, company_naics, company_city, company_state, company_zip, company_industry,\n" +
-                "        linkedin_url, twitter_url, facebook_url, social_connections, skills, interests,\n" +
-                "        skiptrace_match_score, skiptrace_name, skiptrace_address, skiptrace_city, skiptrace_state, skiptrace_zip,\n" +
-                "        skiptrace_landline_numbers, skiptrace_wireless_numbers, skiptrace_credit_rating, skiptrace_dnc, skiptrace_exact_age, skiptrace_ethnic_code, skiptrace_language_code, skiptrace_ip,\n" +
-                "        url, element, percentage, referrer, event_timestamp, event_type,\n" +
-                "        event_count, first_seen_at, last_seen_at, npn, crd, title\n" +
-                "      ) VALUES (\n" +
-                "        NEW.uuid, NEW.first_name, NEW.last_name,\n" +
-                "        NEW.personal_address, NEW.personal_city, NEW.personal_state, NEW.personal_zip, NEW.personal_zip4,\n" +
-                "        NEW.age_range, NEW.children, NEW.gender, NEW.homeowner, NEW.married, NEW.net_worth, NEW.income_range,\n" +
-                "        NEW.direct_number, NEW.direct_number_dnc, NEW.mobile_phone, NEW.mobile_phone_dnc, NEW.personal_phone, NEW.personal_phone_dnc,\n" +
-                "        NEW.business_email, NEW.personal_emails, NEW.deep_verified_emails, NEW.sha256_personal_email, NEW.sha256_business_email,\n" +
-                "        NEW.hem_sha256, NEW.job_title, NEW.headline, NEW.department, NEW.seniority_level, NEW.inferred_years_experience,\n" +
-                "        NEW.company_address, NEW.company_description, NEW.company_domain, NEW.company_employee_count, NEW.company_linkedin_url,\n" +
-                "        NEW.company_name, NEW.company_phone, NEW.company_revenue, NEW.company_sic, NEW.company_naics, NEW.company_city, NEW.company_state, NEW.company_zip, NEW.company_industry,\n" +
-                "        NEW.linkedin_url, NEW.twitter_url, NEW.facebook_url, NEW.social_connections, NEW.skills, NEW.interests,\n" +
-                "        NEW.skiptrace_match_score, NEW.skiptrace_name, NEW.skiptrace_address, NEW.skiptrace_city, NEW.skiptrace_state, NEW.skiptrace_zip,\n" +
-                "        NEW.skiptrace_landline_numbers, NEW.skiptrace_wireless_numbers, NEW.skiptrace_credit_rating, NEW.skiptrace_dnc, NEW.skiptrace_exact_age, NEW.skiptrace_ethnic_code, NEW.skiptrace_language_code, NEW.skiptrace_ip,\n" +
-                "        NEW.url, NEW.element, CASE WHEN NEW.percentage IS NOT NULL AND NEW.percentage <> '' THEN CAST(NEW.percentage AS SIGNED) ELSE NULL END, NEW.referrer, NEW.event_timestamp, NEW.event_type,\n" +
-                "        1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, NEW.npn, NEW.crd, NEW.title\n" +
-                "      );\n" +
-                "    END IF;\n" +
-                "  END IF;\n" +
-                "END";
+            await root.execute(`DROP TRIGGER IF EXISTS \`after_resolution_log_insert_visitor_update\``);
 
-            await root.execute(richVisitorTrigger);
-            log(`✅ Rich visitor update trigger created`);
+            const minimalVisitorTrigger = `CREATE TRIGGER \`after_resolution_log_insert_visitor_update\`
+AFTER INSERT ON \`superpixel_resolution_log\`
+FOR EACH ROW
+BEGIN
+  IF NEW.uuid IS NOT NULL AND NEW.uuid <> '' AND NEW.uuid <> 'null' THEN
+    INSERT INTO \`superpixel_visitors\` (
+      uuid, first_name, last_name,
+      personal_address, personal_city, personal_state, personal_zip,
+      first_seen_at, last_seen_at, event_count,
+      url, element, percentage, referrer, event_timestamp, event_type,
+      company_name, job_title, npn, crd
+    )
+    VALUES (
+      NEW.uuid, NEW.first_name, NEW.last_name,
+      NEW.personal_address, NEW.personal_city, NEW.personal_state, NEW.personal_zip,
+      CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1,
+      NEW.url, NEW.element,
+      CASE WHEN NEW.percentage IS NOT NULL AND NEW.percentage <> '' THEN CAST(NEW.percentage AS SIGNED) ELSE NULL END,
+      NEW.referrer, NEW.event_timestamp, NEW.event_type,
+      NEW.company_name, NEW.job_title, NEW.npn, NEW.crd
+    )
+    ON DUPLICATE KEY UPDATE
+      first_name = COALESCE(NULLIF(first_name,''), NEW.first_name),
+      last_name  = COALESCE(NULLIF(last_name ,''), NEW.last_name),
+      personal_address = COALESCE(NULLIF(personal_address,''), NEW.personal_address),
+      personal_city    = COALESCE(NULLIF(personal_city   ,''), NEW.personal_city),
+      personal_state   = COALESCE(NULLIF(personal_state  ,''), NEW.personal_state),
+      personal_zip     = COALESCE(NULLIF(personal_zip    ,''), NEW.personal_zip),
+      company_name = COALESCE(NULLIF(company_name,''), NEW.company_name),
+      job_title    = COALESCE(NULLIF(job_title   ,''), NEW.job_title),
+      npn = COALESCE(NULLIF(npn,''), NEW.npn),
+      crd = COALESCE(NULLIF(crd,''), NEW.crd),
+      url = CASE WHEN NEW.url IS NOT NULL AND NEW.url <> '' THEN NEW.url ELSE url END,
+      element = CASE WHEN NEW.element IS NOT NULL AND NEW.element <> '' THEN NEW.element ELSE element END,
+      percentage = CASE WHEN NEW.percentage IS NOT NULL AND NEW.percentage <> '' THEN CAST(NEW.percentage AS SIGNED) ELSE percentage END,
+      referrer = CASE WHEN NEW.referrer IS NOT NULL AND NEW.referrer <> '' THEN NEW.referrer ELSE referrer END,
+      event_timestamp = CASE WHEN NEW.event_timestamp IS NOT NULL AND NEW.event_timestamp <> '' THEN NEW.event_timestamp ELSE event_timestamp END,
+      event_type      = CASE WHEN NEW.event_type      IS NOT NULL AND NEW.event_type      <> '' THEN NEW.event_type      ELSE event_type END,
+      event_count = event_count + 1,
+      last_seen_at = CURRENT_TIMESTAMP;
+  END IF;
+END`;
+
+            await root.execute(minimalVisitorTrigger);
+            log(`✅ Rich visitor update trigger created (minimal)`);
         } catch (visitorTriggerError: any) {
             log(`⚠️ Warning: Could not create rich visitor update trigger:`, {
                 message: visitorTriggerError.message,
