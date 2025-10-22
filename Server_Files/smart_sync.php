@@ -142,8 +142,8 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     
     $allData = array_merge([$headers], $visitors);
     
-    // Update range to include all columns (A to V). Note: We added 'Business Emails' after 'Emails'.
-    $range = 'Visitors!A1:V' . count($allData);
+    // Update range to include all columns (A to W). Note: 'Business Emails' after 'Emails'.
+    $range = 'Visitors!A1:W' . count($allData);
     $body = new ValueRange(['values' => $allData]);
     
     try {

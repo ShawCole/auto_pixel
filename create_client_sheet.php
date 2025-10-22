@@ -52,7 +52,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
                         'sheetId' => 0,
                         'gridProperties' => [
                             'rowCount' => 10010,  // 10,000 visitors + header + buffer
-                            'columnCount' => 22,  // Expanded columns (A:V)
+                            'columnCount' => 23,  // Expanded columns (A:W)
                             'frozenRowCount' => 1,
                         ],
                     ],
@@ -63,7 +63,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
                         'sheetId' => 1,
                         'gridProperties' => [
                             'rowCount' => 100010,  // 100,000 events + header + buffer
-                            'columnCount' => 18,   // Expanded columns (A:R)
+                            'columnCount' => 19,   // Expanded columns (A:S)
                             'frozenRowCount' => 1,
                         ],
                     ],
@@ -85,7 +85,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
         
         $sheets->spreadsheets_values->update(
             $spreadsheetId,
-            'Visitors!A1:V1',
+            'Visitors!A1:W1',
             new Google\Service\Sheets\ValueRange([
                 'values' => $visitorsHeaders
             ]),
@@ -101,7 +101,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
         
         $sheets->spreadsheets_values->update(
             $spreadsheetId,
-            'Events!A1:R1',
+            'Events!A1:S1',
             new Google\Service\Sheets\ValueRange([
                 'values' => $eventsHeaders
             ]),
