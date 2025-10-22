@@ -1,0 +1,1 @@
+"Trigger"	"Event"	"Table"	"Statement"	"Timing"	"Created"	"sql_mode"	"Definer"	"character_set_client"	"collation_connection"	"Database Collation"
