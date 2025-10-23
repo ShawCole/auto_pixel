@@ -1,9 +1,14 @@
 -- This file contains the necessary SQL to set up procedures and triggers for a new client database.
 -- It is executed by the backend provisioning script after tables are created.
 
--- Drop and recreate the email parsing procedure
+-- COMMAND_SEPARATOR --
+
+-- Drop the email parsing procedure if it exists
 DROP PROCEDURE IF EXISTS parse_visitor_emails;
-DELIMITER $$
+
+-- COMMAND_SEPARATOR --
+
+-- Recreate the email parsing procedure
 CREATE PROCEDURE parse_visitor_emails(
     IN p_uuid VARCHAR(100),
     IN p_email_string TEXT,
@@ -38,12 +43,16 @@ proc_label: BEGIN -- Added a label for LEAVE
             VALUES (p_uuid, email_item, p_email_type, p_source_column);
         END IF;
     END WHILE;
-END$$ -- Use the label here too
-DELIMITER ;
+END; -- NOTE: Use standard semicolon here
 
--- Drop and recreate the main visitor hydration trigger
+-- COMMAND_SEPARATOR --
+
+-- Drop the main visitor hydration trigger if it exists
 DROP TRIGGER IF EXISTS after_resolution_log_insert_visitor_update;
-DELIMITER $$
+
+-- COMMAND_SEPARATOR --
+
+-- Recreate the main visitor hydration trigger
 CREATE TRIGGER after_resolution_log_insert_visitor_update
 AFTER INSERT ON superpixel_resolution_log
 FOR EACH ROW
@@ -184,5 +193,6 @@ BEGIN
       );
     END IF;
   END IF;
-END$$
-DELIMITER ;
+END; -- NOTE: Use standard semicolon here
+
+-- COMMAND_SEPARATOR --
