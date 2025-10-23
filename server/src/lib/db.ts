@@ -53,12 +53,19 @@ export async function ensureClientSchema(client: string) {
         }
 
         log(`🔧 Creating procedures and triggers for '${clientDbName}' from SQL file...`);
-        const sqlFilePath = path.join(__dirname, '..', 'provision_triggers.sql'); // Assumes file is in src/
-        const sqlCommands = await fs.readFile(sqlFilePath, 'utf-8');
+        const sqlFilePath = path.join(__dirname, '..', 'provision_triggers.sql');
+        const sqlFileContent = await fs.readFile(sqlFilePath, 'utf-8');
 
-        // Execute the whole SQL file content
-        // The 'USE clientDbName' above ensures this runs in the correct DB
-        await root.query(sqlCommands);
+        // Split the SQL file into individual command blocks based on the DELIMITER.
+        // This is more robust than a single large query.
+        const sqlCommands = sqlFileContent.split('DELIMITER ;').filter(cmd => cmd.trim().length > 0);
+
+        for (const command of sqlCommands) {
+            log(`Executing SQL block...`);
+            // Add the delimiter back for each command block
+            const fullCommand = 'DELIMITER ;' + command;
+            await root.query(fullCommand);
+        }
 
         log(`✅ Successfully executed provisioning SQL for '${clientDbName}'.`);
 
