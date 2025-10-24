@@ -1,6 +1,5 @@
 import mysql from "mysql2/promise";
-import fs from "fs/promises";
-import path from "path";
+// Removed fs and path imports as they are no longer needed for SQL execution
 
 const { DB_HOST, DB_USER, DB_PASS, TEMPLATE_DB } = process.env;
 
@@ -24,7 +23,7 @@ export async function ensureClientSchema(client: string) {
     }
 
     log("🔌 Connecting to MariaDB...");
-    // Keep multipleStatements: true - it might still be needed for complex CREATE statements
+    // multipleStatements: false might be sufficient now, but keeping it true is safe
     const root = await mysql.createConnection({
         host: DB_HOST,
         user: DB_USER,
@@ -41,59 +40,35 @@ export async function ensureClientSchema(client: string) {
         await root.query(`CREATE DATABASE IF NOT EXISTS \`${clientDbName}\``);
         log(`✅ Database '${clientDbName}' created/verified`);
 
-        // Switch context permanently for subsequent commands in this connection
-        await root.execute(`USE \`${clientDbName}\``);
-        log(`✅ Switched context to database '${clientDbName}'`);
+        // No need to USE clientDbName here, the master procedure handles context
 
         const tablesToClone = ["superpixel_resolution_log", "superpixel_visitors", "superpixel_emails"];
         for (const table of tablesToClone) {
-            log(`📋 Creating table '${table}' if not exists...`);
-            // Clone structure from template DB into the current client DB context
-            await root.execute(`CREATE TABLE IF NOT EXISTS \`${table}\` LIKE \`${TEMPLATE_DB}\`.\`${table}\``);
-            log(`✅ Table '${table}' created/verified.`);
+            log(`📋 Creating table '${table}' in database '${clientDbName}' if not exists...`);
+            // Clone structure from template DB directly into the client DB
+            await root.execute(`CREATE TABLE IF NOT EXISTS \`${clientDbName}\`.\`${table}\` LIKE \`${TEMPLATE_DB}\`.\`${table}\``);
+            log(`✅ Table '${clientDbName}.${table}' created/verified.`);
         }
 
-        log(`🔧 Creating procedures and triggers for '${clientDbName}' from SQL file...`);
-        const sqlFilePath = path.join(__dirname, '..', 'provision_triggers.sql'); // Assumes file is in src/
-        const sqlFileContent = await fs.readFile(sqlFilePath, 'utf-8');
+        // --- THIS IS THE KEY PART ---
+        log(`🔧 Calling master procedure 'pixel.provision_client_objects' for client '${clientDbName}'...`);
 
-        // Split the SQL file by the custom comment separator into individual statements
-        const sqlStatements = sqlFileContent.split('-- COMMAND_SEPARATOR --')
-            .map(cmd => cmd.trim()) // Trim whitespace from each part
-            .filter(cmd => cmd.length > 0); // Remove empty strings
+        // Call the master stored procedure located in the 'pixel' db
+        // Ensure the root user has EXECUTE privilege on pixel.provision_client_objects
+        await root.query('CALL pixel.provision_client_objects(?)', [clientDbName]);
 
-        for (const statement of sqlStatements) {
-            // Log the beginning of the statement being executed
-            const statementStart = statement.substring(0, 100).replace(/\s+/g, ' ');
-            log(`Executing SQL statement starting with: ${statementStart}...`);
-            try {
-                // Execute each trimmed SQL statement individually
-                await root.query(statement);
-                log(`✅ Successfully executed SQL statement.`);
-            } catch (sqlError: any) {
-                // Log the specific statement that failed more clearly
-                log(`💥 Failed to execute SQL statement starting with: ${statementStart}...`, {
-                    error: sqlError.message,
-                    sqlMessage: sqlError.sqlMessage,
-                    sqlState: sqlError.sqlState,
-                    errno: sqlError.errno,
-                    code: sqlError.code,
-                    // Optionally log the full statement if errors persist
-                    // failedStatement: statement
-                });
-                // Re-throw the error to stop the provisioning process immediately
-                throw sqlError;
-            }
-        }
-
-        log(`✅ Successfully executed all provisioning SQL for '${clientDbName}'.`);
+        log(`✅ Successfully called provisioning procedure for '${clientDbName}'.`);
+        // --- END KEY PART ---
 
         log(`🎉 Database schema setup completed for client: ${clientDbName}`);
+
     } catch (error: any) {
-        log("💥 Database operation failed:", {
-            // Error details are logged within the loop for SQL failures
-            // If error is from connection/DB creation/table cloning, it will log here
-            errorMessage: error.message
+        log(`💥 Database schema setup failed for client: ${clientDbName}`, {
+            error: error.message,
+            sqlMessage: error.sqlMessage, // Might be relevant if CALL fails
+            sqlState: error.sqlState,
+            errno: error.errno,
+            code: error.code
         });
         throw error; // Re-throw to indicate failure to the caller
     } finally {
