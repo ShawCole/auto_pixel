@@ -57,29 +57,29 @@ export async function ensureClientSchema(client: string) {
         const sqlFilePath = path.join(__dirname, '..', 'provision_triggers.sql'); // Assumes file is in src/
         const sqlFileContent = await fs.readFile(sqlFilePath, 'utf-8');
 
-        // Split the SQL file by the custom comment separator
-        const sqlCommands = sqlFileContent.split('-- COMMAND_SEPARATOR --')
+        // Split the SQL file by the custom comment separator into individual statements
+        const sqlStatements = sqlFileContent.split('-- COMMAND_SEPARATOR --')
             .map(cmd => cmd.trim()) // Trim whitespace from each part
             .filter(cmd => cmd.length > 0); // Remove empty strings
 
-        for (const command of sqlCommands) {
-            // Log the beginning of the command being executed
-            const commandStart = command.substring(0, 100).replace(/\s+/g, ' '); // Get first 100 chars, collapse whitespace
-            log(`Executing SQL block starting with: ${commandStart}...`);
+        for (const statement of sqlStatements) {
+            // Log the beginning of the statement being executed
+            const statementStart = statement.substring(0, 100).replace(/\s+/g, ' ');
+            log(`Executing SQL statement starting with: ${statementStart}...`);
             try {
-                // Execute each trimmed command block individually
-                await root.query(command);
-                log(`✅ Successfully executed SQL block.`);
+                // Execute each trimmed SQL statement individually
+                await root.query(statement);
+                log(`✅ Successfully executed SQL statement.`);
             } catch (sqlError: any) {
-                // Log the specific command that failed more clearly
-                log(`💥 Failed to execute SQL block starting with: ${commandStart}...`, {
+                // Log the specific statement that failed more clearly
+                log(`💥 Failed to execute SQL statement starting with: ${statementStart}...`, {
                     error: sqlError.message,
                     sqlMessage: sqlError.sqlMessage,
                     sqlState: sqlError.sqlState,
                     errno: sqlError.errno,
                     code: sqlError.code,
-                    // Optionally log the full command if errors persist and are hard to debug
-                    // failedCommand: command
+                    // Optionally log the full statement if errors persist
+                    // failedStatement: statement
                 });
                 // Re-throw the error to stop the provisioning process immediately
                 throw sqlError;
@@ -87,11 +87,10 @@ export async function ensureClientSchema(client: string) {
         }
 
         log(`✅ Successfully executed all provisioning SQL for '${clientDbName}'.`);
-        log(`🎉 Database schema setup completed for client: ${clientDbName}`);
 
+        log(`🎉 Database schema setup completed for client: ${clientDbName}`);
     } catch (error: any) {
-        // Log the overarching failure if any step failed
-        log(`💥 Database schema setup failed for client: ${clientDbName}`, {
+        log("💥 Database operation failed:", {
             // Error details are logged within the loop for SQL failures
             // If error is from connection/DB creation/table cloning, it will log here
             errorMessage: error.message
