@@ -140,7 +140,12 @@ BEGIN
         NEW.company_address, NEW.company_description, NEW.company_domain, NEW.company_employee_count, NEW.company_linkedin_url,
         NEW.company_name, NEW.company_phone, NEW.company_revenue, NEW.company_sic, NEW.company_naics, NEW.company_city, NEW.company_state, NEW.company_zip, NEW.company_industry,
         NEW.linkedin_url, NEW.twitter_url, NEW.facebook_url, NEW.social_connections, NEW.skills, NEW.interests,
-        NEW.skiptrace_match_score, NEW.skiptrace_name, skiptrace_address, skiptrace_city, skiptrace_state, skiptrace_zip,
+        NEW.skiptrace_match_score, NEW.skiptrace_name, 
+        
+        -- ### THIS IS THE FIX ###
+        NEW.skiptrace_address, NEW.skiptrace_city, NEW.skiptrace_state, NEW.skiptrace_zip, 
+        -- ### END FIX ###
+
         NEW.skiptrace_landline_numbers, NEW.skiptrace_wireless_numbers, NEW.skiptrace_credit_rating, NEW.skiptrace_dnc, NEW.skiptrace_exact_age, NEW.skiptrace_ethnic_code, NEW.skiptrace_language_code, NEW.skiptrace_ip,
         NEW.skiptrace_b2b_address, NEW.skiptrace_b2b_phone, NEW.skiptrace_b2b_source, NEW.skiptrace_b2b_website, NEW.valid_phones,
         NEW.url, NEW.element, CASE WHEN NEW.percentage IS NOT NULL AND NEW.percentage <> '' THEN CAST(NEW.percentage AS SIGNED) ELSE NULL END, NEW.referrer, NEW.event_timestamp, NEW.event_type,
@@ -153,4 +158,3 @@ BEGIN
 END; -- NOTE: Use standard semicolon here
 
 -- COMMAND_SEPARATOR --
-
