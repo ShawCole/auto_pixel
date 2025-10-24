@@ -23,6 +23,17 @@ function delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function cleanupTempDir(dirPath: string) {
+    try {
+        if (fs.existsSync(dirPath)) {
+            fs.rmSync(dirPath, { recursive: true, force: true });
+            log(`🧹 Cleaned up temporary directory: ${dirPath}`);
+        }
+    } catch (e: any) {
+        log(`⚠️ Failed to clean up temp dir ${dirPath}: ${e.message}`);
+    }
+}
+
 interface PixelOptions {
     client: string;
     webhookUrl: string;
@@ -1428,7 +1439,7 @@ export async function createPixel({ client, website }: { client: string, website
                 log("⚠️ Could not close Install modal; continuing");
             }
 
-            // Open the Webhook dialog from the most recent row and Test; verify DB row
+            // Open the Webhook dialog from the most recent row to set the URL
             try {
                 log("🧭 Opening Webhook dialog for newest pixel row...");
                 let rowWebhookBtn;
@@ -1443,361 +1454,120 @@ export async function createPixel({ client, website }: { client: string, website
                     await driver.executeScript("arguments[0].click();", rowWebhookBtn);
                     log("✅ Row Webhook dialog opened");
 
-                    // Ensure webhook URL remains populated; if empty, fill and optionally click Add
+                    // Ensure webhook URL is set
                     try {
                         const input = await driver.findElement(By.css('input[placeholder*="http"], input[name*="webhook"], input[type="url"]'));
+                        const hook = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
                         const current = (await input.getAttribute('value')) || '';
-                        log(`🔍 Row webhook input value: ${current}`);
-                        if (!current.trim()) {
-                            const hook = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
+                        if (current.trim() !== hook) {
                             await driver.executeScript("arguments[0].value='';", input);
                             await delay(100);
                             await input.sendKeys(hook);
-                            // Click Add if present to save
+                            // Click Add/Save button if present
                             try {
-                                const addBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Add')]"));
+                                const addBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Add')] | //button[contains(normalize-space(.), 'Save')]"));
                                 await driver.executeScript("arguments[0].click();", addBtn);
-                                log("✅ Webhook URL added/saved on row dialog");
+                                log("✅ Webhook URL set/saved on row dialog");
                                 await delay(300);
-                            } catch { }
-                        }
-                    } catch (e) { log("⚠️ Could not verify/fill row webhook URL"); }
-
-                    // Click Test and verify DB entry
-                    try {
-                        const testBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Test')]"));
-                        await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", testBtn);
-                        await delay(120);
-                        await driver.executeScript("arguments[0].click();", testBtn);
-                        log("✅ Row Webhook Test clicked");
-                    } catch (e) { log("⚠️ Row Webhook Test button not found"); }
-
-                    // Verify DB row in superpixel_resolution_log for the client database
-                    try {
-                        if (DB_HOST && DB_USER && DB_PASS) {
-                            const conn = await mysql.createConnection({ host: DB_HOST, user: DB_USER, password: DB_PASS, database: client, connectTimeout: 15000 });
-                            log("⏳ Verifying webhook test row in superpixel_resolution_log (polling up to 15s)...");
-                            log("🔌 DB connection established for client:", { client });
-                            // Initial tiny wait after Test click to allow webhook to fire
-                            await delay(1000);
-                            const start = Date.now();
-                            let attempt = 0;
-                            while (Date.now() - start < 15000 && !(webhookVerified && webhookTestUuidVerified)) {
-                                attempt++;
-                                try {
-                                    const [rowsAny] = await conn.query("SELECT id FROM superpixel_resolution_log ORDER BY id DESC LIMIT 1");
-                                    const foundAny = Array.isArray(rowsAny) && (rowsAny as any[]).length > 0;
-                                    // Check for known test UUID explicitly
-                                    const [rowsTest] = await conn.query("SELECT id, uuid, event_timestamp, url, referrer FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1", [TEST_UUID]);
-                                    const foundTest = Array.isArray(rowsTest) && (rowsTest as any[]).length > 0;
-                                    if (foundTest) { webhookRowSample = (rowsTest as any[])[0]; }
-                                    webhookVerified = webhookVerified || foundAny;
-                                    webhookTestUuidVerified = webhookTestUuidVerified || foundTest;
-                                    log(`🔎 DB poll attempt ${attempt}: anyRow=${foundAny}, testUuid=${foundTest}`);
-                                    if (webhookVerified && webhookTestUuidVerified) { break; }
-                                } catch (pollErr: any) {
-                                    log(`⚠️ DB poll attempt ${attempt} error:`, { message: pollErr?.message });
-                                }
-                                await delay(500);
-                            }
-                            await conn.end();
-                            // If test UUID is verified, consider webhook verified as well
-                            if (webhookTestUuidVerified) { webhookVerified = true; }
-                            log(`📗 DB poll result: webhookVerified=${webhookVerified}, webhookTestUuidVerified=${webhookTestUuidVerified}`);
-                            // If UI-based Test did not verify, send programmatic webhook test and re-poll
-                            if (!webhookTestUuidVerified) {
-                                try {
-                                    const nowIso = new Date().toISOString();
-                                    const hookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
-                                    const payload = {
-                                        events: [
-                                            {
-                                                pixel_id: "003daacb-d261-421c-9781-311df9c381d8",
-                                                hem_sha256: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d",
-                                                event_timestamp: nowIso,
-                                                event_type: "page_view",
-                                                ip_address: "35.191.85.117",
-                                                activity_start_date: nowIso,
-                                                activity_end_date: new Date(Date.now() + 60000).toISOString(),
-                                                resolution: {
-                                                    UUID: TEST_UUID,
-                                                    FIRST_NAME: "Margaret",
-                                                    LAST_NAME: "Faz",
-                                                    PERSONAL_ADDRESS: "547 Pinewood Ln",
-                                                    PERSONAL_CITY: "San Antonio",
-                                                    PERSONAL_STATE: "TX",
-                                                    PERSONAL_ZIP: "78216",
-                                                    PERSONAL_ZIP4: "6911",
-                                                    AGE_RANGE: "65 and older",
-                                                    CHILDREN: "Y",
-                                                    GENDER: "F",
-                                                    HOMEOWNER: "Y",
-                                                    MARRIED: "Y",
-                                                    INCOME_RANGE: "Less than $20,000",
-                                                    NET_WORTH: "$75,000 to $99,999",
-                                                    DIRECT_NUMBER: "+12104382427, +12108237899, +17137836220, +14322144256",
-                                                    DIRECT_NUMBER_DNC: "Y, Y, Y, N",
-                                                    MOBILE_PHONE: "+12104382427, +14322144256, +12108237899",
-                                                    MOBILE_PHONE_DNC: "Y, N, Y",
-                                                    PERSONAL_PHONE: "+12104382427, +12108237899, +14322144256",
-                                                    PERSONAL_PHONE_DNC: "Y, Y, N",
-                                                    PERSONAL_EMAILS: "margaretfaz@gmail.com, mf7476439@gmail.com, mflores8589@gmail.com",
-                                                    BUSINESS_EMAIL: "",
-                                                    DEEP_VERIFIED_EMAILS: "",
-                                                    SHA256_PERSONAL_EMAIL: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d, 38e1e9e2bd652af38d5af129a5a763cd89dfaf0f84db99fdf9c1d4265bb56ecf, 2b863da80b0df29ce907336f4a55c91ef9b70fdc4c3f0b05846600dd2554d56f",
-                                                    SHA256_BUSINESS_EMAIL: "",
-                                                    JOB_TITLE: "",
-                                                    HEADLINE: "",
-                                                    DEPARTMENT: "",
-                                                    SENIORITY_LEVEL: "",
-                                                    INFERRED_YEARS_EXPERIENCE: "",
-                                                    EDUCATION_HISTORY: "",
-                                                    COMPANY_ADDRESS: "",
-                                                    COMPANY_DESCRIPTION: "",
-                                                    COMPANY_DOMAIN: "",
-                                                    COMPANY_EMPLOYEE_COUNT: "",
-                                                    COMPANY_NAME: "",
-                                                    COMPANY_PHONE: "",
-                                                    COMPANY_REVENUE: "",
-                                                    COMPANY_SIC: "",
-                                                    COMPANY_NAICS: "",
-                                                    COMPANY_CITY: "",
-                                                    COMPANY_STATE: "",
-                                                    COMPANY_ZIP: "",
-                                                    COMPANY_INDUSTRY: "",
-                                                    LINKEDIN_URL: "",
-                                                    TWITTER_URL: "",
-                                                    FACEBOOK_URL: "",
-                                                    SOCIAL_CONNECTIONS: "",
-                                                    SKILLS: "",
-                                                    INTERESTS: "",
-                                                    SKIPTRACE_MATCH_SCORE: "11",
-                                                    SKIPTRACE_NAME: "MARGARET FLORES",
-                                                    SKIPTRACE_ADDRESS: "547 Pinewood Ln",
-                                                    SKIPTRACE_CITY: "San Antonio",
-                                                    SKIPTRACE_STATE: "TX",
-                                                    SKIPTRACE_ZIP: "78216",
-                                                    SKIPTRACE_LANDLINE_NUMBERS: "",
-                                                    SKIPTRACE_WIRELESS_NUMBERS: "",
-                                                    SKIPTRACE_CREDIT_RATING: "B",
-                                                    SKIPTRACE_DNC: "Y",
-                                                    SKIPTRACE_EXACT_AGE: "76",
-                                                    SKIPTRACE_ETHNIC_CODE: "",
-                                                    SKIPTRACE_LANGUAGE_CODE: "UX",
-                                                    SKIPTRACE_IP: "172.204.161.145",
-                                                    SKIPTRACE_B2B_ADDRESS: "",
-                                                    SKIPTRACE_B2B_PHONE: "",
-                                                    SKIPTRACE_B2B_SOURCE: "",
-                                                    SKIPTRACE_B2B_WEBSITE: "",
-                                                    VALID_PHONES: ""
-                                                },
-                                                event_data: {
-                                                    url: "https://example.com/?wldup=20251020161105-8a6eaf&fbclid=IwZXh0bgNhZW0BMABhZGlkAasi7LnErLQBHkvPe3ogxPIzpgbWouGmaIf-QkOpOtHgjzrXn0yJrXQVf9OmeaS7Bl-adVpe_aem_nyLfIvd-NuxQZlmIbTs67Q&utm_medium=paid&utm_source=fb&utm_id=120228215089410580&utm_content=120228215155820580&utm_term=120228215089440580&utm_campaign=120228215089410580",
-                                                    referrer: "http://m.facebook.com/",
-                                                    title: "example.com",
-                                                    timestamp: nowIso,
-                                                    percentage: 94,
-                                                    element: {
-                                                        attributes: { class: "elementor-button elementor-button-link elementor-size-sm", href: "#gallery" },
-                                                        classes: "elementor-button elementor-button-link elementor-size-sm",
-                                                        id: null,
-                                                        tag: "A",
-                                                        text: "View custom cabinets\n"
-                                                    }
-                                                }
-                                            }
-                                        ]
-                                    };
-                                    await fetch(hookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-                                    log("🚀 Sent programmatic webhook test POST");
-                                } catch (sendErr: any) {
-                                    log("⚠️ Programmatic webhook test send failed:", { message: sendErr?.message });
-                                }
-
-                                // Re-poll the DB for up to 10s
-                                try {
-                                    const conn2 = await mysql.createConnection({ host: DB_HOST, user: DB_USER, password: DB_PASS, database: client, connectTimeout: 15000 });
-                                    const start2 = Date.now();
-                                    let attempt2 = 0;
-                                    while (Date.now() - start2 < 10000 && !webhookTestUuidVerified) {
-                                        attempt2++;
-                                        try {
-                                            const [rowsTest2] = await conn2.query("SELECT id, uuid, event_timestamp, url, referrer FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1", [TEST_UUID]);
-                                            const foundTest2 = Array.isArray(rowsTest2) && (rowsTest2 as any[]).length > 0;
-                                            if (foundTest2) { webhookRowSample = (rowsTest2 as any[])[0]; }
-                                            webhookTestUuidVerified = webhookTestUuidVerified || foundTest2;
-                                            if (webhookTestUuidVerified) { break; }
-                                        } catch (pollErr2: any) {
-                                            log(`⚠️ Fallback DB poll attempt ${attempt2} error:`, { message: pollErr2?.message });
-                                        }
-                                        await delay(500);
-                                    }
-                                    await conn2.end();
-                                    log(`📘 Fallback poll result: webhookTestUuidVerified=${webhookTestUuidVerified}`);
-                                } catch (poll2Err: any) {
-                                    log("⚠️ Programmatic fallback DB verification failed:", { message: poll2Err?.message });
-                                }
-                            }
-                            if (webhookTestUuidVerified) {
-                                log("✅ Verified test UUID present in superpixel_resolution_log");
-                                if (webhookRowSample) {
-                                    log("📄 Test row sample:", webhookRowSample);
-                                }
-                            } else if (webhookVerified) {
-                                log("⚠️ A row exists, but test UUID not found yet");
-                            } else {
-                                log("⚠️ No webhook test row detected within timeout");
+                            } catch {
+                                log("✅ Webhook URL filled (no Add/Save button found, assuming auto-save)");
                             }
                         } else {
-                            log("ℹ️ DB env not configured; skipping DB verification");
+                            log("✅ Webhook URL already correctly set.");
                         }
-                    } catch (e) { log("⚠️ DB verification failed"); }
+                    } catch (e) { log("⚠️ Could not set row webhook URL"); }
+
+                    // Close the modal manually if the form didn't auto-close (common after Save/Add)
+                    try {
+                        let modalCloseBtn = await driver.findElement(By.xpath("//div[@role='dialog']//button[contains(normalize-space(.), 'Close') or @aria-label='Close']")).catch(() => null);
+                        if (modalCloseBtn) {
+                            await modalCloseBtn.click();
+                            log("✅ Webhook dialog closed after setting URL.");
+                        }
+                    } catch (e) { /* Ignore errors on closing modal */ }
+
                 } else {
-                    log("ℹ️ Could not find row Webhook action");
+                    log("ℹ️ Could not find row Webhook action to set URL.");
                 }
-            } catch (e) {
-                log("⚠️ Failed to open and test row Webhook dialog");
+            } catch (e: any) {
+                log("⚠️ Failed to set Webhook URL on row dialog:", { message: e.message });
             }
 
-            // GLOBAL PROGRAMMATIC FALLBACK: if still not verified, send the canonical test row and re-poll even if UI path failed
-            if (!webhookTestUuidVerified) {
-                try {
-                    const nowIso = new Date().toISOString();
-                    const hookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
-                    const payload = {
-                        events: [
-                            {
-                                pixel_id: "003daacb-d261-421c-9781-311df9c381d8",
-                                hem_sha256: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d",
-                                event_timestamp: nowIso,
-                                event_type: "page_view",
-                                ip_address: "35.191.85.117",
-                                activity_start_date: nowIso,
-                                activity_end_date: new Date(Date.now() + 60000).toISOString(),
-                                resolution: {
-                                    UUID: TEST_UUID,
-                                    FIRST_NAME: "Margaret",
-                                    LAST_NAME: "Faz",
-                                    PERSONAL_ADDRESS: "547 Pinewood Ln",
-                                    PERSONAL_CITY: "San Antonio",
-                                    PERSONAL_STATE: "TX",
-                                    PERSONAL_ZIP: "78216",
-                                    PERSONAL_ZIP4: "6911",
-                                    AGE_RANGE: "65 and older",
-                                    CHILDREN: "Y",
-                                    GENDER: "F",
-                                    HOMEOWNER: "Y",
-                                    MARRIED: "Y",
-                                    INCOME_RANGE: "Less than $20,000",
-                                    NET_WORTH: "$75,000 to $99,999",
-                                    DIRECT_NUMBER: "+12104382427, +12108237899, +17137836220, +14322144256",
-                                    DIRECT_NUMBER_DNC: "Y, Y, Y, N",
-                                    MOBILE_PHONE: "+12104382427, +14322144256, +12108237899",
-                                    MOBILE_PHONE_DNC: "Y, N, Y",
-                                    PERSONAL_PHONE: "+12104382427, +12108237899, +14322144256",
-                                    PERSONAL_PHONE_DNC: "Y, Y, N",
-                                    PERSONAL_EMAILS: "margaretfaz@gmail.com, mf7476439@gmail.com, mflores8589@gmail.com",
-                                    BUSINESS_EMAIL: "",
-                                    DEEP_VERIFIED_EMAILS: "",
-                                    SHA256_PERSONAL_EMAIL: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d, 38e1e9e2bd652af38d5af129a5a763cd89dfaf0f84db99fdf9c1d4265bb56ecf, 2b863da80b0df29ce907336f4a55c91ef9b70fdc4c3f0b05846600dd2554d56f",
-                                    SHA256_BUSINESS_EMAIL: "",
-                                    JOB_TITLE: "",
-                                    HEADLINE: "",
-                                    DEPARTMENT: "",
-                                    SENIORITY_LEVEL: "",
-                                    INFERRED_YEARS_EXPERIENCE: "",
-                                    EDUCATION_HISTORY: "",
-                                    COMPANY_ADDRESS: "",
-                                    COMPANY_DESCRIPTION: "",
-                                    COMPANY_DOMAIN: "",
-                                    COMPANY_EMPLOYEE_COUNT: "",
-                                    COMPANY_NAME: "",
-                                    COMPANY_PHONE: "",
-                                    COMPANY_REVENUE: "",
-                                    COMPANY_SIC: "",
-                                    COMPANY_NAICS: "",
-                                    COMPANY_CITY: "",
-                                    COMPANY_STATE: "",
-                                    COMPANY_ZIP: "",
-                                    COMPANY_INDUSTRY: "",
-                                    LINKEDIN_URL: "",
-                                    TWITTER_URL: "",
-                                    FACEBOOK_URL: "",
-                                    SOCIAL_CONNECTIONS: "",
-                                    SKILLS: "",
-                                    INTERESTS: "",
-                                    SKIPTRACE_MATCH_SCORE: "11",
-                                    SKIPTRACE_NAME: "MARGARET FLORES",
-                                    SKIPTRACE_ADDRESS: "547 Pinewood Ln",
-                                    SKIPTRACE_CITY: "San Antonio",
-                                    SKIPTRACE_STATE: "TX",
-                                    SKIPTRACE_ZIP: "78216",
-                                    SKIPTRACE_LANDLINE_NUMBERS: "",
-                                    SKIPTRACE_WIRELESS_NUMBERS: "",
-                                    SKIPTRACE_CREDIT_RATING: "B",
-                                    SKIPTRACE_DNC: "Y",
-                                    SKIPTRACE_EXACT_AGE: "76",
-                                    SKIPTRACE_ETHNIC_CODE: "",
-                                    SKIPTRACE_LANGUAGE_CODE: "UX",
-                                    SKIPTRACE_IP: "172.204.161.145",
-                                    SKIPTRACE_B2B_ADDRESS: "",
-                                    SKIPTRACE_B2B_PHONE: "",
-                                    SKIPTRACE_B2B_SOURCE: "",
-                                    SKIPTRACE_B2B_WEBSITE: "",
-                                    VALID_PHONES: ""
-                                },
-                                event_data: {
-                                    url: "https://example.com/?wldup=20251020161105-8a6eaf&fbclid=IwZXh0bgNhZW0BMABhZGlkAasi7LnErLQBHkvPe3ogxPIzpgbWouGmaIf-QkOpOtHgjzrXn0yJrXQVf9OmeaS7Bl-adVpe_aem_nyLfIvd-NuxQZlmIbTs67Q&utm_medium=paid&utm_source=fb&utm_id=120228215089410580&utm_content=120228215155820580&utm_term=120228215089440580&utm_campaign=120228215089410580",
-                                    referrer: "http://m.facebook.com/",
-                                    title: "example.com",
-                                    timestamp: nowIso,
-                                    percentage: 94,
-                                    element: {
-                                        attributes: { class: "elementor-button elementor-button-link elementor-size-sm", href: "#gallery" },
-                                        classes: "elementor-button elementor-button-link elementor-size-sm",
-                                        id: null,
-                                        tag: "A",
-                                        text: "View custom cabinets\n"
-                                    }
-                                }
-                            }
-                        ]
-                    };
-                    await fetch(hookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-                    log("🚀 GLOBAL fallback: Sent programmatic webhook test POST");
-                } catch (sendErr: any) {
-                    log("⚠️ GLOBAL fallback send failed:", { message: sendErr?.message });
-                }
-
-                // Re-poll the DB for up to 10s
-                try {
-                    if (DB_HOST && DB_USER && DB_PASS) {
-                        const conn3 = await mysql.createConnection({ host: DB_HOST, user: DB_USER, password: DB_PASS, database: client, connectTimeout: 15000 });
-                        const start3 = Date.now();
-                        let attempt3 = 0;
-                        while (Date.now() - start3 < 10000 && !webhookTestUuidVerified) {
-                            attempt3++;
-                            try {
-                                const [rowsTest3] = await conn3.query("SELECT id, uuid, event_timestamp, url, referrer FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1", [TEST_UUID]);
-                                const foundTest3 = Array.isArray(rowsTest3) && (rowsTest3 as any[]).length > 0;
-                                if (foundTest3) { webhookRowSample = (rowsTest3 as any[])[0]; }
-                                webhookTestUuidVerified = webhookTestUuidVerified || foundTest3;
-                                if (webhookTestUuidVerified) { break; }
-                            } catch (pollErr3: any) {
-                                log(`⚠️ GLOBAL fallback DB poll attempt ${attempt3} error:`, { message: pollErr3?.message });
-                            }
-                            await delay(500);
+            // --- OPTIMIZATION START: IMMEDIATE PROGRAMMATIC TEST + SHORT DB POLL ---
+            // 1) Send the canonical test payload immediately
+            try {
+                const hookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
+                const nowIso = new Date().toISOString();
+                const testUrl = `${website}?wldup=${nowIso.replace(/[:.-]/g, '').substring(0, 14)}-${Math.random().toString(36).substring(2, 8)}&fbclid=t`;
+                const payload = {
+                    events: [
+                        {
+                            pixel_id: "003daacb-d261-421c-9781-311df9c381d8",
+                            hem_sha256: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d",
+                            event_timestamp: nowIso,
+                            event_type: "page_view",
+                            ip_address: "35.191.85.117",
+                            activity_start_date: nowIso,
+                            activity_end_date: new Date(Date.now() + 60000).toISOString(),
+                            resolution: {
+                                UUID: TEST_UUID, FIRST_NAME: "Margaret", LAST_NAME: "Faz",
+                                PERSONAL_ADDRESS: "547 Pinewood Ln", PERSONAL_CITY: "San Antonio", PERSONAL_STATE: "TX", PERSONAL_ZIP: "78216", PERSONAL_ZIP4: "6911",
+                                AGE_RANGE: "65 and older", CHILDREN: "Y", GENDER: "F", HOMEOWNER: "Y", MARRIED: "Y",
+                                INCOME_RANGE: "Less than $20,000", NET_WORTH: "$75,000 to $99,999",
+                                DIRECT_NUMBER: "+12104382427, +12108237899, +17137836220, +14322144256", DIRECT_NUMBER_DNC: "Y, Y, Y, N",
+                                MOBILE_PHONE: "+12104382427, +14322144256, +12108237899", MOBILE_PHONE_DNC: "Y, N, Y",
+                                PERSONAL_PHONE: "+12104382427, +12108237899, +14322144256", PERSONAL_PHONE_DNC: "Y, Y, N",
+                                PERSONAL_EMAILS: "margaretfaz@gmail.com, mf7476439@gmail.com, mflores8589@gmail.com",
+                                SKIPTRACE_MATCH_SCORE: "11", SKIPTRACE_NAME: "MARGARET FLORES", SKIPTRACE_ADDRESS: "547 Pinewood Ln",
+                                SKIPTRACE_CITY: "San Antonio", SKIPTRACE_STATE: "TX", SKIPTRACE_ZIP: "78216", SKIPTRACE_CREDIT_RATING: "B", SKIPTRACE_DNC: "Y", SKIPTRACE_EXACT_AGE: "76", SKIPTRACE_LANGUAGE_CODE: "UX", SKIPTRACE_IP: "172.204.161.145",
+                                BUSINESS_EMAIL: "", DEEP_VERIFIED_EMAILS: "", SHA256_PERSONAL_EMAIL: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d, 38e1e9e2bd652af38d5af129a5a763cd89dfaf0f84db99fdf9c1d4265bb56ecf, 2b863da80b0df29ce907336f4a55c91ef9b70fdc4c3f0b05846600dd2554d56f",
+                                SHA256_BUSINESS_EMAIL: "", JOB_TITLE: "", HEADLINE: "", DEPARTMENT: "", SENIORITY_LEVEL: "", INFERRED_YEARS_EXPERIENCE: "", EDUCATION_HISTORY: "", COMPANY_ADDRESS: "", COMPANY_DESCRIPTION: "", COMPANY_DOMAIN: "", COMPANY_EMPLOYEE_COUNT: "", COMPANY_NAME: "", COMPANY_PHONE: "", COMPANY_REVENUE: "", COMPANY_SIC: "", COMPANY_NAICS: "", COMPANY_CITY: "", COMPANY_STATE: "", COMPANY_ZIP: "", COMPANY_INDUSTRY: "", LINKEDIN_URL: "", TWITTER_URL: "", FACEBOOK_URL: "", SOCIAL_CONNECTIONS: "", SKILLS: "", INTERESTS: "", SKIPTRACE_LANDLINE_NUMBERS: "", SKIPTRACE_WIRELESS_NUMBERS: "", SKIPTRACE_B2B_ADDRESS: "", SKIPTRACE_B2B_PHONE: "", SKIPTRACE_B2B_SOURCE: "", SKIPTRACE_B2B_WEBSITE: "", VALID_PHONES: ""
+                            },
+                            event_data: { url: testUrl, referrer: "http://m.facebook.com/", title: website, timestamp: nowIso, percentage: 94, element: { attributes: { class: "elementor-button", href: "#gallery" }, classes: "elementor-button", id: null, tag: "A", text: "View custom cabinets\n" } }
                         }
-                        await conn3.end();
-                        if (webhookTestUuidVerified) { webhookVerified = true; }
-                        log(`📘 GLOBAL fallback poll result: webhookTestUuidVerified=${webhookTestUuidVerified}`);
-                    } else {
-                        log("ℹ️ DB env not configured; skipping GLOBAL fallback DB verification");
-                    }
-                } catch (poll3Err: any) {
-                    log("⚠️ GLOBAL fallback DB verification failed:", { message: poll3Err?.message });
-                }
+                    ]
+                };
+                await fetch(hookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+                log("🚀 Sent programmatic webhook test POST");
+            } catch (sendErr: any) {
+                log("⚠️ Programmatic webhook test send failed:", { message: sendErr?.message });
             }
+
+            // 2) Poll the DB for a short duration (max 10s) to verify the row landed
+            try {
+                if (DB_HOST && DB_USER && DB_PASS) {
+                    const conn = await mysql.createConnection({ host: DB_HOST, user: DB_USER, password: DB_PASS, database: client, connectTimeout: 5000 });
+                    const start = Date.now();
+                    const timeout = 10000;
+                    let attempt = 0;
+                    log(`⏳ Verifying test row in DB (polling up to ${timeout / 1000}s)...`);
+                    while (Date.now() - start < timeout && !webhookTestUuidVerified) {
+                        attempt++;
+                        try {
+                            const [rowsTest]: any = await conn.query("SELECT id, uuid, event_timestamp, url, referrer FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1", [TEST_UUID]);
+                            const foundTest = Array.isArray(rowsTest) && rowsTest.length > 0;
+                            if (foundTest) {
+                                webhookRowSample = rowsTest[0];
+                                webhookTestUuidVerified = true;
+                                webhookVerified = true;
+                                log(`✅ DB Verification successful on attempt ${attempt}`);
+                                break;
+                            }
+                        } catch (pollErr: any) {
+                            log(`⚠️ DB poll attempt ${attempt} error:`, { message: pollErr?.message });
+                        }
+                        await delay(500);
+                    }
+                    await conn.end();
+                    log(`📘 Final DB poll result: webhookTestUuidVerified=${webhookTestUuidVerified}`);
+                } else {
+                    log("ℹ️ DB env not configured; skipping DB verification");
+                }
+            } catch (dbErr: any) {
+                log("⚠️ Final DB verification failed:", { message: dbErr?.message });
+            }
+
+            // --- OPTIMIZATION END ---
 
             return { pixelCode: finalCode, webhookVerified, webhookTestUuidVerified, webhookRowSample };
         } else {
@@ -1812,5 +1582,6 @@ export async function createPixel({ client, website }: { client: string, website
         } catch (cleanupError) {
             log("⚠️ Browser cleanup error:", cleanupError);
         }
+        cleanupTempDir(tmpBase);
     }
 } 
