@@ -354,7 +354,7 @@ export async function createPixel({ client, website }: { client: string, website
         // Wait for the button to be interactable (enabled + not aria-disabled + not loading)
         log("⏳ Waiting for create button to be enabled...");
         let enabled = false;
-        for (let i = 0; i < 40; i++) { // ~20s total
+        for (let i = 0; i < 8; i++) { // ~4s total
             try {
                 const isEnabled = await createButton.isEnabled();
                 const ariaDisabled = (await createButton.getAttribute('aria-disabled')) || '';
