@@ -455,9 +455,28 @@ app.post('/generate', async (req, res) => {
             log('⚠️ Error during canonical webhook test + verify:', { message: e?.message });
         }
 
-        // 4) Create Google Sheet for the client (ASYNC after response) and upsert pixel_sheets LAST
-        // Respond fast: sheet creation will run in background; store empty sheet URL for now
+        // 4) Create Google Sheet for the client (optional, may fail) and upsert pixel_sheets LAST
+        // Generate a unique pixel ID for tracking
+        const pixelId = `${client.toLowerCase()}-pixel-${Date.now()}`;
+
+        // Create Google Sheet for the client
         let sheetUrl: string | undefined;
+        const sheetResult = await createGoogleSheet(client, pixelId, website);
+        log(`🔍 Sheet creation result:`, sheetResult); // Debug log
+
+        if (sheetResult.sheetUrl) {
+            sheetUrl = sheetResult.sheetUrl;
+            log(`✅ Sheet URL obtained: ${sheetUrl}`); // Debug log
+
+            // Trigger full dynamic sync after 10 seconds to include the new sheet
+            log(`⏰ Scheduling full dynamic sync in 10 seconds to include new sheet...`);
+            setTimeout(() => {
+                log(`🚀 Executing triggerFullSync now...`); // Debug log
+                triggerFullSync();
+            }, 10000);
+        } else {
+            log("⚠️ Failed to create Google Sheet but continuing:", sheetResult.error);
+        }
 
         // Upsert central pixel.metadata row in pixel.pixel_sheets (LAST)
         try {
@@ -526,70 +545,6 @@ app.post('/generate', async (req, res) => {
             webhookTestUuidVerified: finalWebhookTestUuidVerified,
             webhookRowSample: finalWebhookRowSample
         });
-
-        // Background: create the Google Sheet, update pixel_sheets, then trigger sync
-        (async () => {
-            try {
-                const pixelIdForSheet = `${client.toLowerCase()}-pixel-${Date.now()}`;
-                const sheetResult = await createGoogleSheet(client, pixelIdForSheet, website);
-                log(`🔍 [bg] Sheet creation result:`, sheetResult);
-                if (sheetResult.sheetUrl) {
-                    const createdSheetUrl = sheetResult.sheetUrl;
-                    try {
-                        const mysql = await import('mysql2/promise');
-                        const connection = await mysql.createConnection({
-                            host: process.env.DB_HOST,
-                            user: process.env.DB_USER,
-                            password: process.env.DB_PASS,
-                            database: 'pixel',
-                            connectTimeout: 30000
-                        });
-                        try {
-                            const extractPixelIdFromScript = (snippet: string): string | null => {
-                                try {
-                                    const m = (result.pixelCode || '').match(/\bhttps?:\/\/(?:cdn\.)?v3\.identitypxl\.app\/pixels\/([^\/'"\s]+)\/p\.js/i);
-                                    return m && m[1] ? m[1] : null;
-                                } catch { return null; }
-                            };
-                            const extractSheetId = (url?: string): string | null => {
-                                if (!url) return null;
-                                try { const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/); return m && m[1] ? m[1] : null; } catch { return null; }
-                            };
-                            const pixelIdFromScript = extractPixelIdFromScript(result.pixelCode || '') || '';
-                            const bgSheetId = extractSheetId(createdSheetUrl) || `PENDING_${Date.now()}`;
-                            const sql = `
-                                INSERT INTO pixel_sheets
-                                    (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
-                                VALUES (?, ?, ?, ?, ?, ?, 1)
-                                ON DUPLICATE KEY UPDATE
-                                    client_website = VALUES(client_website),
-                                    pixel_id = IF(VALUES(pixel_id) <> '', VALUES(pixel_id), pixel_id),
-                                    pixel_script = VALUES(pixel_script),
-                                    sheet_id = IF(VALUES(sheet_id) <> '', VALUES(sheet_id), sheet_id),
-                                    sheet_url = IF(VALUES(sheet_url) <> '', VALUES(sheet_url), sheet_url)
-                            `;
-                            await connection.execute(sql, [client, website, pixelIdFromScript, result.pixelCode, bgSheetId, createdSheetUrl]);
-                            log('✅ [bg] Updated pixel_sheets with sheet URL', { client, bgSheetId });
-                        } finally {
-                            await connection.end();
-                        }
-
-                        // Schedule full sync shortly after sheet creation
-                        log('[bg] ⏰ Scheduling full dynamic sync in 10 seconds...');
-                        setTimeout(() => {
-                            log('[bg] 🚀 Executing triggerFullSync now...');
-                            triggerFullSync();
-                        }, 10000);
-                    } catch (e: any) {
-                        log('⚠️ [bg] Failed to upsert pixel_sheets with sheet URL:', { message: e?.message });
-                    }
-                } else {
-                    log('⚠️ [bg] Sheet creation failed:', sheetResult.error);
-                }
-            } catch (bgErr: any) {
-                log('⚠️ [bg] Error during async sheet creation:', { message: bgErr?.message });
-            }
-        })();
     } catch (error: any) {
         log("💥 Error during pixel generation:", {
             error: error.message,
