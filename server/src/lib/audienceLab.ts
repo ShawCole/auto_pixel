@@ -826,7 +826,20 @@ export async function createPixel({ client, website }: { client: string, website
             log("⏳ Waiting for pixel creation to complete...");
             log("🔍 DEBUG: Current page title before delay:", await driver.getTitle());
             log("🔍 DEBUG: Current URL before delay:", await driver.getCurrentUrl());
-            await delay(2000); // Wait a bit longer for pixel creation process to complete
+            // Instead of a fixed sleep, wait up to ~2s for Install UI/snippet to be ready
+            try {
+                await driver.wait(
+                    async () => {
+                        try {
+                            // Check for Install tab OR presence of a <pre> code block in dialog
+                            const hasInstallTab = (await driver.findElements(By.xpath("//button[contains(normalize-space(.), 'Install')]"))).length > 0;
+                            const hasDialogPre = (await driver.findElements(By.xpath("//div[@role='dialog']//pre"))).length > 0;
+                            return hasInstallTab || hasDialogPre;
+                        } catch { return false; }
+                    },
+                    2000
+                );
+            } catch { /* proceed even if not detected within 2s */ }
             log("🔍 DEBUG: Current page title after delay:", await driver.getTitle());
             log("🔍 DEBUG: Current URL after delay:", await driver.getCurrentUrl());
 
