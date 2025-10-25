@@ -296,163 +296,93 @@ app.post('/generate', async (req, res) => {
         let finalWebhookTestUuidVerified = (result as any).webhookTestUuidVerified === true;
         let finalWebhookRowSample: any = (result as any).webhookRowSample || null;
 
-        try {
-            function extractPixelIdFromScript(snippet: string): string | null {
-                try {
-                    const m = snippet.match(/\bhttps?:\/\/(?:cdn\.)?v3\.identitypxl\.app\/pixels\/([^\/'"\s]+)\/p\.js/i);
-                    return m && m[1] ? m[1] : null;
-                } catch { return null; }
-            }
+        if (!finalWebhookTestUuidVerified) {
+            try {
+                function extractPixelIdFromScript(snippet: string): string | null {
+                    try {
+                        const m = snippet.match(/\bhttps?:\/\/(?:cdn\.)?v3\.identitypxl\.app\/pixels\/([^\/'"\s]+)\/p\.js/i);
+                        return m && m[1] ? m[1] : null;
+                    } catch { return null; }
+                }
 
-            const TEST_UUID = 'dc0016d3803db4912441edb1b0';
-            const hookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${encodeURIComponent(client)}`;
-            const now = new Date();
-            const nowIso = now.toISOString();
-            const endIso = new Date(now.getTime() + 60_000).toISOString();
-            const parsedPixelId = extractPixelIdFromScript(result.pixelCode || '') || '';
-            const randomTag = `${now.toISOString().replace(/\D/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 8)}`;
+                const TEST_UUID = 'dc0016d3803db4912441edb1b0';
+                const hookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${encodeURIComponent(client)}`;
+                const now = new Date();
+                const nowIso = now.toISOString();
+                const endIso = new Date(now.getTime() + 60_000).toISOString();
+                const parsedPixelId = extractPixelIdFromScript(result.pixelCode || '') || '';
+                const randomTag = `${now.toISOString().replace(/\D/g, '').slice(0, 14)}-${Math.random().toString(36).slice(2, 8)}`;
 
-            const payload: any = {
-                events: [
-                    {
-                        pixel_id: parsedPixelId,
-                        hem_sha256: '1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d',
-                        event_timestamp: nowIso,
-                        event_type: 'page_view',
-                        ip_address: '35.191.85.117',
-                        activity_start_date: nowIso,
-                        activity_end_date: endIso,
-                        referrer_url: '',
-                        resolution: {
-                            UUID: TEST_UUID,
-                            FIRST_NAME: 'Margaret',
-                            LAST_NAME: 'Faz',
-                            PERSONAL_ADDRESS: '547 Pinewood Ln',
-                            PERSONAL_CITY: 'San Antonio',
-                            PERSONAL_STATE: 'TX',
-                            PERSONAL_ZIP: '78216',
-                            PERSONAL_ZIP4: '6911',
-                            AGE_RANGE: '65 and older',
-                            CHILDREN: 'Y',
-                            GENDER: 'F',
-                            HOMEOWNER: 'Y',
-                            MARRIED: 'Y',
-                            NET_WORTH: '$75,000 to $99,999',
-                            INCOME_RANGE: 'Less than $20,000',
-                            DIRECT_NUMBER: '+12104382427, +12108237899, +17137836220, +14322144256',
-                            DIRECT_NUMBER_DNC: 'Y, Y, Y, N',
-                            MOBILE_PHONE: '+12104382427, +14322144256, +12108237899',
-                            MOBILE_PHONE_DNC: 'Y, N, Y',
-                            PERSONAL_PHONE: '+12104382427, +12108237899, +14322144256',
-                            PERSONAL_PHONE_DNC: 'Y, Y, N',
-                            BUSINESS_EMAIL: '',
-                            PERSONAL_EMAILS: 'margaretfaz@gmail.com, mf7476439@gmail.com, mflores8589@gmail.com',
-                            DEEP_VERIFIED_EMAILS: '',
-                            SHA256_PERSONAL_EMAIL: '1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d, 38e1e9e2bd652af38d5af129a5a763cd89dfaf0f84db99fdf9c1d4265bb56ecf, 2b863da80b0df29ce907336f4a55c91ef9b70fdc4c3f0b05846600dd2554d56f',
-                            SHA256_BUSINESS_EMAIL: '',
-                            JOB_TITLE: '',
-                            HEADLINE: '',
-                            DEPARTMENT: '',
-                            SENIORITY_LEVEL: '',
-                            INFERRED_YEARS_EXPERIENCE: '',
-                            COMPANY_NAME_HISTORY: '',
-                            JOB_TITLE_HISTORY: '',
-                            EDUCATION_HISTORY: '',
-                            COMPANY_ADDRESS: '',
-                            COMPANY_DESCRIPTION: '',
-                            COMPANY_DOMAIN: '',
-                            COMPANY_EMPLOYEE_COUNT: '',
-                            COMPANY_LINKEDIN_URL: null,
-                            COMPANY_NAME: '',
-                            COMPANY_PHONE: '',
-                            COMPANY_REVENUE: '',
-                            COMPANY_SIC: '',
-                            COMPANY_NAICS: '',
-                            COMPANY_CITY: '',
-                            COMPANY_STATE: '',
-                            COMPANY_ZIP: '',
-                            COMPANY_INDUSTRY: '',
-                            LINKEDIN_URL: '',
-                            TWITTER_URL: '',
-                            FACEBOOK_URL: '',
-                            SOCIAL_CONNECTIONS: '',
-                            SKILLS: '',
-                            INTERESTS: '',
-                            SKIPTRACE_MATCH_SCORE: '11',
-                            SKIPTRACE_NAME: 'MARGARET FLORES',
-                            SKIPTRACE_ADDRESS: '547 Pinewood Ln',
-                            SKIPTRACE_CITY: 'San Antonio',
-                            SKIPTRACE_STATE: 'TX',
-                            SKIPTRACE_ZIP: '78216',
-                            SKIPTRACE_LANDLINE_NUMBERS: '',
-                            SKIPTRACE_WIRELESS_NUMBERS: '',
-                            SKIPTRACE_CREDIT_RATING: 'B',
-                            SKIPTRACE_DNC: 'Y',
-                            SKIPTRACE_EXACT_AGE: '76',
-                            SKIPTRACE_ETHNIC_CODE: '',
-                            SKIPTRACE_LANGUAGE_CODE: 'UX',
-                            SKIPTRACE_IP: '172.204.161.145',
-                            SKIPTRACE_B2B_ADDRESS: '',
-                            SKIPTRACE_B2B_PHONE: '',
-                            SKIPTRACE_B2B_SOURCE: '',
-                            SKIPTRACE_B2B_WEBSITE: '',
-                            VALID_PHONES: ''
-                        },
-                        event_data: {
-                            url: `https://example.com/?wldup=${randomTag}&fbclid=t`,
-                            referrer: 'http://m.facebook.com/',
-                            title: 'example.com',
-                            percentage: 94,
-                            element: '{"attributes":{"class":"elementor-button elementor-button-link elementor-size-sm","href":"#gallery"},"classes":"elementor-button elementor-button-link elementor-size-sm","id":null,"tag":"A","text":"View custom cabinets\\n"}'
+                const payload: any = {
+                    events: [
+                        {
+                            pixel_id: parsedPixelId,
+                            hem_sha256: '1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d',
+                            event_timestamp: nowIso,
+                            event_type: 'page_view',
+                            ip_address: '35.191.85.117',
+                            activity_start_date: nowIso,
+                            activity_end_date: endIso,
+                            referrer_url: '',
+                            resolution: {
+                                UUID: TEST_UUID
+                            },
+                            event_data: {
+                                url: `https://example.com/?wldup=${randomTag}&fbclid=t`,
+                                referrer: 'http://m.facebook.com/',
+                                title: 'example.com'
+                            }
                         }
-                    }
-                ]
-            };
+                    ]
+                };
 
-            try {
-                log('🛰️ Posting canonical webhook test payload...');
-                const resp = await (fetch as any)(hookUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                try {
+                    log('🛰️ Posting canonical webhook test payload...');
+                    const resp = await (fetch as any)(hookUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    log('🛰️ Webhook POST status:', { status: resp.status });
+                } catch (e: any) {
+                    log('⚠️ Webhook POST failed:', { message: e?.message });
+                }
+
+                // Poll client DB for TEST_UUID up to 10s (shorter since Selenium already tried)
+                const mysql = await import('mysql2/promise');
+                const conn = await mysql.createConnection({
+                    host: process.env.DB_HOST,
+                    user: process.env.DB_USER,
+                    password: process.env.DB_PASS,
+                    database: client,
+                    connectTimeout: 30000
                 });
-                log('🛰️ Webhook POST status:', { status: resp.status });
-            } catch (e: any) {
-                log('⚠️ Webhook POST failed:', { message: e?.message });
-            }
-
-            // Poll client DB for TEST_UUID up to 15s
-            const mysql = await import('mysql2/promise');
-            const conn = await mysql.createConnection({
-                host: process.env.DB_HOST,
-                user: process.env.DB_USER,
-                password: process.env.DB_PASS,
-                database: client,
-                connectTimeout: 30000
-            });
-            try {
-                for (let i = 0; i < 15; i++) {
-                    const [rows] = await conn.execute<any[]>(
-                        'SELECT id, uuid, event_timestamp, url FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1',
-                        [TEST_UUID]
-                    );
-                    if ((rows as any[]).length) {
-                        finalWebhookTestUuidVerified = true;
-                        finalWebhookVerified = true;
-                        finalWebhookRowSample = (rows as any[])[0];
-                        log('✅ Canonical webhook test verified in DB');
-                        break;
+                try {
+                    for (let i = 0; i < 10; i++) {
+                        const [rows] = await conn.execute<any[]>(
+                            'SELECT id, uuid, event_timestamp, url FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1',
+                            [TEST_UUID]
+                        );
+                        if ((rows as any[]).length) {
+                            finalWebhookTestUuidVerified = true;
+                            finalWebhookVerified = true;
+                            finalWebhookRowSample = (rows as any[])[0];
+                            log('✅ Canonical webhook test verified in DB');
+                            break;
+                        }
+                        await new Promise(r => setTimeout(r, 1000));
                     }
-                    await new Promise(r => setTimeout(r, 1000));
+                    if (!finalWebhookTestUuidVerified) {
+                        log('⚠️ Canonical webhook test not verified within timeout');
+                    }
+                } finally {
+                    await conn.end();
                 }
-                if (!finalWebhookTestUuidVerified) {
-                    log('⚠️ Canonical webhook test not verified within timeout');
-                }
-            } finally {
-                await conn.end();
+            } catch (e: any) {
+                log('⚠️ Error during canonical webhook test + verify:', { message: e?.message });
             }
-        } catch (e: any) {
-            log('⚠️ Error during canonical webhook test + verify:', { message: e?.message });
+        } else {
+            log('⏭️ Skipping canonical webhook verify (already verified by Selenium)');
         }
 
         // 4) Create Google Sheet for the client (ASYNC after response) and upsert pixel_sheets LAST
