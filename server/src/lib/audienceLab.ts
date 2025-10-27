@@ -270,26 +270,70 @@ export async function createPixel({ client, website }: { client: string, website
         log("✅ Audience option selected");
         await delay(400); // Wait for dashboard to load
 
-        // Step 4: Click the pixel menu item
-        log("📊 Waiting for dashboard to load...");
-        const pixelMenuXPath = "/html/body/div[1]/div/div[1]/div/div[2]/div/div[2]/div[2]/div[2]/ul/li[1]/a";
-        await driver.wait(until.elementLocated(By.xpath(pixelMenuXPath)), 15000);
-        log("✅ Dashboard loaded");
-        await delay(200); // Brief wait
+        // Step 4: Open the Pixel section (resilient locators + fallback)
+        log("📊 Waiting for dashboard to load (nav present)...");
+        await driver.wait(until.elementLocated(By.css('a, nav, aside')), 8000).catch(() => {});
+        log("✅ Dashboard elements present");
+        await delay(150);
 
-        log("🖱️  Clicking pixels menu item...");
-        const pixelMenuItem = await driver.findElement(By.xpath(pixelMenuXPath));
-        log(`🔍 VERBOSE: Pixel menu item found with XPath: ${pixelMenuXPath}`);
-        log(`🔍 VERBOSE: Pixel menu item tag: ${await pixelMenuItem.getTagName()}`);
-        log(`🔍 VERBOSE: Pixel menu item text: ${await pixelMenuItem.getText()}`);
-        log(`🔍 VERBOSE: Pixel menu item href: ${await pixelMenuItem.getAttribute('href')}`);
-        log(`🔍 VERBOSE: Pixel menu item class: ${await pixelMenuItem.getAttribute('class')}`);
-        log(`🔍 VERBOSE: Pixel menu item enabled: ${await pixelMenuItem.isEnabled()}`);
-        log(`🔍 VERBOSE: Pixel menu item displayed: ${await pixelMenuItem.isDisplayed()}`);
+        log("🖱️  Locating Pixels menu item...");
+        const pixelLocators = [
+            By.css('a[href$="/pixel"]'),
+            By.xpath("//a[.//span[normalize-space()='Pixel'] or contains(normalize-space(.),'Pixel')]")
+        ];
+        let pixelLink: any = null;
+        for (const loc of pixelLocators) {
+            const els = await driver.findElements(loc);
+            for (const el of els) {
+                try { if (await el.isDisplayed()) { pixelLink = el; break; } } catch {}
+            }
+            if (pixelLink) break;
+        }
 
-        await pixelMenuItem.click();
-        log("✅ Pixels section opened");
-        await delay(600); // Wait for pixels page to load
+        if (!pixelLink) {
+            // Try to expand/click sidebar toggle once then re-scan
+            try {
+                const toggles = await driver.findElements(By.xpath("//button[contains(@aria-label,'Sidebar') or contains(@class,'menu') or contains(@data-sidebar,'menu-action')]"));
+                if (toggles.length) { try { await toggles[0].click(); await delay(150); } catch {} }
+            } catch {}
+            for (const loc of pixelLocators) {
+                const els = await driver.findElements(loc);
+                for (const el of els) {
+                    try { if (await el.isDisplayed()) { pixelLink = el; break; } } catch {}
+                }
+                if (pixelLink) break;
+            }
+        }
+
+        if (pixelLink) {
+            try {
+                await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", pixelLink);
+                await driver.executeScript("arguments[0].click();", pixelLink);
+                log("✅ Pixels section opened via menu link");
+            } catch {
+                pixelLink = null;
+            }
+        }
+
+        if (!pixelLink) {
+            // Direct URL fallback using org from current URL
+            try {
+                const curUrl = await driver.getCurrentUrl();
+                const url = new URL(curUrl);
+                const parts = url.pathname.split('/').filter(Boolean);
+                const org = (parts[0] === 'home' && parts[1]) ? parts[1] : 'accupoint-solutions';
+                const target = `https://app.simpleaudience.io/home/${org}/pixel`;
+                log(`ℹ️ Menu link not found; navigating directly to: ${target}`);
+                await driver.get(target);
+            } catch {}
+        }
+
+        // Ensure Pixels page loaded (create button or table present)
+        await driver.wait(
+            until.elementLocated(By.xpath("//button[contains(normalize-space(.),'Create')] | //table | //a[contains(@href,'/pixel') and @data-active='true']")),
+            10000
+        );
+        await delay(400);
 
         // Install network interceptors early to capture any response bodies
         try {
