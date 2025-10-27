@@ -272,7 +272,7 @@ export async function createPixel({ client, website }: { client: string, website
 
         // Step 4: Open the Pixel section (resilient locators + fallback)
         log("📊 Waiting for dashboard to load (nav present)...");
-        await driver.wait(until.elementLocated(By.css('a, nav, aside')), 8000).catch(() => {});
+        await driver.wait(until.elementLocated(By.css('a, nav, aside')), 8000).catch(() => { });
         log("✅ Dashboard elements present");
         await delay(150);
 
@@ -285,7 +285,7 @@ export async function createPixel({ client, website }: { client: string, website
         for (const loc of pixelLocators) {
             const els = await driver.findElements(loc);
             for (const el of els) {
-                try { if (await el.isDisplayed()) { pixelLink = el; break; } } catch {}
+                try { if (await el.isDisplayed()) { pixelLink = el; break; } } catch { }
             }
             if (pixelLink) break;
         }
@@ -294,12 +294,12 @@ export async function createPixel({ client, website }: { client: string, website
             // Try to expand/click sidebar toggle once then re-scan
             try {
                 const toggles = await driver.findElements(By.xpath("//button[contains(@aria-label,'Sidebar') or contains(@class,'menu') or contains(@data-sidebar,'menu-action')]"));
-                if (toggles.length) { try { await toggles[0].click(); await delay(150); } catch {} }
-            } catch {}
+                if (toggles.length) { try { await toggles[0].click(); await delay(150); } catch { } }
+            } catch { }
             for (const loc of pixelLocators) {
                 const els = await driver.findElements(loc);
                 for (const el of els) {
-                    try { if (await el.isDisplayed()) { pixelLink = el; break; } } catch {}
+                    try { if (await el.isDisplayed()) { pixelLink = el; break; } } catch { }
                 }
                 if (pixelLink) break;
             }
@@ -325,7 +325,7 @@ export async function createPixel({ client, website }: { client: string, website
                 const target = `https://app.simpleaudience.io/home/${org}/pixel`;
                 log(`ℹ️ Menu link not found; navigating directly to: ${target}`);
                 await driver.get(target);
-            } catch {}
+            } catch { }
         }
 
         // Ensure Pixels page loaded (create button or table present)
@@ -386,13 +386,34 @@ export async function createPixel({ client, website }: { client: string, website
             log("⚠️ Failed to install network interceptors");
         }
 
-        // Step 5: Click the "create" button
-        log("⏳ Waiting for create button...");
-        const createBtnXPath = "/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[1]/button";
-        const createBtnLocator = By.xpath(createBtnXPath);
-        await driver.wait(until.elementLocated(createBtnLocator), 15000);
-        let createButton = await driver.findElement(createBtnLocator);
-        await driver.wait(until.elementIsVisible(createButton), 15000);
+        // Step 5: Click the "create" button (resilient selectors)
+        log("⏳ Waiting for create button (resilient)...");
+        const createLocators = [
+            // Prefer page-level Create (not inside dialog)
+            By.xpath(`//button[contains(normalize-space(.),'Create') and not(ancestor::div[@role='dialog'])]`),
+            By.css("button.bg-primary, button.text-primary-foreground, button[aria-label='Create']"),
+            By.xpath(`//button[contains(@class,'primary') and contains(normalize-space(.),'Create')]`),
+            // Fallback: Create inside dialog
+            By.css(`div[role="dialog"] button[type="submit"]`),
+            By.xpath(`//div[@role='dialog']//button[contains(normalize-space(.),'Create')]`)
+        ];
+        let createButton: any = null;
+        for (const loc of createLocators) {
+            try {
+                await driver.wait(until.elementLocated(loc), 5000);
+                const el = await driver.findElement(loc);
+                await driver.wait(until.elementIsVisible(el), 5000);
+                createButton = el; break;
+            } catch { }
+        }
+        if (!createButton) {
+            // fallback: any visible button labeled Create
+            try {
+                const els = await driver.findElements(By.xpath("//button[contains(normalize-space(.),'Create')]"));
+                for (const el of els) { if (await el.isDisplayed()) { createButton = el; break; } }
+            } catch { }
+        }
+        if (!createButton) throw new Error('Create button not found');
         log("✅ Create button found");
 
         // Wait for the button to be interactable (enabled + not aria-disabled + not loading)
@@ -416,8 +437,7 @@ export async function createPixel({ client, website }: { client: string, website
         await delay(200); // Brief wait
 
         log("🖱️  Clicking create pixel button...");
-        createButton = await driver.findElement(createBtnLocator); // Re-find to ensure fresh reference
-        log(`🔍 VERBOSE: Create button found with XPath: ${createBtnXPath}`);
+        // Reconfirm reference and log details
         log(`🔍 VERBOSE: Create button tag: ${await createButton.getTagName()}`);
         log(`🔍 VERBOSE: Create button text: ${await createButton.getText()}`);
         log(`🔍 VERBOSE: Create button type: ${await createButton.getAttribute('type')}`);
