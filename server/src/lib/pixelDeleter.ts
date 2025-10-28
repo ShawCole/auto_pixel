@@ -155,18 +155,55 @@ export async function deletePixelFromSimpleAudience(clientName: string): Promise
         // Wait for confirmation dialog and click confirm delete (use robust selector)
         console.log('⚠️ Waiting for delete confirmation dialog...');
         try {
-            const confirmBtn = await driver.wait(
-                until.elementLocated(By.xpath("//div[@role='dialog']//button[normalize-space()='Delete']")),
-                5000
-            );
-            await confirmBtn.click();
-        } catch {
-            try {
-                await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]/div[2]/button[2]')), 2000);
-                await driver.findElement(By.xpath('/html/body/div[4]/div[2]/button[2]')).click();
-            } catch {
-                await driver.wait(until.elementLocated(By.xpath('/html/body/div[3]/div[2]/button[2]')), 2000);
-                await driver.findElement(By.xpath('/html/body/div[3]/div[2]/button[2]')).click();
+            // Give the portal time to mount
+            await driver.sleep(200);
+
+            // Primary: role-based dialog button with exact text
+            let confirmBtn = await driver
+                .wait(
+                    until.elementLocated(
+                        By.xpath("//div[@role='dialog' or @role='alertdialog']//button[normalize-space()='Delete']")
+                    ),
+                    10000
+                )
+                .catch(() => null as any);
+
+            // Secondary: any visible button with text 'Delete' (common primary button)
+            if (!confirmBtn) {
+                const candidates = await driver.findElements(
+                    By.xpath("//button[normalize-space()='Delete' and not(@disabled)]")
+                );
+                for (const el of candidates) {
+                    const displayed = await el.isDisplayed().catch(() => false);
+                    if (displayed) { confirmBtn = el; break; }
+                }
+            }
+
+            // Tertiary: topmost overlay container heuristic
+            if (!confirmBtn) {
+                const overlayBtn = await driver.findElements(
+                    By.xpath("/html/body/div[last()]//button[normalize-space()='Delete']")
+                );
+                if (overlayBtn.length) confirmBtn = overlayBtn[0];
+            }
+
+            if (!confirmBtn) {
+                throw new Error('Delete confirmation button not found');
+            }
+
+            try { await driver.wait(until.elementIsVisible(confirmBtn), 3000); } catch { }
+            try { await driver.wait(until.elementIsEnabled(confirmBtn), 3000); } catch { }
+            await driver.executeScript("arguments[0].scrollIntoView({block:'center'});", confirmBtn);
+            await driver.executeScript("arguments[0].click();", confirmBtn);
+        } catch (e: any) {
+            console.log('❌ Failed to locate Delete button with resilient selectors:', e?.message || e);
+            // Last-chance absolute fallbacks (dynamic index)
+            const lastChance = await driver
+                .findElements(By.xpath("/html/body/div[last()]/div[2]//button[2]"));
+            if (lastChance.length) {
+                await driver.executeScript("arguments[0].click();", lastChance[0]);
+            } else {
+                throw e;
             }
         }
 
