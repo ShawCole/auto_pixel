@@ -739,7 +739,7 @@ app.get("/admin/pixels", async (req, res) => {
         try {
             // Ensure schema has deletable column
             await ensureDeletableColumn(connection);
-            // Query pixel_sheets table with stats
+            // Query pixel_sheets table and return live metrics (visitors/events) from central columns
             const query = `
                 SELECT 
                     ps.id,
@@ -753,25 +753,9 @@ app.get("/admin/pixels", async (req, res) => {
                     ps.last_sync_at as lastSyncAt,
                     'Uncategorized' as industry,
                     NULL as deletionScheduled,
-                    COALESCE(v.visitor_count, 0) as visitorCount,
-                    COALESCE(e.event_count, 0) as eventCount
+                    COALESCE(ps.visitors, 0) as visitorCount,
+                    COALESCE(ps.events, 0) as eventCount
                 FROM pixel_sheets ps
-                LEFT JOIN (
-                    SELECT 
-                        TABLE_SCHEMA as database_name,
-                        COUNT(*) as visitor_count
-                    FROM information_schema.TABLES 
-                    WHERE TABLE_NAME = 'superpixel_visitors'
-                    GROUP BY TABLE_SCHEMA
-                ) v ON v.database_name = ps.client_name
-                LEFT JOIN (
-                    SELECT 
-                        TABLE_SCHEMA as database_name,
-                        COUNT(*) as event_count
-                    FROM information_schema.TABLES 
-                    WHERE TABLE_NAME = 'superpixel_resolution_log'
-                    GROUP BY TABLE_SCHEMA
-                ) e ON e.database_name = ps.client_name
                 ORDER BY ps.created_at DESC
             `;
 
