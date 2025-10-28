@@ -471,6 +471,56 @@ app.post('/generate', async (req, res) => {
             webhookRowSample: finalWebhookRowSample
         });
 
+        // Background: immediately refresh metrics for this client (fast path via superpixel_visitors)
+        (async () => {
+            try {
+                const mysql = await import('mysql2/promise');
+                // Extract pixel id from snippet
+                const m = (result.pixelCode || '').match(/pixels\/([^/'"\s]+)\/p\.js/i);
+                const pixelId = m && m[1] ? m[1] : '';
+                if (!pixelId) return;
+
+                // Compute metrics from visitor snapshot (no DISTINCT)
+                const clientConn = await mysql.createConnection({
+                    host: process.env.DB_HOST,
+                    user: process.env.DB_USER,
+                    password: process.env.DB_PASS,
+                    database: client,
+                    connectTimeout: 30000
+                });
+                let visitors = 0; let events = 0; let lastEventAt: any = null;
+                try {
+                    const [r1] = await clientConn.execute<any[]>("SELECT COUNT(*) AS v FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    visitors = Number((r1 as any[])[0]?.v || 0);
+                    const [r2] = await clientConn.execute<any[]>("SELECT COALESCE(SUM(event_count),0) AS e FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    events = Number((r2 as any[])[0]?.e || 0);
+                    const [r3] = await clientConn.execute<any[]>("SELECT MAX(last_seen_at) AS last FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    lastEventAt = (r3 as any[])[0]?.last || null;
+                } catch { }
+                try { await clientConn.end(); } catch { }
+
+                // Update central row
+                const central = await mysql.createConnection({
+                    host: process.env.DB_HOST,
+                    user: process.env.DB_USER,
+                    password: process.env.DB_PASS,
+                    database: 'pixel',
+                    connectTimeout: 30000
+                });
+                try {
+                    await central.execute(
+                        "UPDATE pixel_sheets SET visitors = ?, events = ?, last_event_at = COALESCE(?, last_event_at) WHERE client_name = ?",
+                        [visitors, events, lastEventAt, client]
+                    );
+                    log('✅ [bg] Immediate metrics updated', { client, visitors, events, lastEventAt });
+                } finally {
+                    await central.end();
+                }
+            } catch (e: any) {
+                log('⚠️ [bg] Metrics refresh failed:', { message: e?.message });
+            }
+        })();
+
         // Background: create the Google Sheet, update pixel_sheets, then trigger sync
         (async () => {
             try {
