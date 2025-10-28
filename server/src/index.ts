@@ -209,7 +209,7 @@ log('Environment variables loaded:', {
 
 // POST /generate { client: "strategy_simple" }
 app.post('/generate', async (req, res) => {
-    const { client, website } = req.body;
+    const { client, website, pixelName: pixelNameRaw } = req.body;
 
     log(`📝 Received generate request for client: "${client}"`, {
         headers: req.headers,
@@ -226,6 +226,20 @@ app.post('/generate', async (req, res) => {
     }
 
     try {
+        // Determine pixel_name (preferred: website hostname; fallback: client)
+        const derivePixelName = (site: string, fallback: string): string => {
+            try {
+                const u = new URL(site);
+                const host = (u.hostname || '').replace(/^www\./i, '').trim();
+                return host || fallback;
+            } catch {
+                return fallback;
+            }
+        };
+        const pixelName: string = (typeof pixelNameRaw === 'string' && pixelNameRaw.trim())
+            ? pixelNameRaw.trim()
+            : derivePixelName(website, client);
+
         log(`🎯 Starting pixel generation for client: ${client}`);
 
         // Guard: prevent duplicate client_name entries in pixel.pixel_sheets
@@ -240,12 +254,12 @@ app.post('/generate', async (req, res) => {
             });
             try {
                 const [rows] = await connection.execute<any[]>(
-                    'SELECT id FROM pixel_sheets WHERE client_name = ? LIMIT 1',
-                    [client]
+                    'SELECT id FROM pixel_sheets WHERE client_name = ? AND pixel_name = ? LIMIT 1',
+                    [client, pixelName]
                 );
                 if ((rows as any[]).length) {
-                    log('⛔ Client already exists in pixel_sheets', { client, existingId: (rows as any[])[0].id });
-                    return res.status(409).json({ error: 'Client already exists in pixel_sheets', client, existingId: (rows as any[])[0].id });
+                    log('⛔ Pixel already exists for client/pixel_name', { client, pixelName, existingId: (rows as any[])[0].id });
+                    return res.status(409).json({ error: 'Pixel already exists for this client and pixel_name', client, pixelName, existingId: (rows as any[])[0].id });
                 }
             } finally {
                 await connection.end();
@@ -391,8 +405,8 @@ app.post('/generate', async (req, res) => {
 
         // Upsert central pixel.metadata row in pixel.pixel_sheets (LAST)
         try {
-            async function upsertPixelSheetRow(params: { client: string; website: string; pixelScript: string; sheetUrl?: string }) {
-                const { client, website, pixelScript, sheetUrl } = params;
+            async function upsertPixelSheetRow(params: { client: string; pixelName: string; website: string; pixelScript: string; sheetUrl?: string }) {
+                const { client, pixelName, website, pixelScript, sheetUrl } = params;
 
                 function extractPixelIdFromScript(snippet: string): string | null {
                     try {
@@ -413,7 +427,7 @@ app.post('/generate', async (req, res) => {
                 // Always provide a non-null sheet_id to satisfy NOT NULL constraint
                 const sheetId = extractSheetId(sheetUrl) || `PENDING_${Date.now()}`;
 
-                log("🧾 Preparing pixel_sheets upsert", { client, website });
+                log("🧾 Preparing pixel_sheets upsert", { client, pixelName, website });
                 const mysql = await import("mysql2/promise");
                 const connection = await mysql.createConnection({
                     host: process.env.DB_HOST,
@@ -426,8 +440,8 @@ app.post('/generate', async (req, res) => {
                     log("🧾 Executing pixel_sheets upsert", { pixelIdFromScript, sheetId, hasSheetUrl: !!sheetUrl });
                     const sql = `
                         INSERT INTO pixel_sheets
-                            (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
-                        VALUES (?, ?, ?, ?, ?, ?, 1)
+                            (client_name, pixel_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, 1)
                         ON DUPLICATE KEY UPDATE
                             client_website = VALUES(client_website),
                             pixel_id = IF(VALUES(pixel_id) <> '', VALUES(pixel_id), pixel_id),
@@ -435,14 +449,14 @@ app.post('/generate', async (req, res) => {
                             sheet_id = IF(VALUES(sheet_id) <> '', VALUES(sheet_id), sheet_id),
                             sheet_url = IF(VALUES(sheet_url) <> '', VALUES(sheet_url), sheet_url)
                     `;
-                    await connection.execute(sql, [client, website, pixelIdFromScript, pixelScript, sheetId, sheetUrl || '']);
-                    log("✅ Upserted pixel_sheets row", { client, website, pixelIdFromScript, sheetId, hasSheetUrl: !!sheetUrl });
+                    await connection.execute(sql, [client, pixelName, website, pixelIdFromScript, pixelScript, sheetId, sheetUrl || '']);
+                    log("✅ Upserted pixel_sheets row", { client, pixelName, website, pixelIdFromScript, sheetId, hasSheetUrl: !!sheetUrl });
                 } finally {
                     await connection.end();
                 }
             }
 
-            await upsertPixelSheetRow({ client, website, pixelScript: result.pixelCode, sheetUrl });
+            await upsertPixelSheetRow({ client, pixelName, website, pixelScript: result.pixelCode, sheetUrl });
         } catch (metaErr: any) {
             log("⚠️ Failed to upsert pixel_sheets row:", { message: metaErr?.message });
         }
@@ -489,8 +503,8 @@ app.post('/generate', async (req, res) => {
                             const bgSheetId = extractSheetId(createdSheetUrl) || `PENDING_${Date.now()}`;
                             const sql = `
                                 INSERT INTO pixel_sheets
-                                    (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
-                                VALUES (?, ?, ?, ?, ?, ?, 1)
+                                    (client_name, pixel_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url, deletable)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, 1)
                                 ON DUPLICATE KEY UPDATE
                                     client_website = VALUES(client_website),
                                     pixel_id = IF(VALUES(pixel_id) <> '', VALUES(pixel_id), pixel_id),
@@ -498,8 +512,8 @@ app.post('/generate', async (req, res) => {
                                     sheet_id = IF(VALUES(sheet_id) <> '', VALUES(sheet_id), sheet_id),
                                     sheet_url = IF(VALUES(sheet_url) <> '', VALUES(sheet_url), sheet_url)
                             `;
-                            await connection.execute(sql, [client, website, pixelIdFromScript, result.pixelCode, bgSheetId, createdSheetUrl]);
-                            log('✅ [bg] Updated pixel_sheets with sheet URL', { client, bgSheetId });
+                            await connection.execute(sql, [client, pixelName, website, pixelIdFromScript, result.pixelCode, bgSheetId, createdSheetUrl]);
+                            log('✅ [bg] Updated pixel_sheets with sheet URL', { client, pixelName, bgSheetId });
                         } finally {
                             await connection.end();
                         }

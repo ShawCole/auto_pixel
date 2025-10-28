@@ -174,16 +174,13 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
         }
         
         // Use INSERT ... ON DUPLICATE KEY UPDATE to handle existing clients
-        $stmt = $mysqli->prepare("
-            INSERT INTO pixel_sheets (client_name, pixel_id, sheet_id, sheet_url, client_website) 
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE 
-                pixel_id = VALUES(pixel_id),
-                sheet_id = VALUES(sheet_id), 
-                sheet_url = VALUES(sheet_url),
-                client_website = VALUES(client_website)
-        ");
-        $stmt->bind_param("sssss", $clientName, $pixelId, $spreadsheetId, $spreadsheetUrl, $websiteUrl);
+        // Derive pixel_name from website hostname (fallback to clientName)
+        $host = parse_url($websiteUrl, PHP_URL_HOST);
+        if ($host) { $host = preg_replace('/^www\./i', '', $host); }
+        $pixelName = $host ?: $clientName;
+
+        $stmt = $mysqli->prepare("\n            INSERT INTO pixel_sheets (client_name, pixel_name, pixel_id, sheet_id, sheet_url, client_website) \n            VALUES (?, ?, ?, ?, ?, ?)\n            ON DUPLICATE KEY UPDATE \n                pixel_id = VALUES(pixel_id),\n                sheet_id = VALUES(sheet_id), \n                sheet_url = VALUES(sheet_url),\n                client_website = VALUES(client_website)\n        ");
+        $stmt->bind_param("ssssss", $clientName, $pixelName, $pixelId, $spreadsheetId, $spreadsheetUrl, $websiteUrl);
         
         if (!$stmt->execute()) {
             throw new Exception("Failed to save sheet info: " . $stmt->error);
