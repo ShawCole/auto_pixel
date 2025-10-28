@@ -416,22 +416,14 @@ export async function createPixel({ client, website }: { client: string, website
         if (!createButton) throw new Error('Create button not found');
         log("✅ Create button found");
 
-        // Wait for the button to be interactable (enabled + not aria-disabled + not loading)
-        log("⏳ Waiting for create button to be enabled...");
-        let enabled = false;
-        for (let i = 0; i < 8; i++) { // ~4s total
-            try {
-                const isEnabled = await createButton.isEnabled();
-                const ariaDisabled = (await createButton.getAttribute('aria-disabled')) || '';
-                const className = (await createButton.getAttribute('class')) || '';
-                if (isEnabled && ariaDisabled !== 'true' && !/disabled|loading/i.test(className)) { enabled = true; break; }
-            } catch { }
-            await delay(500);
-        }
-        if (!enabled) {
-            log("⚠️ Create button still disabled; attempting JS enable");
-            try { await driver.executeScript("arguments[0].removeAttribute('disabled'); arguments[0].setAttribute('aria-disabled','false');", createButton); } catch { }
-        }
+        // Skip polling; force-enable and proceed immediately
+        log("⚡ Skipping enable-wait; forcing Create button enabled via JS");
+        try {
+            await driver.executeScript(
+                "try{arguments[0].removeAttribute('disabled'); arguments[0].setAttribute('aria-disabled','false'); if(arguments[0].classList){arguments[0].classList.remove('disabled');}}catch(_){}",
+                createButton
+            );
+        } catch { }
 
         await driver.executeScript("arguments[0].scrollIntoView({block:'center'});", createButton);
         await delay(200); // Brief wait
