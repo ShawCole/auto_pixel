@@ -52,7 +52,8 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
             last_name, 
             company_name, 
             job_title, 
-            personal_emails, 
+            personal_emails,
+            business_email,
             mobile_phone,
             personal_address,
             personal_city, 
@@ -89,6 +90,7 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['company_name'] ?? '',
             $row['job_title'] ?? '',
             $row['personal_emails'] ?? '',
+            $row['business_email'] ?? '',
             $row['mobile_phone'] ?? '',
             $row['personal_address'] ?? '',
             $row['personal_city'] ?? '',
@@ -247,8 +249,8 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     
     $allData = array_merge([$headers], $events);
     
-    // Update range to include all columns (A to R)
-    $range = 'Events!A1:R' . count($allData);
+    // Update range to include all columns (A to S)
+    $range = 'Events!A1:S' . count($allData);
     $body = new ValueRange(['values' => $allData]);
     
     try {
