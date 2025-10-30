@@ -323,6 +323,82 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
             $pixelMysqli->close();
         }
         
+        /*
+        |--------------------------------------------------------------------------
+        | APPLY SHEET PROTECTION (Idempotent)
+        |--------------------------------------------------------------------------
+        | Locks down the 'Visitors' and 'Events' tabs on every successful sync.
+        | Removes existing protections on those tabs and reapplies the correct one.
+        */
+        try {
+            $tabNamesToProtect = ['Visitors', 'Events'];
+
+            // 1. Get the spreadsheet to find tab GIDs and existing protections
+            $spreadsheet = $service->spreadsheets->get($sheetId);
+            $sheets = $spreadsheet->getSheets();
+            $existingProtections = $spreadsheet->getProtectedRanges();
+
+            $sheetIdMap = [];
+            foreach ($sheets as $sheetObj) {
+                $title = $sheetObj->getProperties()->getTitle();
+                if (in_array($title, $tabNamesToProtect)) {
+                    $sheetIdMap[$title] = $sheetObj->getProperties()->getSheetId();
+                }
+            }
+
+            $requests = [];
+
+            // 2. Find and add DELETE requests for old protections on these tabs
+            if ($existingProtections) {
+                foreach ($existingProtections as $protection) {
+                    $range = $protection->getRange();
+                    if ($range && in_array($range->getSheetId(), $sheetIdMap)) {
+                        $requests[] = new Google\Service\Sheets\Request([
+                            'deleteProtectedRange' => [
+                                'protectedRangeId' => $protection->getProtectedRangeId()
+                            ]
+                        ]);
+                    }
+                }
+            }
+
+            // 3. Define the protection settings (Only owners can edit)
+            $editors = new Google\Service\Sheets\Editors([
+                'users' => [],
+                'groups' => [],
+                'domainUsersCanEdit' => false
+            ]);
+
+            // 4. Create and add ADD requests for the new protections
+            foreach ($tabNamesToProtect as $tabName) {
+                if (isset($sheetIdMap[$tabName])) {
+                    $protectionRequest = new Google\Service\Sheets\ProtectedRange([
+                        'range' => [
+                            'sheetId' => $sheetIdMap[$tabName]
+                        ],
+                        'description' => 'Live data. Please duplicate this sheet (File > Make a copy) to sort or filter.',
+                        'warningOnly' => false,
+                        'editors' => $editors
+                    ]);
+
+                    $requests[] = new Google\Service\Sheets\Request([
+                        'addProtectedRange' => ['protectedRange' => $protectionRequest]
+                    ]);
+                }
+            }
+
+            // 5. Execute the batch update (deletes and adds all at once)
+            if (!empty($requests)) {
+                $batchUpdateRequest = new Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
+                    'requests' => $requests
+                ]);
+
+                $service->spreadsheets->batchUpdate($sheetId, $batchUpdateRequest);
+            }
+        } catch (Exception $e) {
+            error_log('Google API error applying protection: ' . $e->getMessage());
+        }
+
         return true;
     } else {
         echo "❌ Sync failed for $clientName\n";
