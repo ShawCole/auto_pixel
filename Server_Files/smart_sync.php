@@ -335,7 +335,6 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
             // 1. Get the spreadsheet to find tab GIDs and existing protections
             $spreadsheet = $service->spreadsheets->get($sheetId);
             $sheets = $spreadsheet->getSheets();
-            $existingProtections = $spreadsheet->getProtectedRanges();
 
             $sheetIdMap = [];
             foreach ($sheets as $sheetObj) {
@@ -348,8 +347,12 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
             $requests = [];
 
             // 2. Find and add DELETE requests for old protections on these tabs
-            if ($existingProtections) {
-                foreach ($existingProtections as $protection) {
+            foreach ($sheets as $sheetObj) {
+                $protectedRanges = $sheetObj->getProtectedRanges();
+                if (!$protectedRanges) {
+                    continue;
+                }
+                foreach ($protectedRanges as $protection) {
                     $range = $protection->getRange();
                     if ($range && in_array($range->getSheetId(), $sheetIdMap)) {
                         $requests[] = new Google\Service\Sheets\Request([
