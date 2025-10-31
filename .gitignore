@@ -1,3 +1,22 @@
+# Generated CSV exports
+Focus_Distribution/*.csv
+*/Google_Sheets/*.csv
+*/MySQL/*.csv
+
+# Backups and temp files
+*.bak
+*.backup
+*.bak.*
+*.backup.*
+
+# Logs
+*.log
+
+# OS / Editor
+.DS_Store
+.idea/
+.vscode/
+*.swp
 # Dependencies
 node_modules/
 npm-debug.log*
