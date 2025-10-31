@@ -248,8 +248,8 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     
     $allData = array_merge([$headers], $events);
     
-    // Update range to include all columns (A to R)
-    $range = 'Events!A1:R' . count($allData);
+    // Update range to include all columns (A to S)
+    $range = 'Events!A1:S' . count($allData);
     $body = new ValueRange(['values' => $allData]);
     
     try {
