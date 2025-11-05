@@ -646,9 +646,8 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
 
     const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
     const phpScript = isProduction ? "/opt/auto-pixel/smart_sync.php" : "../smart_sync.php";
-    const cmd = isProduction
-        ? `sudo -u www-data ${PHP_BIN} ${phpScript} --client=${clientName}`
-        : `${PHP_BIN} ${phpScript} --client=${clientName}`;
+    // Run directly as the PM2 user (auto-pixel) to avoid sudo/NOPASSWD issues
+    const cmd = `${PHP_BIN} ${phpScript} --client=${clientName}`;
 
     const spawnCmd = `nohup ${cmd} >> ${logPath} 2>&1 & echo $!`;
 
