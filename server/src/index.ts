@@ -253,7 +253,7 @@ app.post('/generate', async (req, res) => {
                 connectTimeout: 30000
             });
             try {
-                const [rows] = await connection.execute<any[]>(
+                const [rows] = await connection.execute(
                     'SELECT id FROM pixel_sheets WHERE client_name = ? AND pixel_name = ? LIMIT 1',
                     [client, pixelName]
                 );
@@ -373,7 +373,7 @@ app.post('/generate', async (req, res) => {
                 });
                 try {
                     for (let i = 0; i < 10; i++) {
-                        const [rows] = await conn.execute<any[]>(
+                        const [rows] = await conn.execute(
                             'SELECT id, uuid, event_timestamp, url FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1',
                             [TEST_UUID]
                         );
@@ -490,11 +490,11 @@ app.post('/generate', async (req, res) => {
                 });
                 let visitors = 0; let events = 0; let lastEventAt: any = null;
                 try {
-                    const [r1] = await clientConn.execute<any[]>("SELECT COUNT(*) AS v FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    const [r1] = await clientConn.execute("SELECT COUNT(*) AS v FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
                     visitors = Number((r1 as any[])[0]?.v || 0);
-                    const [r2] = await clientConn.execute<any[]>("SELECT COALESCE(SUM(event_count),0) AS e FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    const [r2] = await clientConn.execute("SELECT COALESCE(SUM(event_count),0) AS e FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
                     events = Number((r2 as any[])[0]?.e || 0);
-                    const [r3] = await clientConn.execute<any[]>("SELECT MAX(last_seen_at) AS last FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    const [r3] = await clientConn.execute("SELECT MAX(last_seen_at) AS last FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
                     lastEventAt = (r3 as any[])[0]?.last || null;
                 } catch { }
                 try { await clientConn.end(); } catch { }
@@ -673,7 +673,7 @@ async function getClientByPixelId(pixelId: string): Promise<{ clientName: string
         connectTimeout: 30000
     });
     try {
-        const [rows] = await connection.execute<any[]>(
+        const [rows] = await connection.execute(
             "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE id = ?",
             [pixelId]
         );
@@ -694,7 +694,7 @@ async function getClientByName(clientName: string): Promise<{ clientName: string
         connectTimeout: 30000
     });
     try {
-        const [rows] = await connection.execute<any[]>(
+        const [rows] = await connection.execute(
             "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE client_name = ?",
             [clientName]
         );
@@ -722,24 +722,24 @@ const ADMIN_METRICS_TTL_MS = 60_000; // 60s
 
 async function computeLocalDayWindowUtc(connection: any, tz: string): Promise<{ startIso: string; endIso: string }> {
     // Ask MySQL to do the tz math so we don't pull a tz lib here
-    const [rows] = await connection.execute<any[]>(
+    const [rows] = (await connection.execute(
         "SELECT " +
         "DATE_FORMAT(CONVERT_TZ(DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?)), ?, 'UTC'), '%Y-%m-%dT%H:%i:%sZ') AS startIso, " +
         "DATE_FORMAT(CONVERT_TZ(DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?)) + INTERVAL 1 DAY, ?, 'UTC'), '%Y-%m-%dT%H:%i:%sZ') AS endIso",
         [tz, tz, tz, tz]
-    );
+    )) as any;
     const r = rows[0] || {};
     return { startIso: r.startIso, endIso: r.endIso };
 }
 
 async function readSevenDayAgg(connection: any, pixelId: string, tz: string): Promise<{ events7d: number; avgDaily7d: number }> {
-    const [rows] = await connection.execute<any[]>(
+    const [rows] = (await connection.execute(
         "SELECT COALESCE(SUM(events_count),0) AS e7, COALESCE(AVG(events_count),0) AS avg7 " +
         "FROM pixel_daily_stats " +
         "WHERE pixel_id = ? " +
         "AND day_local BETWEEN DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?)) - INTERVAL 6 DAY AND DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?))",
         [pixelId, tz, tz]
-    );
+    )) as any;
     const r = rows[0] || {};
     return { events7d: Number(r.e7 || 0), avgDaily7d: Number(r.avg7 || 0) };
 }
@@ -749,31 +749,31 @@ async function readLiveMetricsForClient(connection: any, clientName: string, pix
     const { startIso, endIso } = await computeLocalDayWindowUtc(connection, tz);
 
     // Events today
-    const [evRows] = await connection.execute<any[]>(
+    const [evRows] = (await connection.execute(
         `SELECT COUNT(*) AS c FROM \`${clientName}\`.superpixel_resolution_log 
          WHERE pixel_id = ? 
            AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'
            AND event_timestamp >= ? AND event_timestamp < ?`,
         [pixelId, startIso, endIso]
-    );
+    )) as any;
     const eventsToday = Number((evRows as any[])[0]?.c || 0);
 
     // Visitors today (distinct uuid)
-    const [visRows] = await connection.execute<any[]>(
+    const [visRows] = (await connection.execute(
         `SELECT COUNT(DISTINCT uuid) AS c FROM \`${clientName}\`.superpixel_resolution_log 
          WHERE pixel_id = ? 
            AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'
            AND event_timestamp >= ? AND event_timestamp < ?`,
         [pixelId, startIso, endIso]
-    );
+    )) as any;
     const visitorsToday = Number((visRows as any[])[0]?.c || 0);
 
     // Last real event (use created_at for speed/consistency)
-    const [lastRows] = await connection.execute<any[]>(
+    const [lastRows] = (await connection.execute(
         `SELECT MAX(created_at) AS last_created FROM \`${clientName}\`.superpixel_resolution_log 
          WHERE pixel_id = ? AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'`,
         [pixelId]
-    );
+    )) as any;
     const lastCreated = (lastRows as any[])[0]?.last_created || null;
     const lastRealEventAt = lastCreated ? new Date(lastCreated).toISOString() : null;
 
@@ -871,7 +871,7 @@ app.get("/admin/pixels", async (req, res) => {
             // Ensure schema has deletable column
             await ensureDeletableColumn(connection);
             // Pull central fields needed for status derivation
-            const [rows] = await connection.execute<any[]>(
+            const [rows] = await connection.execute(
                 `SELECT 
                     ps.id,
                     ps.client_name AS clientName,
@@ -1093,16 +1093,17 @@ app.post("/admin/pixels/:pixelId/download", async (req, res) => {
         });
 
         try {
-            const [rows] = await connection.execute<RowDataPacket[]>(
+            const [rows] = await connection.execute(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
 
-            if (rows.length === 0) {
+            const rowsArr = rows as any[];
+            if (rowsArr.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
 
-            const clientName = rows[0].client_name;
+            const clientName = rowsArr[0].client_name;
             const result = await downloadClientData(clientName);
 
             if (result.success) {
@@ -1143,18 +1144,18 @@ app.post("/admin/pixels/:pixelId/delete-from-simpleaudience", async (req, res) =
         });
 
         try {
-            const [rows] = await connection.execute<RowDataPacket[]>(
+            const [rows] = await connection.execute(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
 
-            if (rows.length === 0) {
+            const rowsArr2 = rows as any[];
+            if (rowsArr2.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
-
-            const clientName = rows[0].client_name;
+            const clientName = rowsArr2[0].client_name;
             // Check DB-backed deletable flag
-            const [lockRows] = await connection.execute<RowDataPacket[]>(
+            const [lockRows] = await connection.execute(
                 'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
@@ -1202,14 +1203,15 @@ app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
 
         let clientName: string | null = null;
         try {
-            const [rows] = await connection.execute<RowDataPacket[]>(
+            const [rows] = await connection.execute(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
-            if ((rows as any[]).length === 0) {
+            const rowsArr3 = rows as any[];
+            if (rowsArr3.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
-            clientName = (rows as any[])[0].client_name as string;
+            clientName = rowsArr3[0].client_name as string;
         } finally {
             await connection.end();
         }
@@ -1225,7 +1227,7 @@ app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
                 connectTimeout: 30000
             });
             try {
-                const [lockRows] = await conn.execute<RowDataPacket[]>(
+                const [lockRows] = await conn.execute(
                     'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
                     [pixelId]
                 );
@@ -1276,18 +1278,18 @@ app.post("/admin/pixels/:pixelId/delete-from-database", async (req, res) => {
         });
 
         try {
-            const [rows] = await connection.execute<RowDataPacket[]>(
+            const [rows] = await connection.execute(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
 
-            if (rows.length === 0) {
+            const rowsArr4 = rows as any[];
+            if (rowsArr4.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
-
-            const clientName = rows[0].client_name;
+            const clientName = rowsArr4[0].client_name;
             // Enforce DB-backed deletable flag
-            const [lockRows] = await connection.execute<RowDataPacket[]>(
+            const [lockRows] = await connection.execute(
                 'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
@@ -1357,7 +1359,7 @@ app.post("/admin/pixels/:pixelId/deletable", async (req, res) => {
         try {
             await ensureDeletableColumn(connection);
 
-            const [rows] = await connection.execute<RowDataPacket[]>(
+            const [rows] = await connection.execute(
                 'SELECT id FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
@@ -1461,7 +1463,7 @@ app.get("/admin/pixels/:pixelId/sync/status", async (req, res) => {
 
         let lastSyncAt: string | null = null;
         try {
-            const [rows] = await connection.execute<any[]>(
+            const [rows] = await connection.execute(
                 "SELECT last_sync_at FROM pixel_sheets WHERE id = ?",
                 [pixelId]
             );
