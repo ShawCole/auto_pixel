@@ -9,6 +9,7 @@ use Google\Client;
 use Google\Service\Sheets;
 use Google\Service\Sheets\ValueRange;
 use Google\Service\Sheets\BatchUpdateValuesRequest;
+use Google\Service\Sheets\ClearValuesRequest;
 
 // Configuration
 $dbHost = '34.31.66.104';
@@ -149,6 +150,8 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     $body = new ValueRange(['values' => $allData]);
     
     try {
+        // Clear existing data so deletions in DB reflect in the sheet
+        $service->spreadsheets_values->clear($sheetId, 'Visitors!A:Z', new ClearValuesRequest());
         $service->spreadsheets_values->update($sheetId, $range, $body, ['valueInputOption' => 'RAW']);
         echo "Updated " . count($visitors) . " visitor records (max: $VISITORS_LIMIT)\n";
         return true;
@@ -254,6 +257,8 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     $body = new ValueRange(['values' => $allData]);
     
     try {
+        // Clear existing data so deletions in DB reflect in the sheet
+        $service->spreadsheets_values->clear($sheetId, 'Events!A:Z', new ClearValuesRequest());
         $service->spreadsheets_values->update($sheetId, $range, $body, ['valueInputOption' => 'RAW']);
         echo "Full refresh: Updated " . count($events) . " event records\n";
         return true;
@@ -469,11 +474,31 @@ function checkForNewSheets() {
 
 // Check for command line arguments
 $specificClient = null;
+
+// Help/usage support
+if (in_array('-h', $argv, true) || in_array('--help', $argv, true)) {
+    echo "Usage: php smart_sync.php [--client=CLIENT_NAME | CLIENT_NAME]\n";
+    echo "Examples:\n";
+    echo "  php smart_sync.php --client=Retirement_Results_ACTIVE_2\n";
+    echo "  php smart_sync.php Retirement_Results_ACTIVE_2\n";
+    exit(0);
+}
+
+// Support --client=NAME and --only=NAME
 foreach ($argv as $arg) {
     if (strpos($arg, '--client=') === 0) {
         $specificClient = substr($arg, 9); // Remove '--client='
         break;
     }
+    if (strpos($arg, '--only=') === 0) {
+        $specificClient = substr($arg, 7); // Remove '--only='
+        break;
+    }
+}
+
+// Support positional first argument (client name) when not an option
+if ($specificClient === null && isset($argv[1]) && strpos($argv[1], '-') !== 0) {
+    $specificClient = $argv[1];
 }
 
 // Main execution
