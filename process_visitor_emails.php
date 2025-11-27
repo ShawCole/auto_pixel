@@ -1,294 +1,196 @@
 <?php
 /**
- * Process visitor emails - lookup NPN/CRD
- * In the hybrid approach, database triggers handle email parsing into superpixel_emails
- * This script focuses on NPN/CRD lookup but can also parse emails if needed
+ * Process visitor emails - OPTIMIZED FOR PERSISTENT CONNECTIONS
+ * Logic:
+ * 1. Accepts existing DB connections (prevents handshake overhead in loops).
+ * 2. Batches queries (Master DB lookup).
+ * 3. Batches updates (Transaction).
  */
 
-function processVisitorEmails($client_db, $uuid, $parse_emails = true, $debug = false) {
-    // Database configuration (consistent with other scripts)
+function processVisitorEmails($client_db, $uuid, $parse_emails = true, $progress_callback = null, $external_client_link = null, $external_master_link = null) {
     $host = '34.31.66.104';
     $user = 'root';
     $pass = 'AccuPoint01!';
     
-    $results = [
-        'emails_parsed' => 0,
-        'emails_found' => 0,
-        'npn_found' => false,
-        'crd_found' => false,
-        'npn' => null,
-        'crd' => null
-    ];
+    $results = ['emails_processed' => 0, 'best_match' => null];
     
-    // Connect to client database
-    $client_mysqli = new mysqli(
-        $host,
-        $user,
-        $pass,
-        $client_db
-    );
-    
-    if ($client_mysqli->connect_error) {
-        if ($debug) echo "Failed to connect to client database: " . $client_mysqli->connect_error . "\n";
-        return $results;
+    // --- OPTIMIZATION: USE EXISTING CONNECTION IF PROVIDED ---
+    if ($external_client_link) {
+        $client_mysqli = $external_client_link;
+        // Ensure we are on the right DB (in case the link was used for another client)
+        $client_mysqli->select_db($client_db);
+    } else {
+        $client_mysqli = new mysqli($host, $user, $pass, $client_db);
+        if ($client_mysqli->connect_error) return $results;
     }
-    
-    // First, check if emails are already in superpixel_emails (from triggers)
-    $email_check = $client_mysqli->prepare("SELECT COUNT(*) as count FROM superpixel_emails WHERE uuid = ?");
-    $email_check->bind_param("s", $uuid);
-    $email_check->execute();
-    $check_result = $email_check->get_result();
-    $existing_count = $check_result->fetch_assoc()['count'];
-    $email_check->close();
-    
-    if ($debug) echo "Found $existing_count existing emails for UUID: $uuid\n";
-    
-    // If no emails exist and parse_emails is true, parse them from the source tables
-    if ($existing_count == 0 && $parse_emails) {
-        if ($debug) echo "No emails found in superpixel_emails, parsing from source tables...\n";
+
+    // --- PHASE 1: PARSE EMAILS ---
+    $visitor_first_name = '';
+    $visitor_last_name = '';
+
+    $stmt = $client_mysqli->prepare("SELECT first_name, last_name, business_email, personal_emails, deep_verified_emails FROM superpixel_visitors WHERE uuid = ? LIMIT 1");
+    $stmt->bind_param("s", $uuid);
+    $stmt->execute();
+    $visitor_row = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($visitor_row) {
+        $visitor_first_name = trim($visitor_row['first_name'] ?? '');
+        $visitor_last_name = trim($visitor_row['last_name'] ?? '');
+    }
+
+    if ($parse_emails && $visitor_row) {
+        $stmt_insert = $client_mysqli->prepare("INSERT IGNORE INTO superpixel_emails (uuid, email, first_name, last_name, email_type, source_column) VALUES (?, ?, ?, ?, ?, ?)");
         
-        // Get visitor's emails from both tables
-        $email_sources = [];
-        
-        // Get from visitors table
-        $visitor_query = "SELECT business_email, personal_emails, deep_verified_emails 
-                          FROM superpixel_visitors 
-                          WHERE uuid = ? LIMIT 1";
-        
-        $stmt = $client_mysqli->prepare($visitor_query);
-        $stmt->bind_param("s", $uuid);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($row = $result->fetch_assoc()) {
-            if (!empty($row['business_email'])) {
-                $email_sources[] = ['emails' => $row['business_email'], 'type' => 'business'];
-            }
-            if (!empty($row['personal_emails'])) {
-                $email_sources[] = ['emails' => $row['personal_emails'], 'type' => 'personal'];
-            }
-            if (!empty($row['deep_verified_emails'])) {
-                $email_sources[] = ['emails' => $row['deep_verified_emails'], 'type' => 'deep_verified'];
-            }
-        }
-        $stmt->close();
-        
-        // Parse and store individual emails
-        foreach ($email_sources as $source) {
+        $sources = [
+            ['emails' => $visitor_row['business_email'], 'type' => 'business'],
+            ['emails' => $visitor_row['personal_emails'], 'type' => 'personal'],
+            ['emails' => $visitor_row['deep_verified_emails'], 'type' => 'deep_verified']
+        ];
+
+        foreach ($sources as $source) {
+            if (empty($source['emails'])) continue;
             $emails = explode(',', $source['emails']);
             foreach ($emails as $email) {
                 $email = trim($email);
-                // Basic email validation
                 if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-                    // Insert into superpixel_emails
-                    $insert_query = "INSERT IGNORE INTO superpixel_emails 
-                                    (uuid, email, email_type, source_column) 
-                                    VALUES (?, ?, ?, ?)";
-                    
-                    $stmt = $client_mysqli->prepare($insert_query);
-                    $source_col = $source['type'] . '_email' . ($source['type'] !== 'business' ? 's' : '');
-                    $stmt->bind_param("ssss", $uuid, $email, $source['type'], $source_col);
-                    
-                    if ($stmt->execute() && $stmt->affected_rows > 0) {
-                        $results['emails_parsed']++;
-                    }
-                    $stmt->close();
+                    $col = $source['type'] . '_email' . ($source['type'] !== 'business' ? 's' : '');
+                    $stmt_insert->bind_param("ssssss", $uuid, $email, $visitor_first_name, $visitor_last_name, $source['type'], $col);
+                    $stmt_insert->execute();
                 }
             }
         }
-        
-        if ($debug && $results['emails_parsed'] > 0) {
-            echo "Parsed " . $results['emails_parsed'] . " new emails\n";
-        }
+        $stmt_insert->close();
     }
     
-    // Now get all emails from superpixel_emails for NPN/CRD lookup
-    $email_query = "SELECT DISTINCT email FROM superpixel_emails WHERE uuid = ?";
-    $stmt = $client_mysqli->prepare($email_query);
-    $stmt->bind_param("s", $uuid);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    $all_emails = [];
+    // --- PHASE 2: BATCH ENRICHMENT ---
+
+    if (empty($visitor_first_name) || empty($visitor_last_name)) {
+        // Only close if we opened it ourselves
+        if (!$external_client_link) $client_mysqli->close();
+        return $results;
+    }
+
+    $email_rows = [];
+    $clean_emails = [];
+    $result = $client_mysqli->query("SELECT id, email, email_type FROM superpixel_emails WHERE uuid = '$uuid'"); 
     while ($row = $result->fetch_assoc()) {
-        $all_emails[] = $row['email'];
+        $email_rows[] = $row;
+        $clean_emails[] = $client_mysqli->real_escape_string(trim($row['email']));
     }
-    $stmt->close();
-    
-    $results['emails_found'] = count($all_emails);
-    if ($debug) echo "Total emails for lookup: " . $results['emails_found'] . "\n";
-    
-    // Perform NPN/CRD lookup from match_emails
-    if (!empty($all_emails)) {
-        // Connect to accupoint_solutions database
-        $match_mysqli = new mysqli(
-            $host,
-            $user,
-            $pass,
-            'accupoint_solutions'
-        );
+
+    $results['emails_processed'] = count($email_rows);
+    $best_match = null; 
+
+    if (!empty($email_rows)) {
+        
+        // --- OPTIMIZATION: USE EXISTING MASTER CONNECTION ---
+        if ($external_master_link) {
+            $match_mysqli = $external_master_link;
+            // Ensure we ping to keep alive if script is long running
+            if (!$match_mysqli->ping()) $match_mysqli->connect($host, $user, $pass, 'accupoint_solutions');
+        } else {
+            $match_mysqli = new mysqli($host, $user, $pass, 'accupoint_solutions');
+        }
         
         if (!$match_mysqli->connect_error) {
-            // Build IN clause for all emails
-            $placeholders = str_repeat('?,', count($all_emails) - 1) . '?';
             
-            // STEP 1: Direct email lookup
-            $email_query = "SELECT Email, CRD, NPN, AgentID FROM match_emails 
-                           WHERE Email IN ($placeholders) 
-                           ORDER BY NPN IS NOT NULL DESC, CRD IS NOT NULL DESC 
-                           LIMIT 1";
+            $email_list_sql = "'" . implode("','", $clean_emails) . "'";
+            $batch_sql = "SELECT Email, NPN, CRD, NPN_Active, CRD_Active, first_name, last_name 
+                          FROM match_emails_v2 
+                          WHERE Email IN ($email_list_sql)";
             
-            $stmt = $match_mysqli->prepare($email_query);
-            if ($stmt) {
-                // Create type string for bind_param
-                $types = str_repeat('s', count($all_emails));
-                $stmt->bind_param($types, ...$all_emails);
-                $stmt->execute();
-                $result = $stmt->get_result();
+            $master_map = [];
+            $batch_res = $match_mysqli->query($batch_sql);
+            if ($batch_res) {
+                while ($m = $batch_res->fetch_assoc()) {
+                    $master_map[strtolower(trim($m['Email']))][] = $m;
+                }
+            }
+            // Only close if we created it
+            if (!$external_master_link) $match_mysqli->close();
+
+            $client_mysqli->begin_transaction();
+            $stmt_update = $client_mysqli->prepare("UPDATE superpixel_emails SET confidence_score=?, reason=?, matched_first_name=?, matched_last_name=?, npn=?, crd=?, npn_active=?, crd_active=? WHERE id=?");
+
+            $v_fn = mb_strtolower($visitor_first_name);
+            $v_ln = mb_strtolower($visitor_last_name);
+            $v_fn_3 = mb_substr($v_fn, 0, 3);
+
+            foreach ($email_rows as $row) {
+                $email_raw = trim($row['email']);
+                $email_key = strtolower($email_raw);
                 
-                if ($row = $result->fetch_assoc()) {
-                    $results['crd'] = $row['CRD'];
-                    $results['npn'] = $row['NPN'];
-                    $agentId = $row['AgentID'];
-                    
-                    if ($debug) echo "Direct match found - CRD: {$row['CRD']}, NPN: {$row['NPN']}\n";
-                    
-                    // STEP 2: If we have CRD but no NPN, look for NPN using CRD
-                    // Note: After running normalize_match_emails.php, this should rarely be needed
-                    // as NPNs are propagated to all rows with the same CRD
-                    if (!empty($results['crd']) && empty($results['npn'])) {
-                        $crd_query = "SELECT NPN FROM match_emails 
-                                     WHERE CRD = ? AND NPN IS NOT NULL 
-                                     LIMIT 1";
+                $match_data = null;
+                $score = 0;
+                $reason = "No Match";
+
+                if (isset($master_map[$email_key])) {
+                    foreach ($master_map[$email_key] as $cand) {
+                        $m_fn = mb_strtolower($cand['first_name'] ?? '');
+                        $m_ln = mb_strtolower($cand['last_name'] ?? '');
                         
-                        $stmt2 = $match_mysqli->prepare($crd_query);
-                        $stmt2->bind_param("s", $results['crd']);
-                        $stmt2->execute();
-                        $result2 = $stmt2->get_result();
-                        
-                        if ($row2 = $result2->fetch_assoc()) {
-                            $results['npn'] = $row2['NPN'];
-                            if ($debug) echo "Found NPN via CRD lookup: {$row2['NPN']}\n";
+                        if ($m_fn === $v_fn && $m_ln === $v_ln) {
+                            $score = 100;
+                            $reason = 'Same Person';
+                            $match_data = $cand;
+                            break; 
                         }
-                        $stmt2->close();
-                    }
-                    
-                    // STEP 2B: If we have NPN but no CRD, look for CRD using NPN
-                    if (!empty($results['npn']) && empty($results['crd'])) {
-                        $npn_query = "SELECT CRD FROM match_emails 
-                                     WHERE NPN = ? AND CRD IS NOT NULL 
-                                     LIMIT 1";
                         
-                        $stmt2b = $match_mysqli->prepare($npn_query);
-                        $stmt2b->bind_param("s", $results['npn']);
-                        $stmt2b->execute();
-                        $result2b = $stmt2b->get_result();
-                        
-                        if ($row2b = $result2b->fetch_assoc()) {
-                            $results['crd'] = $row2b['CRD'];
-                            if ($debug) echo "Found CRD via NPN lookup: {$row2b['CRD']}\n";
+                        if ($score < 80 && $m_ln === $v_ln && mb_substr($m_fn, 0, 3) === $v_fn_3) {
+                            $score = 80;
+                            $reason = 'Nickname';
+                            $match_data = $cand;
                         }
-                        $stmt2b->close();
-                    }
-                    
-                    // STEP 3: If still no NPN but we have AgentID, try that
-                    // This is useful for emails without CRD but with AgentID
-                    if (empty($results['npn']) && !empty($agentId)) {
-                        $agent_query = "SELECT NPN FROM match_emails 
-                                       WHERE AgentID = ? AND NPN IS NOT NULL 
-                                       LIMIT 1";
-                        
-                        $stmt3 = $match_mysqli->prepare($agent_query);
-                        $stmt3->bind_param("s", $agentId);
-                        $stmt3->execute();
-                        $result3 = $stmt3->get_result();
-                        
-                        if ($row3 = $result3->fetch_assoc()) {
-                            $results['npn'] = $row3['NPN'];
-                            if ($debug) echo "Found NPN via AgentID lookup: {$row3['NPN']}\n";
-                        }
-                        $stmt3->close();
-                    }
-                    
-                    // STEP 3B: If still no CRD but we have AgentID, try that
-                    if (empty($results['crd']) && !empty($agentId)) {
-                        $agent_crd_query = "SELECT CRD FROM match_emails 
-                                           WHERE AgentID = ? AND CRD IS NOT NULL 
-                                           LIMIT 1";
-                        
-                        $stmt3b = $match_mysqli->prepare($agent_crd_query);
-                        $stmt3b->bind_param("s", $agentId);
-                        $stmt3b->execute();
-                        $result3b = $stmt3b->get_result();
-                        
-                        if ($row3b = $result3b->fetch_assoc()) {
-                            $results['crd'] = $row3b['CRD'];
-                            if ($debug) echo "Found CRD via AgentID lookup: {$row3b['CRD']}\n";
-                        }
-                        $stmt3b->close();
                     }
                 }
-                
-                $stmt->close();
+
+                if ($match_data) {
+                    $stmt_update->bind_param("isssssiii", 
+                        $score, $reason, $match_data['first_name'], $match_data['last_name'], 
+                        $match_data['NPN'], $match_data['CRD'], $match_data['NPN_Active'], $match_data['CRD_Active'], 
+                        $row['id']
+                    );
+                    $stmt_update->execute();
+
+                    if ($best_match === null || $score > $best_match['score']) {
+                        $best_match = [
+                            'score' => $score,
+                            'npn' => $match_data['NPN'],
+                            'crd' => $match_data['CRD'],
+                            'email' => $email_raw,
+                            'reason' => $reason,
+                            'email_type' => $row['email_type'],
+                            'master_name' => $match_data['first_name'] . ' ' . $match_data['last_name']
+                        ];
+                    }
+                }
+
+                if (is_callable($progress_callback)) {
+                    $progress_callback($email_raw, $row['email_type'], "$visitor_first_name $visitor_last_name", $reason, $uuid);
+                }
             }
-            
-            // Update visitor and resolution log tables if we found NPN/CRD
-            if (!empty($results['npn']) || !empty($results['crd'])) {
-                $results['npn_found'] = !empty($results['npn']);
-                $results['crd_found'] = !empty($results['crd']);
-                
-                // Update visitors table
-                $update_query = "UPDATE superpixel_visitors 
-                                SET npn = COALESCE(npn, ?), 
-                                    crd = COALESCE(crd, ?) 
-                                WHERE uuid = ?";
-                
-                $stmt = $client_mysqli->prepare($update_query);
-                $stmt->bind_param("sss", $results['npn'], $results['crd'], $uuid);
-                $stmt->execute();
-                $stmt->close();
-                
-                // Update resolution log
-                $update_query = "UPDATE superpixel_resolution_log 
-                                SET npn = COALESCE(npn, ?), 
-                                    crd = COALESCE(crd, ?) 
-                                WHERE uuid = ?";
-                
-                $stmt = $client_mysqli->prepare($update_query);
-                $stmt->bind_param("sss", $results['npn'], $results['crd'], $uuid);
-                $stmt->execute();
-                $stmt->close();
-                
-                if ($debug) echo "Updated tables with NPN: {$results['npn']}, CRD: {$results['crd']}\n";
-            }
-            
-            $match_mysqli->close();
-        } else {
-            if ($debug) echo "Failed to connect to accupoint_solutions database\n";
+
+            $stmt_update->close();
+            $client_mysqli->commit();
         }
     }
-    
-    $client_mysqli->close();
-    
+
+    // --- PHASE 3: UPDATE VISITOR PARENT ---
+    if ($best_match) {
+        $results['best_match'] = $best_match;
+        $stmt_v = $client_mysqli->prepare("UPDATE superpixel_visitors SET npn=?, crd=? WHERE uuid=?");
+        $stmt_v->bind_param("sss", $best_match['npn'], $best_match['crd'], $uuid);
+        $stmt_v->execute();
+        $stmt_v->close();
+
+        $stmt_l = $client_mysqli->prepare("UPDATE superpixel_resolution_log SET npn=?, crd=? WHERE uuid=?");
+        $stmt_l->bind_param("sss", $best_match['npn'], $best_match['crd'], $uuid);
+        $stmt_l->execute();
+        $stmt_l->close();
+    }
+
+    if (!$external_client_link) $client_mysqli->close();
     return $results;
 }
-
-// If called directly from command line
-if (php_sapi_name() === 'cli' && isset($argv[1]) && isset($argv[2])) {
-    $client_db = $argv[1];
-    $uuid = $argv[2];
-    $parse_emails = !isset($argv[3]) || $argv[3] !== 'lookup-only';
-    $debug = isset($argv[3]) && $argv[3] === 'debug';
-    
-    echo "Processing emails for client: $client_db, UUID: $uuid\n";
-    $results = processVisitorEmails($client_db, $uuid, $parse_emails, $debug);
-    
-    echo "Results:\n";
-    echo "- Emails found: " . $results['emails_found'] . "\n";
-    echo "- Emails parsed: " . $results['emails_parsed'] . "\n";
-    echo "- NPN found: " . ($results['npn_found'] ? 'Yes' : 'No') . "\n";
-    echo "- CRD found: " . ($results['crd_found'] ? 'Yes' : 'No') . "\n";
-    if ($results['npn']) echo "- NPN: " . $results['npn'] . "\n";
-    if ($results['crd']) echo "- CRD: " . $results['crd'] . "\n";
-}
-?> 
+?>
