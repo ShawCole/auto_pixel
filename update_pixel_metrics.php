@@ -29,8 +29,23 @@ if ($pixelDb->connect_error) {
     die("Failed to connect to pixel database: " . $pixelDb->connect_error . "\n");
 }
 
+// Configuration for slow clients (update less frequently)
+$SLOW_CLIENTS = ['VettaFi'];  // Clients with large datasets
+$SLOW_CLIENT_INTERVAL = 3600; // Update slow clients every 1 hour (3600 seconds)
+
+// Check if we should skip slow clients this run
+$skipSlowClients = false;
+foreach ($argv as $arg) {
+    if ($arg === '--skip-slow') {
+        $skipSlowClients = true;
+    }
+    if ($arg === '--only-slow') {
+        $specificClient = null; // Will be handled below
+    }
+}
+
 // Get all clients or specific client
-$sql = "SELECT id, client_name, pixel_id FROM pixel_sheets";
+$sql = "SELECT id, client_name, pixel_id, last_sync_at FROM pixel_sheets";
 if ($specificClient) {
     $sql .= " WHERE client_name = '" . $pixelDb->real_escape_string($specificClient) . "'";
 }
@@ -52,8 +67,27 @@ foreach ($clients as $client) {
     $clientName = $client['client_name'];
     $pixelId = $client['pixel_id'];
     $clientId = $client['id'];
+    $lastSyncAt = $client['last_sync_at'] ?? null;
     
-    echo "  Updating $clientName... ";
+    // Check if this is a slow client that should be skipped
+    $isSlowClient = in_array($clientName, $SLOW_CLIENTS);
+    if ($isSlowClient && $skipSlowClients) {
+        echo "  Skipping $clientName (slow client, use --only-slow to update)\n";
+        continue;
+    }
+    
+    // For slow clients, check if enough time has passed since last update
+    if ($isSlowClient && $lastSyncAt) {
+        $lastSync = strtotime($lastSyncAt);
+        $timeSinceSync = time() - $lastSync;
+        if ($timeSinceSync < $SLOW_CLIENT_INTERVAL) {
+            $remaining = $SLOW_CLIENT_INTERVAL - $timeSinceSync;
+            echo "  Skipping $clientName (updated " . round($timeSinceSync/60) . " min ago, next in " . round($remaining/60) . " min)\n";
+            continue;
+        }
+    }
+    
+    echo "  Updating $clientName" . ($isSlowClient ? " (slow client)" : "") . "... ";
     
     // Connect to client database
     $clientDb = @new mysqli($dbHost, $dbUser, $dbPass, $clientName);
