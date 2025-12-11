@@ -84,7 +84,7 @@ foreach ($clients as $client) {
         $eventCount = (int)$row['cnt'];
     }
     
-    // Get last event timestamp
+    // Get last event timestamp and convert to MySQL format
     $lastEventAt = null;
     $lastEventResult = $clientDb->query("
         SELECT MAX(event_timestamp) as last_event 
@@ -93,7 +93,12 @@ foreach ($clients as $client) {
           AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'
     ");
     if ($lastEventResult && $row = $lastEventResult->fetch_assoc()) {
-        $lastEventAt = $row['last_event'];
+        $rawTimestamp = $row['last_event'];
+        if ($rawTimestamp) {
+            // Convert ISO 8601 format to MySQL datetime format
+            $dt = new DateTime($rawTimestamp);
+            $lastEventAt = $dt->format('Y-m-d H:i:s');
+        }
     }
     
     $clientDb->close();
