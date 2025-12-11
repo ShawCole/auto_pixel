@@ -382,7 +382,7 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
 
             // 3. Define the protection settings (Only owners can edit)
             $editors = new Google\Service\Sheets\Editors([
-                'users' => [],
+                'users' => ['1036908983018-compute@developer.gserviceaccount.com', 'scole@thynkdata.com'],
                 'groups' => [],
                 'domainUsersCanEdit' => false
             ]);
@@ -539,7 +539,7 @@ if ($specificClient) {
         $sheetId = $row['sheet_id'];
         $stmt->close();
         $mysqli->close();
-        
+
         $success = syncSingleSheet($specificClient, $sheetId, true);
         if ($success) {
             echo "✅ Immediate sync completed successfully for $specificClient\n";
@@ -595,4 +595,8 @@ if ($specificClient) {
     echo "Next sync in 5 minutes\n";
     echo "Monitoring for new sheets every ${MONITOR_INTERVAL} seconds\n";
 }
+
+/**
+ * Uses User Credentials (Owner) to grant Service Account access AND enable public viewing.
+ */
 ?> 
