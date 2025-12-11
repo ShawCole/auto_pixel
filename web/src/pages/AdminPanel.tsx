@@ -12,6 +12,19 @@ interface Pixel {
     visitorCount: number
     deletionScheduled?: string
     deleteLocked?: boolean
+    status?: {
+        primary: string
+        badges: string[]
+        reason: string
+        nextAction: string
+    }
+    metrics?: {
+        eventsToday: number
+        visitorsToday: number
+        events7d: number
+        avgDaily7d: number
+        lastRealEventAt: string | null
+    }
 }
 
 export default function AdminPanel() {
@@ -56,8 +69,15 @@ export default function AdminPanel() {
                 }
 
                 const data = await res.json()
-                setPixels(data.pixels || [])
-                setFilteredPixels(data.pixels || [])
+                // Map API response to expected format
+                const mappedPixels = (data.pixels || []).map((p: any) => ({
+                    ...p,
+                    eventCount: p.eventCount ?? p.metrics?.eventsToday ?? 0,
+                    visitorCount: p.visitorCount ?? p.metrics?.visitorsToday ?? 0,
+                    industry: p.industry ?? p.status?.primary ?? 'Uncategorized'
+                }))
+                setPixels(mappedPixels)
+                setFilteredPixels(mappedPixels)
             } catch (err: any) {
                 setError(err.message || 'Failed to fetch pixels')
             } finally {
@@ -289,13 +309,13 @@ export default function AdminPanel() {
                     <div className="bg-white rounded-lg shadow p-6">
                         <div className="text-sm font-medium text-gray-500 mb-1">Total Events</div>
                         <div className="text-2xl font-bold text-gray-900">
-                            {pixels.reduce((sum, p) => sum + p.eventCount, 0).toLocaleString()}
+                            {pixels.reduce((sum, p) => sum + (p.eventCount || 0), 0).toLocaleString()}
                         </div>
                     </div>
                     <div className="bg-white rounded-lg shadow p-6">
                         <div className="text-sm font-medium text-gray-500 mb-1">Total Visitors</div>
                         <div className="text-2xl font-bold text-gray-900">
-                            {pixels.reduce((sum, p) => sum + p.visitorCount, 0).toLocaleString()}
+                            {pixels.reduce((sum, p) => sum + (p.visitorCount || 0), 0).toLocaleString()}
                         </div>
                     </div>
                     <div className="bg-white rounded-lg shadow p-6">
@@ -449,8 +469,8 @@ export default function AdminPanel() {
                                                     {pixel.industry || 'Uncategorized'}
                                                 </span>
                                             </td>
-                                            <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{pixel.eventCount.toLocaleString()}</td>
-                                            <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{pixel.visitorCount.toLocaleString()}</td>
+                                            <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{(pixel.eventCount || 0).toLocaleString()}</td>
+                                            <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{(pixel.visitorCount || 0).toLocaleString()}</td>
                                             <td className="p-4 text-sm text-gray-600" style={{ width: '120px' }}>
                                                 <div className="flex items-center gap-1 truncate">
                                                     <Calendar className="w-4 h-4" />
