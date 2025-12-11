@@ -313,6 +313,13 @@ try {
 } catch (Throwable $e) {
   debugLog("Raw event persist error: " . $e->getMessage());
 }
+
+		// CRITICAL: Skip events without a valid UUID - these cannot be resolved to visitors
+		$eventUuid = $insert_data['uuid'] ?? '';
+		if (empty($eventUuid) || trim($eventUuid) === '') {
+		  debugLog("WARNING: Skipping event $eventIndex - no UUID present (unresolved visitor)");
+		  continue;
+		}
  
 		// Build SQL with safe escaping
 		$columns = [];
