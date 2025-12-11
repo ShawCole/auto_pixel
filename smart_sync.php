@@ -12,7 +12,7 @@ use Google\Service\Sheets\BatchUpdateValuesRequest;
 use Google\Service\Sheets\ClearValuesRequest;
 
 // Configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 $credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
@@ -150,9 +150,14 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     $body = new ValueRange(['values' => $allData]);
     
     try {
-        // Clear existing data so deletions in DB reflect in the sheet
-        $service->spreadsheets_values->clear($sheetId, 'Visitors!A:Z', new ClearValuesRequest());
+        // Update data first (overwrites existing rows in place - no visible gap)
         $service->spreadsheets_values->update($sheetId, $range, $body, ['valueInputOption' => 'RAW']);
+        
+        // Clear only trailing rows to remove stale data (rows after current data)
+        $nextRow = count($allData) + 1;
+        $clearRange = "Visitors!A{$nextRow}:Z";
+        $service->spreadsheets_values->clear($sheetId, $clearRange, new ClearValuesRequest());
+        
         echo "Updated " . count($visitors) . " visitor records (max: $VISITORS_LIMIT)\n";
         return true;
     } catch (Exception $e) {
@@ -257,9 +262,14 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
     $body = new ValueRange(['values' => $allData]);
     
     try {
-        // Clear existing data so deletions in DB reflect in the sheet
-        $service->spreadsheets_values->clear($sheetId, 'Events!A:Z', new ClearValuesRequest());
+        // Update data first (overwrites existing rows in place - no visible gap)
         $service->spreadsheets_values->update($sheetId, $range, $body, ['valueInputOption' => 'RAW']);
+        
+        // Clear only trailing rows to remove stale data (rows after current data)
+        $nextRow = count($allData) + 1;
+        $clearRange = "Events!A{$nextRow}:Z";
+        $service->spreadsheets_values->clear($sheetId, $clearRange, new ClearValuesRequest());
+        
         echo "Full refresh: Updated " . count($events) . " event records\n";
         return true;
     } catch (Exception $e) {
