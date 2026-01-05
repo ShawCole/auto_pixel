@@ -3,7 +3,7 @@ module.exports = {
     name: 'auto-pixel-api',
     script: 'dist/index.js',
     env: {
-      DB_HOST: '34.31.66.104',
+      DB_HOST: '34.26.61.148',
       DB_USER: 'root',
       DB_PASS: 'AccuPoint01!',
       DB_PORT: '3306',

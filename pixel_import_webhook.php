@@ -3,7 +3,7 @@
 
 header('Content-Type: application/json');
 
-$dbHost = getenv('DB_HOST') ?: '34.31.66.104';
+$dbHost = getenv('DB_HOST') ?: '34.26.61.148';
 $dbUser = getenv('DB_USER') ?: 'root';
 $dbPass = getenv('DB_PASS') ?: 'AccuPoint01!';
 $client = isset($_GET['client']) ? preg_replace('/[^a-zA-Z0-9_]/', '', $_GET['client']) : null;

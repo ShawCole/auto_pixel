@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export MYSQL_PWD='AccuPoint01!'
-MYSQL="mysql --protocol=TCP -h 34.31.66.104 -u root"
+MYSQL="mysql --protocol=TCP -h 34.26.61.148 -u root"
 log() { echo "[$(date -Iseconds)] $*"; }
 
 # Ensure pixel_dev exists

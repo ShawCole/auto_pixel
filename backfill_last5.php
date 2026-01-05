@@ -11,7 +11,7 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-$dbHost = getenv('DB_HOST') ?: '34.31.66.104';
+$dbHost = getenv('DB_HOST') ?: '34.26.61.148';
 $dbUser = getenv('DB_USER') ?: 'root';
 $dbPass = getenv('DB_PASS') ?: 'AccuPoint01!';
 

@@ -18,7 +18,7 @@ use Google\Service\Drive;
 use Google\Service\Sheets\ValueRange;
 
 // --- CONFIG ---
-$DB_HOST = '34.31.66.104';
+$DB_HOST = '34.26.61.148';
 $DB_USER = 'root';
 $DB_PASS = 'AccuPoint01!';
 $CENTRAL_DB = 'pixel_v2';
@@ -400,7 +400,7 @@ try {
     $client = new Client();
     $client->setAuthConfig($CREDS_FILE);
     $client->setScopes([Sheets::SPREADSHEETS, Drive::DRIVE]);
-    $client->setSubject('scole@thynkdata.com');
+    // $client->setSubject('scole@thynkdata.com');
 
     $service = new Sheets($client);
     $drive = new Drive($client);

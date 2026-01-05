@@ -1,6 +1,6 @@
 set -euo pipefail
 #!/usr/bin/env bash
-DBHOST=34.31.66.104; DBUSER=root; DBPASS='AccuPoint01!'
+DBHOST=34.26.61.148; DBUSER=root; DBPASS='AccuPoint01!'
 CLIENTS=$(mysql -h $DBHOST -u $DBUSER -p$DBPASS --connect-timeout=5 --wait --reconnect -N -e "
   SELECT ps.client_name
   FROM pixel.pixel_sheets ps

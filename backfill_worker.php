@@ -10,7 +10,7 @@ $min_id    = (int)$argv[2];
 $max_id    = (int)$argv[3];
 $status_file = "backfill_status_{$worker_id}.json";
 
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $user = 'root';
 $pass = 'AccuPoint01!';
 $client_db = 'accupoint_solutions_new';

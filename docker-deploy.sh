@@ -106,7 +106,7 @@ AUDLAB_USERNAME=your_audlab_username
 AUDLAB_PASSWORD=your_audlab_password
 
 # Database Configuration (these are already in docker-compose.yml)
-DB_HOST=34.31.66.104
+DB_HOST=34.26.61.148
 DB_USER=root
 DB_PASS=AccuPoint01!
 TEMPLATE_DB=pixel

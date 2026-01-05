@@ -122,7 +122,7 @@ AUDLAB_USERNAME=your_actual_username
 AUDLAB_PASSWORD=your_actual_password
 
 # Database Configuration (already configured)
-DB_HOST=34.31.66.104
+DB_HOST=34.26.61.148
 DB_USER=root
 DB_PASS=AccuPoint01!
 TEMPLATE_DB=pixel

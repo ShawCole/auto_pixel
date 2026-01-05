@@ -1,7 +1,7 @@
 <?php
 // Debug script to test database query
 
-$mysqli = new mysqli('34.31.66.104', 'root', 'AccuPoint01!');
+$mysqli = new mysqli('34.26.61.148', 'root', 'AccuPoint01!');
 if ($mysqli->connect_error) {
     die('Connection failed: ' . $mysqli->connect_error);
 }

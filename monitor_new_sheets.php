@@ -3,10 +3,10 @@
 require_once __DIR__ . '/vendor/autoload.php';
 
 // Configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Monitoring configuration
 $CHECK_INTERVAL = 10; // Check every 10 seconds

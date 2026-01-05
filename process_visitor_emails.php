@@ -8,7 +8,7 @@
  */
 
 function processVisitorEmails($client_db, $uuid, $parse_emails = true, $progress_callback = null, $external_client_link = null, $external_master_link = null) {
-    $host = '34.31.66.104';
+    $host = '34.26.61.148';
     $user = 'root';
     $pass = 'AccuPoint01!';
     

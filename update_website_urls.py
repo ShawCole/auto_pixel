@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 class WebsiteURLUpdater:
     def __init__(self):
         self.db_config = {
-            'host': os.getenv('DB_HOST', '34.31.66.104'),
+            'host': os.getenv('DB_HOST', '34.26.61.148'),
             'user': os.getenv('DB_USER', 'root'),
             'password': os.getenv('DB_PASS', 'AccuPoint01!'),
             'database': 'pixel'

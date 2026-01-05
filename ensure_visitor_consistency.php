@@ -4,7 +4,7 @@
 
 require_once __DIR__ . '/visitor_upsert_functions.php';
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 

@@ -102,9 +102,9 @@ export default function AdminPanel() {
             )
         }
 
-        // Industry filter
+        // Status filter
         if (industryFilter !== 'all') {
-            filtered = filtered.filter(pixel => pixel.industry === industryFilter)
+            filtered = filtered.filter(pixel => pixel.status?.primary === industryFilter)
         }
 
         // Sort
@@ -274,6 +274,13 @@ export default function AdminPanel() {
         })
     }
 
+    const getTooltipText = (pixel: Pixel) => {
+        if (!pixel.segmentApi) return 'No Segment API'
+        if (!pixel.segmentName) return 'Copy API Key'
+        const firstLine = pixel.segmentName.split('\n')[0]
+        return firstLine.replace(' - ', '\n')
+    }
+
     const toggleSelectPixel = (pixelId: string) => {
         setSelectedPixels(prev => {
             const newSet = new Set(prev)
@@ -294,7 +301,7 @@ export default function AdminPanel() {
         }
     }
 
-    const industries = ['all', ...Array.from(new Set(pixels.map(p => p.industry).filter(Boolean)))]
+    const statuses = ['all', ...Array.from(new Set(pixels.map(p => p.status?.primary).filter(Boolean)))]
 
     // Hide tooltip on scroll
     useEffect(() => {
@@ -336,8 +343,8 @@ export default function AdminPanel() {
                         </div>
                     </div>
                     <div className="bg-white rounded-lg shadow p-6">
-                        <div className="text-sm font-medium text-gray-500 mb-1">Industries</div>
-                        <div className="text-2xl font-bold text-gray-900">{industries.length - 1}</div>
+                        <div className="text-sm font-medium text-gray-500 mb-1">Status</div>
+                        <div className="text-2xl font-bold text-gray-900">{statuses.length - 1}</div>
                     </div>
                 </div>
 
@@ -360,19 +367,18 @@ export default function AdminPanel() {
                             </div>
 
                             {/* Industry Filter */}
-                            <div className="w-full md:w-48">
-                                <select
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                    value={industryFilter}
-                                    onChange={(e) => setIndustryFilter(e.target.value)}
-                                >
-                                    {industries.map(industry => (
-                                        <option key={industry} value={industry}>
-                                            {industry === 'all' ? 'All Industries' : industry}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
+                            <select
+                                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                value={industryFilter}
+                                onChange={(e) => setIndustryFilter(e.target.value)}
+                            >
+                                <option value="all">All Statuses</option>
+                                {statuses.map(status => (
+                                    <option key={status} value={status}>
+                                        {status}
+                                    </option>
+                                ))}
+                            </select>
 
                             {/* Sort */}
                             <div className="w-full md:w-48">
@@ -415,7 +421,7 @@ export default function AdminPanel() {
                                     </th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '180px' }}>Client</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '200px' }}>Website</th>
-                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '120px' }}>Industry</th>
+                                    <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '120px' }}>Status</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '80px' }}>Events</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '80px' }}>Visitors</th>
                                     <th className="p-4 text-left text-sm font-medium text-gray-700" style={{ width: '120px' }}>Created</th>
@@ -482,8 +488,22 @@ export default function AdminPanel() {
                                                 </div>
                                             </td>
                                             <td className="p-4" style={{ width: '120px' }}>
-                                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 truncate">
-                                                    {pixel.industry || 'Uncategorized'}
+                                                <span
+                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium truncate cursor-help ${pixel.status?.primary === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                                                    onMouseEnter={(e) => {
+                                                        const lastEvent = pixel.metrics?.lastRealEventAt;
+                                                        const reason = pixel.status?.reason;
+                                                        let content = lastEvent
+                                                            ? `Last Event at: ${new Date(lastEvent).toLocaleString()}`
+                                                            : 'No events recorded';
+                                                        if (reason) {
+                                                            content = `Reason: ${reason}\n${content}`;
+                                                        }
+                                                        showTooltip(e.currentTarget as HTMLElement, content);
+                                                    }}
+                                                    onMouseLeave={hideTooltip}
+                                                >
+                                                    {pixel.status?.primary || 'Uncategorized'}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{(pixel.eventCount || 0).toLocaleString()}</td>
@@ -496,17 +516,18 @@ export default function AdminPanel() {
                                             </td>
                                             <td className="p-4" style={{ width: '140px' }}>
                                                 <div className="flex items-center gap-2">
-                                                    {pixel.segmentApi && (
-                                                        <button
-                                                            onClick={() => handleCopyApiKey(pixel)}
-                                                            onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, pixel.segmentName || 'Copy API Key')}
-                                                            onMouseLeave={hideTooltip}
-                                                            className="w-8 h-8 rounded-md border flex items-center justify-center transition-colors text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
-                                                            aria-label="Copy API Key"
-                                                        >
-                                                            <Copy className="w-4 h-4" />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={() => pixel.segmentApi && handleCopyApiKey(pixel)}
+                                                        onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, getTooltipText(pixel))}
+                                                        onMouseLeave={hideTooltip}
+                                                        className={`w-8 h-8 rounded-md border flex items-center justify-center transition-colors ${pixel.segmentApi
+                                                            ? 'text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300'
+                                                            : 'text-gray-300 border-gray-200 cursor-not-allowed bg-gray-50'}`}
+                                                        disabled={!pixel.segmentApi}
+                                                        aria-label="Copy API Key"
+                                                    >
+                                                        <Copy className="w-4 h-4" />
+                                                    </button>
                                                     <button
                                                         onClick={() => handleRefresh(pixel)}
                                                         onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, 'Refresh')}
@@ -529,18 +550,6 @@ export default function AdminPanel() {
                                                             aria-label="View Sheet"
                                                         >
                                                             <FileSpreadsheet className="w-4 h-4" />
-                                                        </button>
-                                                    )}
-
-                                                    {pixel.segmentApi && (
-                                                        <button
-                                                            onClick={() => handleCopyApiKey(pixel)}
-                                                            onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, pixel.segmentName || 'Copy API Key')}
-                                                            onMouseLeave={hideTooltip}
-                                                            className="w-8 h-8 rounded-md border flex items-center justify-center transition-colors text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
-                                                            aria-label="Copy API Key"
-                                                        >
-                                                            <Copy className="w-4 h-4" />
                                                         </button>
                                                     )}
 
@@ -705,7 +714,9 @@ export default function AdminPanel() {
                             top: tooltip.y - 40,
                             transform: 'translateX(-50%)',
                             maxWidth: '300px',
-                            wordBreak: 'break-all'
+                            wordBreak: 'break-word',
+                            whiteSpace: 'pre-line',
+                            textAlign: 'center'
                         }}
                     >
                         {tooltip.content}

@@ -92,10 +92,10 @@ php monitor_new_sheets.php      # Start monitor process
 ### **Database Checks**
 ```bash
 # Check client data
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
 
 # Check specific data
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
 ```
 
 ### **Webhook Testing**

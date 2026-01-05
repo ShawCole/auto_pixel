@@ -3,7 +3,7 @@
 
 header('Content-Type: application/json');
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 

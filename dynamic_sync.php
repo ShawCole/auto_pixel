@@ -10,10 +10,10 @@ use Google\Service\Sheets;
 use Google\Service\Sheets\ValueRange;
 use Google\Service\Sheets\BatchUpdateValuesRequest;
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Configuration
 $VISITORS_LIMIT = 10000;
@@ -30,7 +30,7 @@ function getGoogleClient() {
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]);
-    $client->setSubject('scole@thynkdata.com');
+    // $client->setSubject('scole@thynkdata.com');
     return $client;
 }
 

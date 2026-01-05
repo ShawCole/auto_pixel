@@ -2,7 +2,7 @@
 set -euo pipefail
 
 export MYSQL_PWD='AccuPoint01!'
-MYSQL="mysql --protocol=TCP -h 34.31.66.104 -u root -N -B"
+MYSQL="mysql --protocol=TCP -h 34.26.61.148 -u root -N -B"
 
 if [ $# -ne 1 ]; then
   echo "Usage: $0 <ClientSchemaName>" >&2

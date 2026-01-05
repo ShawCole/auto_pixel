@@ -8,12 +8,16 @@ use Google\Service\Sheets\ValueRange;
 use Google\Service\Sheets\BatchUpdateValuesRequest;
 
 // Database configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 
 // Google Sheets configuration
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+<<<<<<< HEAD
+$credentialsPath = '/opt/auto-pixel/credentials.json';
+=======
+$credentialsPath = __DIR__ . '/credentials.json';
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
 // Configuration for data limits and staggering
 $VISITORS_LIMIT = 10000;    // Max visitors to sync
@@ -22,24 +26,31 @@ $STAGGER_DELAY = 30;        // Seconds between client syncs (30 seconds = 2 clie
 $MAX_CLIENTS_PER_RUN = 10;  // Maximum clients to sync in one run (prevents rate limit issues)
 
 // Initialize Google Client
-function getGoogleClient() {
+function getGoogleClient()
+{
     global $credentialsPath;
-    
+
     $client = new Client();
     $client->setAuthConfig($credentialsPath);
     $client->setScopes([
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]);
-    $client->setSubject('scole@thynkdata.com');
+<<<<<<< HEAD
+    // $client->setSubject('scole@thynkdata.com');
     
+=======
+    $client->setSubject('scole@thynkdata.com');
+
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
     return $client;
 }
 
 // Sync visitors data to sheet
-function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
+function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
+{
     echo "Syncing visitors for $clientName...\n";
-    
+
     // Get visitor data
     $sql = "SELECT 
         uuid,
@@ -57,13 +68,13 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     FROM superpixel_visitors
     ORDER BY last_seen_at DESC
     LIMIT 1000"; // Limit for performance
-    
+
     $result = $mysqli->query($sql);
     if (!$result) {
         echo "Error querying visitors: " . $mysqli->error . "\n";
         return false;
     }
-    
+
     $values = [];
     while ($row = $result->fetch_assoc()) {
         $values[] = [
@@ -81,12 +92,12 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['event_count'] ?? '0'
         ];
     }
-    
+
     if (empty($values)) {
         echo "No visitor data to sync\n";
         return true;
     }
-    
+
     // Clear existing data (except header)
     $clearRange = 'Visitors!A2:L1001';
     try {
@@ -94,13 +105,13 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     } catch (Exception $e) {
         echo "Error clearing sheet: " . $e->getMessage() . "\n";
     }
-    
+
     // Update sheet with new data
     $range = 'Visitors!A2';
     $body = new ValueRange([
         'values' => $values
     ]);
-    
+
     try {
         $params = [
             'valueInputOption' => 'RAW'
@@ -115,9 +126,10 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
 }
 
 // Sync recent events to sheet
-function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTime = null) {
+function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTime = null)
+{
     echo "Syncing events for $clientName...\n";
-    
+
     // Build query with optional time filter
     $sql = "SELECT 
         event_timestamp,
@@ -130,19 +142,19 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
         referrer,
         ip_address
     FROM superpixel_resolution_log";
-    
+
     if ($lastSyncTime) {
         $sql .= " WHERE created_at > '$lastSyncTime'";
     }
-    
+
     $sql .= " ORDER BY created_at DESC LIMIT 500"; // Recent events only
-    
+
     $result = $mysqli->query($sql);
     if (!$result) {
         echo "Error querying events: " . $mysqli->error . "\n";
         return false;
     }
-    
+
     $values = [];
     while ($row = $result->fetch_assoc()) {
         $fullName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
@@ -157,12 +169,12 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
             $row['ip_address'] ?? ''
         ];
     }
-    
+
     if (empty($values)) {
         echo "No new event data to sync\n";
         return true;
     }
-    
+
     // For events, we append new data instead of replacing
     if (!$lastSyncTime) {
         // First sync - clear and replace
@@ -177,11 +189,11 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
         // Incremental sync - append
         $range = 'Events Log!A:H';
     }
-    
+
     $body = new ValueRange([
         'values' => $values
     ]);
-    
+
     try {
         if ($lastSyncTime) {
             // Append for incremental updates
@@ -197,7 +209,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
             ];
             $service->spreadsheets_values->update($sheetId, $range, $body, $params);
         }
-        
+
         echo "Updated " . count($values) . " event records\n";
         return true;
     } catch (Exception $e) {
@@ -207,51 +219,52 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
 }
 
 // Main sync function with staggering
-function syncAllSheets() {
+function syncAllSheets()
+{
     global $dbHost, $dbUser, $dbPass, $STAGGER_DELAY, $MAX_CLIENTS_PER_RUN;
-    
+
     // Connect to MySQL
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
     if ($mysqli->connect_error) {
         die("MySQL connection failed: " . $mysqli->connect_error);
     }
-    
+
     // Get Google Sheets service
     $client = getGoogleClient();
     $service = new Sheets($client);
-    
+
     // Get all client sheets to sync, ordered by last sync time (oldest first)
     $sql = "SELECT * FROM pixel.pixel_sheets 
             WHERE sheet_id IS NOT NULL 
-            ORDER BY last_sync_at ASC NULLS FIRST 
+            ORDER BY last_sync_at IS NULL DESC, last_sync_at ASC 
             LIMIT $MAX_CLIENTS_PER_RUN";
     $result = $mysqli->query($sql);
-    
+
     if (!$result) {
         die("Error querying pixel_sheets: " . $mysqli->error);
     }
-    
+
     $clientCount = 0;
     $startTime = time();
-    
+
     while ($sheet = $result->fetch_assoc()) {
         $clientCount++;
         echo "\n=== Syncing {$sheet['client_name']} (Sheet $clientCount) ===";
         echo "\nStarted at: " . date('Y-m-d H:i:s') . "\n";
-        
+
         // Select client database
         $clientDb = $sheet['client_name'];
         if (!$mysqli->select_db($clientDb)) {
             echo "Error: Could not select database $clientDb\n";
             continue;
         }
-        
+
         // Sync visitors
         $visitorsSuccess = syncVisitorsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service);
-        
+
         // Sync events
         $eventsSuccess = syncEventsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service, $sheet['last_sync_at']);
-        
+
         // Update last sync time if successful
         if ($visitorsSuccess && $eventsSuccess) {
             $mysqli->select_db('pixel');
@@ -261,17 +274,17 @@ function syncAllSheets() {
         } else {
             echo "❌ Sync completed with errors for {$sheet['client_name']}\n";
         }
-        
+
         // Stagger delay between clients (except for the last one)
         if ($clientCount < $result->num_rows) {
             echo "Waiting $STAGGER_DELAY seconds before next client...\n";
             sleep($STAGGER_DELAY);
         }
     }
-    
+
     $totalTime = time() - $startTime;
     $mysqli->close();
-    
+
     echo "\n🎉 Sync run completed - processed $clientCount client sheets in ${totalTime}s\n";
     echo "Next sync run in 5 minutes\n";
 }
@@ -282,4 +295,4 @@ if (php_sapi_name() === 'cli') {
 } else {
     die("This script must be run from command line\n");
 }
-?> 
+?>

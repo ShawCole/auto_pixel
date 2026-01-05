@@ -7,7 +7,7 @@ load_dotenv()
 
 def test_database():
     db_config = {
-        'host': os.getenv('DB_HOST', '34.31.66.104'),
+        'host': os.getenv('DB_HOST', '34.26.61.148'),
         'user': os.getenv('DB_USER', 'root'),
         'password': os.getenv('DB_PASS', 'AccuPoint01!'),
         'database': 'pixel',

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-MYSQL="mysql -h 34.31.66.104 -u root -p'AccuPoint01!'"
+MYSQL="mysql -h 34.26.61.148 -u root -p'AccuPoint01!'"
 LOG="/var/log/auto-pixel/ensure_triggers.log"
 SQL_FILE="/opt/auto-pixel/sql/visitor_trigger_safe.sql"
 

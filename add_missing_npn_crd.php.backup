@@ -1,7 +1,7 @@
 <?php
 // Quick fix to add missing npn/crd columns to superpixel_visitors tables
 
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $username = 'root';
 $password = 'AccuPoint01!';
 

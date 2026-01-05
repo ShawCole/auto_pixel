@@ -43,13 +43,13 @@ curl http://localhost:4000/health
 
 ```bash
 # Check client database stats
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
 
 # Check specific visitor data
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
 
 # Check recent events
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, event_type, url, timestamp FROM superpixel_resolution_log ORDER BY id DESC LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, event_type, url, timestamp FROM superpixel_resolution_log ORDER BY id DESC LIMIT 5;"
 ```
 
 ### Sync Operations
@@ -114,7 +114,7 @@ Sourced from SOP v1.1.0 (see SOP_Updated.md) — key highlights only.
 - MySQL access tip: whitelist your IP (Cloud SQL → intent-dev → Connections → Networking → Add Network)
 - DB connectivity smoke test:
   ```bash
-  mysql -h 34.31.66.104 -u root -p'AccuPoint01!' -e "SELECT 'DB Connected' AS status;"
+  mysql -h 34.26.61.148 -u root -p'AccuPoint01!' -e "SELECT 'DB Connected' AS status;"
   ```
 - Daily ops checklist:
   1) Open four terminals (sync, monitor, webhook, API logs)

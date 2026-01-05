@@ -13,7 +13,7 @@ if (!in_array($mode, ['analyze', 'update'])) {
 }
 
 // Database configuration
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $user = 'root';
 $pass = 'AccuPoint01!';
 $dbname = 'accupoint_solutions';

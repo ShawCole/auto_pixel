@@ -232,7 +232,7 @@ calls return unexpected 401 or 403 errors.
 1. If you have delegated domain-wide access to the service account and you want to impersonate a user account, specify the email address of the user account using the method setSubject:
 
     ```php
-    $client->setSubject($user_to_impersonate);
+    // $client->setSubject($user_to_impersonate);
     ```
 
 #### How to use a specific JSON key

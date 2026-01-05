@@ -7,7 +7,7 @@
 ini_set('display_errors', '0');
 header('Content-Type: application/json');
 
-$DB_HOST = getenv('DB_HOST') ?: '34.31.66.104';
+$DB_HOST = getenv('DB_HOST') ?: '34.26.61.148';
 $DB_USER = getenv('DB_USER') ?: 'root';
 $DB_PASS = getenv('DB_PASS') ?: 'AccuPoint01!';
 

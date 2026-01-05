@@ -1,5 +1,7 @@
 <?php
-// smart_sync.php - Hybrid sync script with continuous monitoring and immediate new sheet detection
+// smart_sync_2.php - Hybrid sync script with continuous monitoring and immediate new sheet detection
+// UPDATED: Now tracks and updates 'last_event_at' in the pixel_sheets table.
+
 require_once __DIR__ . '/vendor/autoload.php';
 
 // Include standardized visitor functions
@@ -15,22 +17,24 @@ use Google\Service\Sheets\ClearValuesRequest;
 $dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+// Updated to use generic credentials.json
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Sync configuration
 $VISITORS_LIMIT = 10000;
 $EVENTS_LIMIT = 100000;
 $SYNC_INTERVAL = 300; // 5 minutes in seconds
-$STAGGER_DELAY = 15; // 15 seconds between sheets (reduced from 30s)
+$STAGGER_DELAY = 5; // 15 seconds between sheets (reduced from 30s)
 $MONITOR_INTERVAL = 10; // Check for new sheets every 10 seconds
-$MAX_SHEETS_PER_RUN = 4; // Process max 4 sheets per run to stay within 5 minutes
+$MAX_SHEETS_PER_RUN = 50; // Process up to 50 sheets per run
 
 // Visitor consistency configuration
 $VISITOR_CONSISTENCY_CHECK = true; // Enable visitor consistency checks
 $VISITOR_BACKFILL_LIMIT = 500; // Max visitors to backfill per client per run
 $VISITOR_CHECK_FREQUENCY = 5; // Check every N runs (5 = every 10 minutes with 2-minute cron)
 
-function getGoogleClient() {
+function getGoogleClient()
+{
     global $credentialsPath;
     $client = new Client();
     $client->setAuthConfig($credentialsPath);
@@ -38,14 +42,16 @@ function getGoogleClient() {
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]);
+    // Domain-Wide Delegation ENABLED
     $client->setSubject('scole@thynkdata.com');
     return $client;
 }
 
-function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
+function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
+{
     global $VISITORS_LIMIT;
     echo "Syncing visitors for $clientName (limit: $VISITORS_LIMIT)...\n";
-    
+
     // Get visitor data with all new columns
     $sql = "SELECT 
             uuid, 
@@ -75,13 +81,13 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
         WHERE uuid IS NOT NULL 
         ORDER BY last_seen_at DESC, event_count DESC 
         LIMIT $VISITORS_LIMIT";
-    
+
     $result = $mysqli->query($sql);
     if (!$result) {
         echo "Error querying visitors: " . $mysqli->error . "\n";
         return false;
     }
-    
+
     $visitors = [];
     while ($row = $result->fetch_assoc()) {
         $visitors[] = [
@@ -110,28 +116,28 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['crd'] ?? ''
         ];
     }
-    
+
     if (empty($visitors)) {
         echo "No visitor data to sync\n";
         return true;
     }
-    
+
     // Updated headers with all new columns (including Business Emails)
     $headers = [
-        'UUID', 
-        'First Name', 
-        'Last Name', 
-        'Company', 
-        'Job Title', 
-        'Emails', 
+        'UUID',
+        'First Name',
+        'Last Name',
+        'Company',
+        'Job Title',
+        'Emails',
         'Business Emails',
         'Phone',
         'Personal Address',
-        'City', 
+        'City',
         'State',
         'Zip',
-        'First Seen', 
-        'Last Seen', 
+        'First Seen',
+        'Last Seen',
         'Event Count',
         'Last Visited URL',
         'Last Element',
@@ -142,22 +148,22 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
         'NPN',
         'CRD'
     ];
-    
+
     $allData = array_merge([$headers], $visitors);
-    
+
     // Update range to include all columns (A to W). Note: 'Business Emails' after 'Emails'.
     $range = 'Visitors!A1:W' . count($allData);
     $body = new ValueRange(['values' => $allData]);
-    
+
     try {
         // Update data first (overwrites existing rows in place - no visible gap)
         $service->spreadsheets_values->update($sheetId, $range, $body, ['valueInputOption' => 'RAW']);
-        
+
         // Clear only trailing rows to remove stale data (rows after current data)
         $nextRow = count($allData) + 1;
         $clearRange = "Visitors!A{$nextRow}:Z";
         $service->spreadsheets_values->clear($sheetId, $clearRange, new ClearValuesRequest());
-        
+
         echo "Updated " . count($visitors) . " visitor records (max: $VISITORS_LIMIT)\n";
         return true;
     } catch (Exception $e) {
@@ -166,10 +172,17 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service) {
     }
 }
 
-function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
+<<<<<<< HEAD
+/**
+ * Returns an array: ['success' => bool, 'latest_event' => string|null]
+ */
+=======
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
+function syncEventsToSheet($mysqli, $clientName, $sheetId, $service)
+{
     global $EVENTS_LIMIT;
     echo "Syncing events for $clientName (limit: $EVENTS_LIMIT)...\n";
-    
+
     // Get recent events with new columns (including Business Emails)
     $sql = "SELECT 
             event_timestamp, 
@@ -193,17 +206,29 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             crd
         FROM superpixel_resolution_log 
         WHERE event_timestamp IS NOT NULL 
-        ORDER BY event_timestamp DESC 
+        ORDER BY created_at DESC 
         LIMIT $EVENTS_LIMIT";
-    
+
     $result = $mysqli->query($sql);
     if (!$result) {
         echo "Error querying events: " . $mysqli->error . "\n";
-        return false;
+        return ['success' => false, 'latest_event' => null];
     }
-    
+
     $events = [];
+    $latestEventTimestamp = null;
+    $maxTimestampEpoch = 0;
+
     while ($row = $result->fetch_assoc()) {
+        // Track the maximum event_timestamp found in this entire batch
+        if (!empty($row['event_timestamp'])) {
+            $ts = strtotime($row['event_timestamp']);
+            if ($ts > $maxTimestampEpoch) {
+                $maxTimestampEpoch = $ts;
+                $latestEventTimestamp = $row['event_timestamp'];
+            }
+        }
+
         $events[] = [
             $row['event_timestamp'] ?? '',
             $row['event_type'] ?? '',
@@ -226,83 +251,94 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service) {
             $row['crd'] ?? ''
         ];
     }
-    
+
+<<<<<<< HEAD
+    // Sort events by timestamp descending (PHP-side sort handles mixed date formats correctly)
+    usort($events, function ($a, $b) {
+        $t1 = strtotime($a[0]); // event_timestamp is index 0
+        $t2 = strtotime($b[0]);
+        return $t2 - $t1; // DESC order
+    });
+
+=======
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
     if (empty($events)) {
         echo "No new event data to sync\n";
-        return true;
+        return ['success' => true, 'latest_event' => null];
     }
-    
+
     // Updated headers with new columns (including Business Emails)
-            $headers = [
-        'Timestamp', 
-        'Event Type', 
-        'URL', 
-        'Element', 
-        'Referrer', 
+    $headers = [
+        'Timestamp',
+        'Event Type',
+        'URL',
+        'Element',
+        'Referrer',
         'IP Address',
-        'UUID', 
-        'First Name', 
-        'Last Name', 
-        'Company', 
-        'Job Title', 
-        'Emails', 
+        'UUID',
+        'First Name',
+        'Last Name',
+        'Company',
+        'Job Title',
+        'Emails',
         'Business Emails',
         'Phone',
-        'City', 
+        'City',
         'State',
         'HemSha256',
         'NPN',
         'CRD'
     ];
-    
+
     $allData = array_merge([$headers], $events);
-    
+
     // Update range to include all columns (A to S)
     $range = 'Events!A1:S' . count($allData);
     $body = new ValueRange(['values' => $allData]);
-    
+
     try {
         // Update data first (overwrites existing rows in place - no visible gap)
         $service->spreadsheets_values->update($sheetId, $range, $body, ['valueInputOption' => 'RAW']);
-        
+
         // Clear only trailing rows to remove stale data (rows after current data)
         $nextRow = count($allData) + 1;
         $clearRange = "Events!A{$nextRow}:Z";
         $service->spreadsheets_values->clear($sheetId, $clearRange, new ClearValuesRequest());
-        
+
         echo "Full refresh: Updated " . count($events) . " event records\n";
-        return true;
+        return ['success' => true, 'latest_event' => $latestEventTimestamp];
     } catch (Exception $e) {
         echo "Error updating events: " . $e->getMessage() . "\n";
-        return false;
+        return ['success' => false, 'latest_event' => null];
     }
 }
 
-function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
+function syncSingleSheet($clientName, $sheetId, $isNewSheet = false)
+{
     global $dbHost, $dbUser, $dbPass;
-    
+
     echo "=== Syncing $clientName" . ($isNewSheet ? " (NEW SHEET)" : "") . " ===\n";
     echo "Started at: " . date('Y-m-d H:i:s') . "\n";
-    
+
     // Connect to client database
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass, $clientName);
     if ($mysqli->connect_error) {
         echo "Error: Could not select database $clientName\n";
         return false;
     }
-    
+
     // Get Google client
     $client = getGoogleClient();
     $service = new Sheets($client);
-    
+
     // Step 1: Ensure visitor consistency before syncing (optional, configurable frequency)
     global $VISITOR_CONSISTENCY_CHECK, $VISITOR_BACKFILL_LIMIT, $VISITOR_CHECK_FREQUENCY;
-    
+
     if ($VISITOR_CONSISTENCY_CHECK) {
         // Check if we should run consistency check this time (based on frequency)
-        $currentMinute = (int)date('i');
+        $currentMinute = (int) date('i');
         $shouldCheck = ($currentMinute % ($VISITOR_CHECK_FREQUENCY * 2)) == 0; // Every N*2 minutes
-        
+
         if ($shouldCheck || $isNewSheet) {
             echo "🔍 Checking visitor consistency for $clientName...\n";
             $backfillResult = backfillMissingVisitors($mysqli, $VISITOR_BACKFILL_LIMIT, "smart_sync_$clientName");
@@ -313,37 +349,65 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
             }
         }
     }
-    
+
     // Step 2: Sync both tabs
     echo "Updating both tabs (Visitors + Events) for $clientName...\n";
-    
+
     $visitorsSuccess = syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service);
+<<<<<<< HEAD
+    $eventsResult = syncEventsToSheet($mysqli, $clientName, $sheetId, $service);
+
+    // Normalize result (handle if it returns array or bool for backward compatibility if mixed)
+    $eventsSuccess = is_array($eventsResult) ? $eventsResult['success'] : $eventsResult;
+    $latestEvent = is_array($eventsResult) ? $eventsResult['latest_event'] : null;
+=======
     $eventsSuccess = syncEventsToSheet($mysqli, $clientName, $sheetId, $service);
-    
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
+
     $mysqli->close();
-    
+
     if ($visitorsSuccess && $eventsSuccess) {
         echo "✅ Sync completed successfully for $clientName\n";
-        
+
+<<<<<<< HEAD
+        // Update last_sync_at timestamp AND last_event_at
+=======
         // Update last_sync_at timestamp
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
         $pixelMysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
         if ($pixelMysqli->connect_error) {
-            echo "Warning: Could not update sync timestamp\n";
+            echo "Warning: Could not update sync timestamp - connection failed: " . $pixelMysqli->connect_error . "\n";
         } else {
-            $updateSql = "UPDATE pixel_sheets SET last_sync_at = NOW() WHERE client_name = ?";
-            $stmt = $pixelMysqli->prepare($updateSql);
-            $stmt->bind_param('s', $clientName);
-            $stmt->execute();
+            if ($latestEvent) {
+                // Update both sync time and event time
+                // Convert ISO8601 to MySQL format
+                $formattedEventTime = date('Y-m-d H:i:s', strtotime($latestEvent));
+
+                $updateSql = "UPDATE pixel_sheets SET last_sync_at = NOW(), last_event_at = ? WHERE client_name = ?";
+                $stmt = $pixelMysqli->prepare($updateSql);
+                $stmt->bind_param('ss', $formattedEventTime, $clientName);
+                echo "   -> Attempting update last_event_at to $formattedEventTime for $clientName\n";
+            } else {
+                // Update only sync time if no events found
+                $updateSql = "UPDATE pixel_sheets SET last_sync_at = NOW() WHERE client_name = ?";
+                $stmt = $pixelMysqli->prepare($updateSql);
+                $stmt->bind_param('s', $clientName);
+                echo "   -> No latest event found. Updating only last_sync_at for $clientName\n";
+            }
+
+            if ($stmt->execute()) {
+                echo "   -> Database updated. Rows affected: " . $stmt->affected_rows . "\n";
+            } else {
+                echo "   -> Database update FAILED: " . $stmt->error . "\n";
+            }
             $stmt->close();
             $pixelMysqli->close();
         }
-        
+
         /*
         |--------------------------------------------------------------------------
         | APPLY SHEET PROTECTION (Idempotent)
         |--------------------------------------------------------------------------
-        | Locks down the 'Visitors' and 'Events' tabs on every successful sync.
-        | Removes existing protections on those tabs and reapplies the correct one.
         */
         try {
             $tabNamesToProtect = ['Visitors', 'Events'];
@@ -382,7 +446,7 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
 
             // 3. Define the protection settings (Only owners can edit)
             $editors = new Google\Service\Sheets\Editors([
-                'users' => ['1036908983018-compute@developer.gserviceaccount.com', 'scole@thynkdata.com'],
+                'users' => [],
                 'groups' => [],
                 'domainUsersCanEdit' => false
             ]);
@@ -424,60 +488,62 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false) {
     }
 }
 
-function getSheetsToSync() {
+function getSheetsToSync()
+{
     global $dbHost, $dbUser, $dbPass, $MAX_SHEETS_PER_RUN;
-    
+
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
     if ($mysqli->connect_error) {
         echo "Error connecting to pixel database: " . $mysqli->connect_error . "\n";
         return [];
     }
-    
+
     // Get sheets prioritized by: new sheets first, then oldest sync time
     $sql = "SELECT client_name, sheet_id, last_sync_at FROM pixel_sheets 
             WHERE sheet_id IS NOT NULL 
             ORDER BY last_sync_at IS NULL DESC, COALESCE(last_sync_at, '1970-01-01') ASC 
             LIMIT $MAX_SHEETS_PER_RUN";
-    
+
     $result = $mysqli->query($sql);
     if (!$result) {
         echo "Error querying pixel_sheets: " . $mysqli->error . "\n";
         $mysqli->close();
         return [];
     }
-    
+
     $sheets = [];
     while ($row = $result->fetch_assoc()) {
         $sheets[] = $row;
     }
-    
+
     $mysqli->close();
     return $sheets;
 }
 
-function checkForNewSheets() {
+function checkForNewSheets()
+{
     global $dbHost, $dbUser, $dbPass;
-    
+
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
     if ($mysqli->connect_error) {
         return [];
     }
-    
+
     // Find sheets that have never been synced (last_sync_at is NULL)
     $sql = "SELECT client_name, sheet_id FROM pixel_sheets 
             WHERE sheet_id IS NOT NULL AND last_sync_at IS NULL";
-    
+
     $result = $mysqli->query($sql);
     if (!$result) {
         $mysqli->close();
         return [];
     }
-    
+
     $newSheets = [];
     while ($row = $result->fetch_assoc()) {
         $newSheets[] = $row;
     }
-    
+
     $mysqli->close();
     return $newSheets;
 }
@@ -520,20 +586,20 @@ echo "Max sheets per run: $MAX_SHEETS_PER_RUN\n";
 
 if ($specificClient) {
     echo "🎯 IMMEDIATE SYNC for specific client: $specificClient\n\n";
-    
+
     // Get the sheet ID for the specific client
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
     if ($mysqli->connect_error) {
         echo "Error connecting to pixel database: " . $mysqli->connect_error . "\n";
         exit(1);
     }
-    
+
     $sql = "SELECT sheet_id FROM pixel_sheets WHERE client_name = ? AND sheet_id IS NOT NULL";
     $stmt = $mysqli->prepare($sql);
     $stmt->bind_param('s', $specificClient);
     $stmt->execute();
     $result = $stmt->get_result();
-    
+
     if ($result->num_rows > 0) {
         $row = $result->fetch_assoc();
         $sheetId = $row['sheet_id'];
@@ -555,7 +621,7 @@ if ($specificClient) {
     }
 } else {
     echo "\n";
-    
+
     // First, check for any new sheets that need immediate sync
     $newSheets = checkForNewSheets();
     if (!empty($newSheets)) {
@@ -581,8 +647,9 @@ if ($specificClient) {
     foreach ($sheetsToSync as $index => $sheet) {
         $isNew = !isset($sheet['last_sync_at']) || $sheet['last_sync_at'] === null;
         $success = syncSingleSheet($sheet['client_name'], $sheet['sheet_id'], $isNew);
-        if ($success) $successCount++;
-        
+        if ($success)
+            $successCount++;
+
         // Don't wait after the last sheet
         if ($index < count($sheetsToSync) - 1) {
             echo "Waiting ${STAGGER_DELAY} seconds before next sheet...\n";
@@ -594,9 +661,13 @@ if ($specificClient) {
     echo "Successfully synced: $successCount/" . count($sheetsToSync) . " sheets\n";
     echo "Next sync in 5 minutes\n";
     echo "Monitoring for new sheets every ${MONITOR_INTERVAL} seconds\n";
+<<<<<<< HEAD
+}
+=======
 }
 
 /**
  * Uses User Credentials (Owner) to grant Service Account access AND enable public viewing.
  */
-?> 
+?>
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4

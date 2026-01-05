@@ -38,7 +38,7 @@ fi
 print_status "Creating development database table..."
 
 # Create the pixel_sheets table in the pixel database
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' pixel << 'EOF'
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' pixel << 'EOF'
 CREATE TABLE IF NOT EXISTS `pixel_sheets` (
   `id` int NOT NULL AUTO_INCREMENT,
   `client_name` varchar(100) NOT NULL,
@@ -90,10 +90,10 @@ use Google\Service\Sheets;
 use Google\Service\Drive;
 
 // Configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Test parameters
 $clientName = 'TEST_CLIENT_' . date('Ymd_His');
@@ -203,10 +203,10 @@ use Google\Client;
 use Google\Service\Sheets;
 use Google\Service\Sheets\ValueRange;
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Test configuration
 $TEST_CLIENT = 'TEST_CLIENT_' . date('Ymd'); // Today's test client

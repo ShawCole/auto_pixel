@@ -4,7 +4,7 @@
 
 require_once __DIR__ . '/visitor_upsert_functions.php';
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 
@@ -23,7 +23,7 @@ function getClientDatabases($mysqli) {
             WHERE TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys', 'pixel', 'template')
               AND TABLE_NAME = ('superpixel_resolution_log', 'superpixel_visitors')
             GROUP BY TABLE_SCHEMA
-	    scole@pixel-php:/opt/auto-pixel$ mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "
+	    scole@pixel-php:/opt/auto-pixel$ mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "
 > SELECT TABLE_SCHEMA as db_name
 > FROM information_schema.TABLES 
 > WHERE TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys', 'pixel', 'template')
@@ -33,7 +33,7 @@ function getClientDatabases($mysqli) {
 > ORDER BY TABLE_SCHEMA
 > LIMIT 5;"
 mysql: [Warning] Using a password on the command line interface can be insecure.
-scole@pixel-php:/opt/auto-pixel$ mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "
+scole@pixel-php:/opt/auto-pixel$ mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "
 > SELECT TABLE_SCHEMA as db_name
 > FROM information_schema.TABLES 
 > WHERE TABLE_SCHEMA NOT IN ('information_schema', 'mysql', 'performance_schema', 'sys', 'pixel', 'template')

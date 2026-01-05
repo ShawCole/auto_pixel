@@ -2,7 +2,7 @@
 // migrate_schema_fix.php - Comprehensive schema migration script
 // This script migrates all databases to the corrected schema
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 

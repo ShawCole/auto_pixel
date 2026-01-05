@@ -7,11 +7,15 @@ use Google\Service\Sheets;
 use Google\Service\Drive;
 
 // Configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 // Prefer explicit env override, fall back to standard path on servers
-$credentialsPath = getenv('GOOGLE_APPLICATION_CREDENTIALS') ?: '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+<<<<<<< HEAD
+$credentialsPath = '/opt/auto-pixel/credentials.json';
+=======
+$credentialsPath = getenv('GOOGLE_APPLICATION_CREDENTIALS') ?: __DIR__ . '/credentials.json';
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
 // Get client name, pixel ID, and website URL from command line arguments
 if ($argc < 4) {
@@ -22,9 +26,10 @@ $clientName = $argv[1];
 $pixelId = $argv[2];
 $websiteUrl = $argv[3];
 
-function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
+function createGoogleSheet($clientName, $pixelId, $websiteUrl)
+{
     global $credentialsPath, $dbHost, $dbUser, $dbPass;
-    
+
     try {
         // Initialize Google clients
         $client = new Client();
@@ -33,13 +38,13 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
             'https://www.googleapis.com/auth/spreadsheets',
             'https://www.googleapis.com/auth/drive'
         ]);
-        
+
         // Enable OAuth delegation to create files in user's Drive
         $client->setSubject('scole@thynkdata.com');
-        
+
         $sheets = new Sheets($client);
         $drive = new Drive($client);
-        
+
         // Create spreadsheet with proper title
         $spreadsheet = new Google\Service\Sheets\Spreadsheet([
             'properties' => [
@@ -70,19 +75,40 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
                 ],
             ],
         ]);
-        
+
         $response = $sheets->spreadsheets->create($spreadsheet);
         $spreadsheetId = $response->spreadsheetId;
         $spreadsheetUrl = $response->spreadsheetUrl;
-        
+
         // Set up headers for Visitors sheet with all new columns
-        $visitorsHeaders = [[
-            'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 'Business Emails', 'Phone',
-            'Personal Address', 'City', 'State', 'Zip', 'First Seen', 'Last Seen', 'Event Count',
-            'Last Visited URL', 'Last Element', 'Last Percentage', 'Last Referrer',
-            'Last Timestamp', 'Last Event', 'NPN', 'CRD'
-        ]];
-        
+        $visitorsHeaders = [
+            [
+                'UUID',
+                'First Name',
+                'Last Name',
+                'Company',
+                'Job Title',
+                'Emails',
+                'Business Emails',
+                'Phone',
+                'Personal Address',
+                'City',
+                'State',
+                'Zip',
+                'First Seen',
+                'Last Seen',
+                'Event Count',
+                'Last Visited URL',
+                'Last Element',
+                'Last Percentage',
+                'Last Referrer',
+                'Last Timestamp',
+                'Last Event',
+                'NPN',
+                'CRD'
+            ]
+        ];
+
         $sheets->spreadsheets_values->update(
             $spreadsheetId,
             'Visitors!A1:W1',
@@ -91,14 +117,32 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
             ]),
             ['valueInputOption' => 'RAW']
         );
-        
+
         // Set up headers for Events sheet with all new columns
-        $eventsHeaders = [[
-            'Timestamp', 'Event Type', 'URL', 'Element', 'Referrer', 'IP Address', 
-            'UUID', 'First Name', 'Last Name', 'Company', 'Job Title', 'Emails', 'Business Emails',
-            'Phone', 'City', 'State', 'HemSha256', 'NPN', 'CRD'
-        ]];
-        
+        $eventsHeaders = [
+            [
+                'Timestamp',
+                'Event Type',
+                'URL',
+                'Element',
+                'Referrer',
+                'IP Address',
+                'UUID',
+                'First Name',
+                'Last Name',
+                'Company',
+                'Job Title',
+                'Emails',
+                'Business Emails',
+                'Phone',
+                'City',
+                'State',
+                'HemSha256',
+                'NPN',
+                'CRD'
+            ]
+        ];
+
         $sheets->spreadsheets_values->update(
             $spreadsheetId,
             'Events!A1:S1',
@@ -107,7 +151,7 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
             ]),
             ['valueInputOption' => 'RAW']
         );
-        
+
         // Format headers (bold, background color)
         $requests = [
             [
@@ -151,50 +195,52 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
                 ],
             ],
         ];
-        
+
         $sheets->spreadsheets->batchUpdate(
             $spreadsheetId,
             new Google\Service\Sheets\BatchUpdateSpreadsheetRequest([
                 'requests' => $requests
             ])
         );
-        
+
         // Make the sheet public (anyone with link can view)
         $permission = new Google\Service\Drive\Permission([
             'type' => 'anyone',
             'role' => 'reader',
         ]);
-        
+
         $drive->permissions->create($spreadsheetId, $permission);
-        
+
         // Store in database (update if exists, insert if new)
         $mysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
         if ($mysqli->connect_error) {
             throw new Exception("Database connection failed: " . $mysqli->connect_error);
         }
-        
+
         // Use INSERT ... ON DUPLICATE KEY UPDATE to handle existing clients
         // Derive pixel_name from website hostname (fallback to clientName)
         $host = parse_url($websiteUrl, PHP_URL_HOST);
-        if ($host) { $host = preg_replace('/^www\./i', '', $host); }
+        if ($host) {
+            $host = preg_replace('/^www\./i', '', $host);
+        }
         $pixelName = $host ?: $clientName;
 
         $stmt = $mysqli->prepare("\n            INSERT INTO pixel_sheets (client_name, pixel_name, pixel_id, sheet_id, sheet_url, client_website) \n            VALUES (?, ?, ?, ?, ?, ?)\n            ON DUPLICATE KEY UPDATE \n                pixel_id = VALUES(pixel_id),\n                sheet_id = VALUES(sheet_id), \n                sheet_url = VALUES(sheet_url),\n                client_website = VALUES(client_website)\n        ");
         $stmt->bind_param("ssssss", $clientName, $pixelName, $pixelId, $spreadsheetId, $spreadsheetUrl, $websiteUrl);
-        
+
         if (!$stmt->execute()) {
             throw new Exception("Failed to save sheet info: " . $stmt->error);
         }
-        
+
         $stmt->close();
         $mysqli->close();
-        
+
         return [
             'success' => true,
             'sheetId' => $spreadsheetId,
             'sheetUrl' => $spreadsheetUrl
         ];
-        
+
     } catch (Exception $e) {
         return [
             'success' => false,
@@ -206,4 +252,4 @@ function createGoogleSheet($clientName, $pixelId, $websiteUrl) {
 // Execute and return JSON result
 $result = createGoogleSheet($clientName, $pixelId, $websiteUrl);
 echo json_encode($result);
-?> 
+?>

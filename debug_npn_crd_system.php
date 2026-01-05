@@ -3,7 +3,7 @@
  * Debug NPN/CRD System - Find out why triggers and procedures are failing
  */
 
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $user = 'root';
 $pass = 'AccuPoint01!';
 

@@ -7,10 +7,10 @@ use Google\Service\Sheets;
 use Google\Service\Drive;
 
 // Configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-$credentialsPath = '/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json';
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Get client name and pixel ID from command line arguments
 if ($argc < 3) {
@@ -33,7 +33,7 @@ function createGoogleSheet($clientName, $pixelId) {
         ]);
         
 	// Enable OAuth delegation to create files in user's Drive
-	$client->setSubject('scole@thynkdata.com');
+	// $client->setSubject('scole@thynkdata.com');
 
         $sheets = new Sheets($client);
         $drive = new Drive($client);

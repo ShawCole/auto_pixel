@@ -7,7 +7,7 @@ use Google\Service\Sheets;
 use Google\Service\Drive;
 
 // Configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 // Use different credentials path based on environment
@@ -37,7 +37,7 @@ function createGoogleSheet($clientName, $pixelId) {
         ]);
         
 	// Enable OAuth delegation to create files in user's Drive
-	$client->setSubject('scole@thynkdata.com');
+	// $client->setSubject('scole@thynkdata.com');
 
         $sheets = new Sheets($client);
         $drive = new Drive($client);

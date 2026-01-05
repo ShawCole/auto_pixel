@@ -35,7 +35,7 @@ This integration automatically creates a Google Sheet for each new pixel and syn
 
 ### 2. Create Database Table
 ```bash
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' pixel << 'EOF'
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' pixel << 'EOF'
 CREATE TABLE IF NOT EXISTS `pixel_sheets` (
   `id` int NOT NULL AUTO_INCREMENT,
   `client_name` varchar(100) NOT NULL,

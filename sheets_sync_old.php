@@ -10,12 +10,12 @@ use Google\Service\Sheets\ValueRange;
 use Google\Service\Sheets\BatchUpdateValuesRequest;
 
 // Database configuration
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 
 // Google Sheets configuration
-$credentialsPath = '/etc/auto-pixel/google-credentials.json';
+$credentialsPath = '/opt/auto-pixel/credentials.json';
 
 // Initialize Google Client
 function getGoogleClient() {

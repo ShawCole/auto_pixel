@@ -2,7 +2,7 @@
 // backfill_master.php
 // USAGE: sudo php backfill_master.php
 
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $user = 'root';
 $pass = 'AccuPoint01!';
 $client_db = 'accupoint_solutions_new';

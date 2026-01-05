@@ -13,7 +13,7 @@ This guide covers all the steps needed to:
 First, connect to the MySQL server and update the template database tables:
 
 ```bash
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' pixel
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' pixel
 ```
 
 Run these SQL commands:
@@ -50,11 +50,11 @@ For each existing client database, run the same ALTER TABLE commands:
 
 ```bash
 # Get list of all client databases
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' -e "SHOW DATABASES LIKE 'TEST_CLIENT_%';"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' -e "SHOW DATABASES LIKE 'TEST_CLIENT_%';"
 
 # For each client database, run the update script
 # Example for one client:
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' TEST_CLIENT_888 < update_schema.sql
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' TEST_CLIENT_888 < update_schema.sql
 ```
 
 ## Step 3: Create Triggers for NPN/CRD Lookup

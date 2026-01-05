@@ -10,7 +10,7 @@ use Google\Client;
 use Google\Service\Sheets;
 
 // Database configuration
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $user = 'root';
 $pass = 'AccuPoint01!';
 
@@ -31,7 +31,7 @@ $result = $mysqli->query($check_query);
 
 if ($result->num_rows === 0) {
     echo "❌ Country_Life not found in pixel_sheets. Please add it first:\n";
-    echo "mysql -h 34.31.66.104 -u root -pAccuPoint01! -e \"INSERT INTO pixel.pixel_sheets (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url) VALUES ('Country_Life', 'https://country-life.com', CONCAT('country-life-pixel-', UNIX_TIMESTAMP()), '', '', '');\"\n";
+    echo "mysql -h 34.26.61.148 -u root -pAccuPoint01! -e \"INSERT INTO pixel.pixel_sheets (client_name, client_website, pixel_id, pixel_script, sheet_id, sheet_url) VALUES ('Country_Life', 'https://country-life.com', CONCAT('country-life-pixel-', UNIX_TIMESTAMP()), '', '', '');\"\n";
     exit(1);
 }
 

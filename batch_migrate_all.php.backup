@@ -2,7 +2,7 @@
 require_once 'vendor/autoload.php';
 
 // Database connection
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $username = 'root';
 $password = 'AccuPoint01!';
 

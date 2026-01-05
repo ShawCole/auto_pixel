@@ -18,7 +18,7 @@ ps aux | grep monitor_new     # Monitor process
 crontab -l                    # Scheduled tasks
 
 # Check database connectivity
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' -e "SELECT 'DB Connected' as status;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' -e "SELECT 'DB Connected' as status;"
 ```
 
 ## 🔄 **Sync Operations**
@@ -42,13 +42,13 @@ nohup php monitor_new_sheets.php > /dev/null 2>&1 &
 
 ### Check client database counts
 ```bash
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
 
 # Check specific client data
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
 
 # Check events
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, event_type, url, timestamp FROM superpixel_resolution_log ORDER BY id DESC LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, event_type, url, timestamp FROM superpixel_resolution_log ORDER BY id DESC LIMIT 5;"
 ```
 
 ## 🧪 **Testing & Debugging**
@@ -145,10 +145,10 @@ php delete_client.php 'Active_Wealth_Management-Retirement_Results'
 ### Fix common schema issues
 ```bash
 # Add missing columns to existing databases
-mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN url text AFTER event_type;"
-mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN element text AFTER url;"
-mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN percentage int AFTER element;"
-mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN title text AFTER timestamp;"
+mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN url text AFTER event_type;"
+mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN element text AFTER url;"
+mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN percentage int AFTER element;"
+mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN title text AFTER timestamp;"
 ```
 
 ## 🚨 **Troubleshooting Workflow**
@@ -167,7 +167,7 @@ tail -f /opt/auto-pixel/sync.log | grep "❌\|Error"
 **"Unknown column 'url/element/percentage' in 'field list'"**
 ```bash
 # Add missing columns
-mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN MISSING_COLUMN text;"
+mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "USE CLIENT_NAME; ALTER TABLE superpixel_resolution_log ADD COLUMN MISSING_COLUMN text;"
 ```
 
 **"Unknown database 'CLIENT_NAME'"**
@@ -179,7 +179,7 @@ php delete_client.php 'CLIENT_NAME'
 **"Sync failed for CLIENT_NAME"**
 ```bash
 # Check if database and tables exist
-mysql -h 34.31.66.104 -u root -pAccuPoint01! -e "USE CLIENT_NAME; SHOW TABLES;"
+mysql -h 34.26.61.148 -u root -pAccuPoint01! -e "USE CLIENT_NAME; SHOW TABLES;"
 
 # If missing, run diagnostic script
 php check_problematic_sheets.php
@@ -249,13 +249,13 @@ crontab -l
 ### Database checks
 ```bash
 # Check client counts
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT COUNT(*) as events FROM superpixel_resolution_log; SELECT COUNT(*) as visitors FROM superpixel_visitors;"
 
 # Check visitor data
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, first_name, last_name, url, element FROM superpixel_visitors LIMIT 5;"
 
 # Check event data
-mysql -h 34.31.66.104 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, event_type, url, timestamp FROM superpixel_resolution_log ORDER BY id DESC LIMIT 5;"
+mysql -h 34.26.61.148 -u root -p'AccuPoint01!' CLIENT_NAME -e "SELECT uuid, event_type, url, timestamp FROM superpixel_resolution_log ORDER BY id DESC LIMIT 5;"
 ```
 
 ### Test webhook

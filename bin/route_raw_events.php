@@ -1,7 +1,7 @@
 <?php
 date_default_timezone_set('UTC');
 
-$host = '34.31.66.104';
+$host = '34.26.61.148';
 $user = 'root';
 $pass = 'AccuPoint01!';
 

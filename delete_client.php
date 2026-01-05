@@ -4,7 +4,7 @@
  * Removes a client from pixel_sheets and cleans up their database tables
  */
 
-$dbHost = '34.31.66.104';
+$dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 

@@ -6,7 +6,7 @@ require_once __DIR__ . '/visitor_upsert_functions.php';
 
 header('Content-Type: application/json');
 
-$dbHost = getenv('DB_HOST') ?: '34.31.66.104';
+$dbHost = getenv('DB_HOST') ?: '34.26.61.148';
 $dbUser = getenv('DB_USER') ?: 'root';
 $dbPass = getenv('DB_PASS') ?: 'AccuPoint01!';
 #$dbName = getenv('DB_NAME') ?: 'pixel';

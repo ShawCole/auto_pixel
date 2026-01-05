@@ -9,7 +9,7 @@
  * 3. Nickname Match -> "Nickname: [Name] + Same Last & Email" (Score 80)
  */
 
-$DB_HOST = '34.31.66.104';
+$DB_HOST = '34.26.61.148';
 $DB_USER = 'root';
 $DB_PASS = 'AccuPoint01!';
 $CENTRAL_DB = 'pixel_v2';

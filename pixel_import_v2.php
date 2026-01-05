@@ -26,7 +26,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { exit(0); }
 require_once '/opt/auto-pixel/visitor_upsert_functions_v2.php';
 
 // --- CONFIGURATION ---
-$DB_HOST = getenv('DB_HOST') ?: '34.31.66.104';
+$DB_HOST = getenv('DB_HOST') ?: '34.26.61.148';
 $DB_USER = getenv('DB_USER') ?: 'root';
 $DB_PASS = getenv('DB_PASS') ?: 'AccuPoint01!';
 $CENTRAL_DB = 'pixel';

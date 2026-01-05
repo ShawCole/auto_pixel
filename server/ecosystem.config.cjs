@@ -7,6 +7,8 @@ module.exports = {
       DB_USER: 'root',
       DB_PASS: 'AccuPoint01!',
       DB_PORT: '3306',
+      DB_NAME: 'pixel',          // <--- ADD THIS
+      DB_DATABASE: 'pixel',      // <--- ADD THIS
       TEMPLATE_DB: 'template',
       TEMPLATE_TABLE: 'superpixel_resolution_log',
       TEMPLATE_TABLE_2: 'unique_visitors',

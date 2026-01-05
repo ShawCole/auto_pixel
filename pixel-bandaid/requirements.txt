@@ -1,0 +1,9 @@
+selenium
+pandas
+paramiko
+sshtunnel
+sqlalchemy
+mysql-connector-python
+python-dotenv
+webdriver-manager
+requests

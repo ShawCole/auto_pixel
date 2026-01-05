@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 DB="VettaFi"
-MYSQL="mysql -h 34.31.66.104 -u root -p'AccuPoint01!'"
+MYSQL="mysql -h 34.26.61.148 -u root -p'AccuPoint01!'"
 LOG="/var/log/auto-pixel/monitor_vettafi.log"
 
 echo "[$(date -Iseconds)] Monitor start" | tee -a "$LOG"

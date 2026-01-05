@@ -119,3 +119,19 @@ geckodriver
 AcquireUp/
 TruVestments/Pixel/
 Peak_Pro_Financial/
+
+# Local datasets and junk (do not commit)
+AcquireUp/
+TruVestments/
+Pixel/
+Peak_Pro_Financial/
+active_files_on_vm/
+example_results/
+question_files/
+--header
+--url
+pixel-bandaid.zip
+pixel_import*.php
+
+# Historical AI chats (contain potential secrets)
+previous_auto_pixel_chats_with_ai_builder/

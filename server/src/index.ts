@@ -750,7 +750,11 @@ app.get("/admin/pixels", async (req, res) => {
                     COALESCE(ps.deletable, 1) as deletable,
                     ps.created_at as createdAt,
                     ps.last_sync_at as lastSyncAt,
-                    'Uncategorized' as industry,
+                    ps.last_event_at as lastEventAt,
+                    ps.oplet as oplet,
+                    ps.industry as industry,
+                    ps.paused as paused,
+                    ps.paused_reason as pausedReason,
                     ps.segment_api as segmentApi,
                     ps.segment_name as segmentName,
                     NULL as deletionScheduled,
@@ -771,7 +775,41 @@ app.get("/admin/pixels", async (req, res) => {
                 segmentApi: row.segmentApi,
                 segmentName: row.segmentName,
                 createdAt: row.createdAt.toISOString(),
-                industry: row.industry,
+                industry: row.industry || 'Uncategorized',
+                status: (() => {
+                    const now = new Date();
+                    const created = new Date(row.createdAt);
+                    const lastEvent = row.lastEventAt ? new Date(row.lastEventAt) : null;
+                    const isNew = (now.getTime() - created.getTime()) < 24 * 60 * 60 * 1000;
+
+                    let primary = row.paused === 1 ? 'Paused' : 'Active';
+
+                    if (row.paused === 1) {
+                        primary = 'Paused';
+                    } else if (row.oplet && row.oplet.includes("No Resolutions Found")) {
+                        primary = 'No Resolutions';
+                    } else if (!lastEvent) {
+                        primary = isNew ? 'Awaiting Events' : 'No Events (Overdue)';
+                    } else {
+                        const hoursSinceLastEvent = (now.getTime() - lastEvent.getTime()) / (1000 * 60 * 60);
+                        if (hoursSinceLastEvent > 24) {
+                            const days = Math.floor(hoursSinceLastEvent / 24);
+                            primary = `Last Event: ${days}d ago`;
+                        } else {
+                            primary = 'Active';
+                        }
+                    }
+
+                    return {
+                        primary,
+                        badges: [],
+                        reason: row.pausedReason || '',
+                        nextAction: row.paused === 1 ? 'Resume' : 'Pause'
+                    };
+                })(),
+                metrics: {
+                    lastRealEventAt: row.lastEventAt ? row.lastEventAt.toISOString() : null
+                },
                 eventCount: parseInt(row.eventCount) || 0,
                 visitorCount: parseInt(row.visitorCount) || 0,
                 deletionScheduled: row.deletionScheduled ? row.deletionScheduled.toISOString() : null,

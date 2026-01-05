@@ -10,7 +10,7 @@
 header('Content-Type: application/json');
 
 // --- Config (same defaults as pixel_import.php) ---
-$dbHost = getenv('DB_HOST') ?: '34.31.66.104';
+$dbHost = getenv('DB_HOST') ?: '34.26.61.148';
 $dbUser = getenv('DB_USER') ?: 'root';
 $dbPass = getenv('DB_PASS') ?: 'AccuPoint01!';
 

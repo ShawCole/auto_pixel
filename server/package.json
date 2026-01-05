@@ -16,6 +16,7 @@
         "express": "^4.19.2",
         "googleapis": "^154.0.0",
         "mysql2": "^3.9.3",
+        "node-fetch": "^2.7.0",
         "selenium-webdriver": "^4.33.0"
     },
     "devDependencies": {

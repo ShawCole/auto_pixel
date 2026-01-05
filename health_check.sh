@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-DBHOST=34.31.66.104; DBUSER=root; DBPASS='AccuPoint01!'
+DBHOST=34.26.61.148; DBUSER=root; DBPASS='AccuPoint01!'
 mysql -h $DBHOST -u $DBUSER -p"$DBPASS" -N -e "
 SELECT client_name,
   (SELECT COUNT(*) FROM information_schema.TRIGGERS
