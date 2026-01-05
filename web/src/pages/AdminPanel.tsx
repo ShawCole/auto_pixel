@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Trash2, Search, AlertCircle, RefreshCw, FileSpreadsheet } from 'lucide-react'
+import { Calendar, Trash2, Search, AlertCircle, RefreshCw, FileSpreadsheet, Copy } from 'lucide-react'
 
 interface Pixel {
     id: string
     clientName: string
     website: string
     sheetUrl?: string
+    segmentApi?: string
+    segmentName?: string
     createdAt: string
     industry?: string
     eventCount: number
@@ -257,6 +259,21 @@ export default function AdminPanel() {
         }
     }
 
+    const handleCopyApiKey = (pixel: Pixel) => {
+        if (!pixel.segmentApi) return
+
+        const curlCommand = `curl --request GET \\
+  --url '${pixel.segmentApi}' \\
+  --header 'X-Api-Key: sk_aaaEJaKJZEzw39WFBTLPrvdnPZa5CmjMybZWzED4lY'`
+
+        navigator.clipboard.writeText(curlCommand).then(() => {
+            setSuccess(`API Key copied for ${pixel.clientName}`)
+            setTimeout(() => setSuccess(null), 3000)
+        }).catch(err => {
+            setError(`Failed to copy API key: ${err}`)
+        })
+    }
+
     const toggleSelectPixel = (pixelId: string) => {
         setSelectedPixels(prev => {
             const newSet = new Set(prev)
@@ -479,6 +496,17 @@ export default function AdminPanel() {
                                             </td>
                                             <td className="p-4" style={{ width: '140px' }}>
                                                 <div className="flex items-center gap-2">
+                                                    {pixel.segmentApi && (
+                                                        <button
+                                                            onClick={() => handleCopyApiKey(pixel)}
+                                                            onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, pixel.segmentName || 'Copy API Key')}
+                                                            onMouseLeave={hideTooltip}
+                                                            className="w-8 h-8 rounded-md border flex items-center justify-center transition-colors text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                                                            aria-label="Copy API Key"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                     <button
                                                         onClick={() => handleRefresh(pixel)}
                                                         onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, 'Refresh')}
@@ -501,6 +529,18 @@ export default function AdminPanel() {
                                                             aria-label="View Sheet"
                                                         >
                                                             <FileSpreadsheet className="w-4 h-4" />
+                                                        </button>
+                                                    )}
+
+                                                    {pixel.segmentApi && (
+                                                        <button
+                                                            onClick={() => handleCopyApiKey(pixel)}
+                                                            onMouseEnter={(e) => showTooltip(e.currentTarget as HTMLElement, pixel.segmentName || 'Copy API Key')}
+                                                            onMouseLeave={hideTooltip}
+                                                            className="w-8 h-8 rounded-md border flex items-center justify-center transition-colors text-purple-600 border-purple-200 hover:bg-purple-50 hover:border-purple-300"
+                                                            aria-label="Copy API Key"
+                                                        >
+                                                            <Copy className="w-4 h-4" />
                                                         </button>
                                                     )}
 

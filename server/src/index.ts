@@ -138,8 +138,8 @@ async function triggerFullSync(clientNameForImmediate?: string): Promise<void> {
         // Prefer smart_sync (supports new headers and both tabs) and allow immediate single-client sync
         const syncCommand = isProduction
             ? (clientNameForImmediate
-                ? `${phpBin} /opt/auto-pixel/smart_sync.php --client=${clientNameForImmediate}`
-                : `${phpBin} /opt/auto-pixel/smart_sync.php`)
+                ? `sudo -u www-data ${phpBin} /opt/auto-pixel/smart_sync.php --client=${clientNameForImmediate}`
+                : `sudo -u www-data ${phpBin} /opt/auto-pixel/smart_sync.php`)
             : (clientNameForImmediate
                 ? `${phpBin} ../smart_sync.php --client=${clientNameForImmediate}`
                 : `${phpBin} ../smart_sync.php`);
@@ -253,7 +253,7 @@ app.post('/generate', async (req, res) => {
                 connectTimeout: 30000
             });
             try {
-                const [rows] = await connection.execute(
+                const [rows] = await connection.execute<any[]>(
                     'SELECT id FROM pixel_sheets WHERE client_name = ? AND pixel_name = ? LIMIT 1',
                     [client, pixelName]
                 );
@@ -373,7 +373,7 @@ app.post('/generate', async (req, res) => {
                 });
                 try {
                     for (let i = 0; i < 10; i++) {
-                        const [rows] = await conn.execute(
+                        const [rows] = await conn.execute<any[]>(
                             'SELECT id, uuid, event_timestamp, url FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1',
                             [TEST_UUID]
                         );
@@ -490,11 +490,11 @@ app.post('/generate', async (req, res) => {
                 });
                 let visitors = 0; let events = 0; let lastEventAt: any = null;
                 try {
-                    const [r1] = await clientConn.execute("SELECT COUNT(*) AS v FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    const [r1] = await clientConn.execute<any[]>("SELECT COUNT(*) AS v FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
                     visitors = Number((r1 as any[])[0]?.v || 0);
-                    const [r2] = await clientConn.execute("SELECT COALESCE(SUM(event_count),0) AS e FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    const [r2] = await clientConn.execute<any[]>("SELECT COALESCE(SUM(event_count),0) AS e FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
                     events = Number((r2 as any[])[0]?.e || 0);
-                    const [r3] = await clientConn.execute("SELECT MAX(last_seen_at) AS last FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
+                    const [r3] = await clientConn.execute<any[]>("SELECT MAX(last_seen_at) AS last FROM superpixel_visitors WHERE pixel_id = ?", [pixelId]);
                     lastEventAt = (r3 as any[])[0]?.last || null;
                 } catch { }
                 try { await clientConn.end(); } catch { }
@@ -673,7 +673,7 @@ async function getClientByPixelId(pixelId: string): Promise<{ clientName: string
         connectTimeout: 30000
     });
     try {
-        const [rows] = await connection.execute(
+        const [rows] = await connection.execute<any[]>(
             "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE id = ?",
             [pixelId]
         );
@@ -694,7 +694,7 @@ async function getClientByName(clientName: string): Promise<{ clientName: string
         connectTimeout: 30000
     });
     try {
-        const [rows] = await connection.execute(
+        const [rows] = await connection.execute<any[]>(
             "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE client_name = ?",
             [clientName]
         );
@@ -708,139 +708,7 @@ async function getClientByName(clientName: string): Promise<{ clientName: string
     }
 }
 
-// --- In-process cache for admin metrics (per pixel), TTL ~60s ---
-type CachedMetrics = {
-    cachedAtMs: number;
-    eventsToday: number;
-    visitorsToday: number;
-    lastRealEventAt: string | null; // ISO
-    events7d: number;
-    avgDaily7d: number;
-};
-const ADMIN_METRICS_CACHE = new Map<string, CachedMetrics>(); // key: clientName
-const ADMIN_METRICS_TTL_MS = 60_000; // 60s
-
-async function computeLocalDayWindowUtc(connection: any, tz: string): Promise<{ startIso: string; endIso: string }> {
-    // Ask MySQL to do the tz math so we don't pull a tz lib here
-    const [rows] = (await connection.execute(
-        "SELECT " +
-        "DATE_FORMAT(CONVERT_TZ(DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?)), ?, 'UTC'), '%Y-%m-%dT%H:%i:%sZ') AS startIso, " +
-        "DATE_FORMAT(CONVERT_TZ(DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?)) + INTERVAL 1 DAY, ?, 'UTC'), '%Y-%m-%dT%H:%i:%sZ') AS endIso",
-        [tz, tz, tz, tz]
-    )) as any;
-    const r = rows[0] || {};
-    return { startIso: r.startIso, endIso: r.endIso };
-}
-
-async function readSevenDayAgg(connection: any, pixelId: string, tz: string): Promise<{ events7d: number; avgDaily7d: number }> {
-    const [rows] = (await connection.execute(
-        "SELECT COALESCE(SUM(events_count),0) AS e7, COALESCE(AVG(events_count),0) AS avg7 " +
-        "FROM pixel_daily_stats " +
-        "WHERE pixel_id = ? " +
-        "AND day_local BETWEEN DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?)) - INTERVAL 6 DAY AND DATE(CONVERT_TZ(UTC_TIMESTAMP(),'UTC',?))",
-        [pixelId, tz, tz]
-    )) as any;
-    const r = rows[0] || {};
-    return { events7d: Number(r.e7 || 0), avgDaily7d: Number(r.avg7 || 0) };
-}
-
-async function readLiveMetricsForClient(connection: any, clientName: string, pixelId: string, tz: string): Promise<{ eventsToday: number; visitorsToday: number; lastRealEventAt: string | null }> {
-    // Compute local-day window in UTC
-    const { startIso, endIso } = await computeLocalDayWindowUtc(connection, tz);
-
-    // Events today
-    const [evRows] = (await connection.execute(
-        `SELECT COUNT(*) AS c FROM \`${clientName}\`.superpixel_resolution_log 
-         WHERE pixel_id = ? 
-           AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'
-           AND event_timestamp >= ? AND event_timestamp < ?`,
-        [pixelId, startIso, endIso]
-    )) as any;
-    const eventsToday = Number((evRows as any[])[0]?.c || 0);
-
-    // Visitors today (distinct uuid)
-    const [visRows] = (await connection.execute(
-        `SELECT COUNT(DISTINCT uuid) AS c FROM \`${clientName}\`.superpixel_resolution_log 
-         WHERE pixel_id = ? 
-           AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'
-           AND event_timestamp >= ? AND event_timestamp < ?`,
-        [pixelId, startIso, endIso]
-    )) as any;
-    const visitorsToday = Number((visRows as any[])[0]?.c || 0);
-
-    // Last real event (use created_at for speed/consistency)
-    const [lastRows] = (await connection.execute(
-        `SELECT MAX(created_at) AS last_created FROM \`${clientName}\`.superpixel_resolution_log 
-         WHERE pixel_id = ? AND LOWER(COALESCE(event_type,'')) NOT LIKE '%test%'`,
-        [pixelId]
-    )) as any;
-    const lastCreated = (lastRows as any[])[0]?.last_created || null;
-    const lastRealEventAt = lastCreated ? new Date(lastCreated).toISOString() : null;
-
-    return { eventsToday, visitorsToday, lastRealEventAt };
-}
-
-function daysBetweenIso(aIso?: string | null, bIso?: string | null): number | null {
-    if (!aIso || !bIso) return null;
-    const a = new Date(aIso).getTime();
-    const b = new Date(bIso).getTime();
-    if (!a || !b) return null;
-    return Math.floor((a - b) / 86_400_000);
-}
-
-function deriveStatus(row: any, metrics: CachedMetrics): { primary: string; badges: string[]; reason: string; nextAction: string } {
-    const badges: string[] = [];
-    const nowIso = new Date().toISOString();
-
-    // Refreshing badge
-    if (row.refresh_in_progress === 1 && row.refresh_heartbeat_at) {
-        const dt = new Date(row.refresh_heartbeat_at).getTime();
-        if (Date.now() - dt <= 15 * 60_000) badges.push(`Refreshing`);
-    }
-    // Sync stale badge (>24h)
-    if (row.last_sync_at && (Date.now() - new Date(row.last_sync_at).getTime()) > 24 * 60 * 60 * 1000) {
-        badges.push('Sync Stale');
-    }
-    // Events Today badge
-    badges.push(`Events Today: ${metrics.eventsToday}`);
-
-    // Trial badge (optional)
-    if (row.trial_enabled && row.trial_started_at && row.trial_duration_days) {
-        const end = new Date(new Date(row.trial_started_at).getTime() + Number(row.trial_duration_days) * 86_400_000);
-        const daysLeft = Math.max(0, Math.ceil((end.getTime() - Date.now()) / 86_400_000));
-        badges.push(`Trial: ${daysLeft} days left`);
-    }
-
-    // Primary status priority
-    if (row.paused === 1) {
-        return { primary: `Paused: ${row.paused_reason || 'Maintenance'}`, badges, reason: 'Pixel is paused', nextAction: 'Unpause to resume sync and metrics' };
-    }
-
-    // Awaiting / No Script
-    if (!row.first_real_event_at && row.verification_test_seen_at) {
-        const days = daysBetweenIso(nowIso, new Date(row.verification_test_seen_at).toISOString()) || 0;
-        if (days >= 1) badges.push(`No Script: ${days} Day(s)`);
-        const primary = days >= 1 ? 'No Events (Overdue)' : 'Awaiting Events';
-        const reason = days >= 1 ? 'No real events since test' : 'Test received; waiting for first real event';
-        const nextAction = days >= 1 ? 'Verify script installed on site' : 'Install pixel script on site';
-        return { primary, badges, reason, nextAction };
-    }
-
-    // Active vs Last Event
-    if (metrics.lastRealEventAt) {
-        const ms = Date.now() - new Date(metrics.lastRealEventAt).getTime();
-        if (ms <= 24 * 60 * 60 * 1000) {
-            return { primary: 'Active', badges, reason: 'Real event in the last 24h', nextAction: 'None' };
-        }
-        const daysAgo = Math.floor(ms / 86_400_000);
-        return { primary: `Last Event: ${daysAgo} Day${daysAgo === 1 ? '' : 's'} ago`, badges, reason: 'No events in the past 24h', nextAction: 'Investigate installation or traffic' };
-    }
-
-    // Fallback
-    return { primary: 'Pending Setup', badges, reason: 'Missing first event or test', nextAction: 'Complete installation' };
-}
-
-// Get all pixels with stats (hybrid: daily aggregates + live window)
+// Get all pixels with stats
 app.get("/admin/pixels", async (req, res) => {
     try {
         log("📊 Fetching all pixels for admin panel");
@@ -870,89 +738,48 @@ app.get("/admin/pixels", async (req, res) => {
         try {
             // Ensure schema has deletable column
             await ensureDeletableColumn(connection);
-            // Pull central fields needed for status derivation
-            const [rows] = await connection.execute(
-                `SELECT 
+            // Query pixel_sheets table and return live metrics (visitors/events) from central columns
+            const query = `
+                SELECT 
                     ps.id,
-                    ps.client_name AS clientName,
-                    ps.pixel_id AS pixelId,
-                    ps.sheet_id AS sheetId,
-                    ps.sheet_url AS sheetUrl,
-                    ps.client_website AS clientWebsite,
-                    COALESCE(ps.deletable,1) AS deletable,
-                    ps.created_at AS createdAt,
-                    ps.last_sync_at AS lastSyncAt,
-                    ps.display_timezone AS displayTimezone,
-                    ps.verification_test_seen_at AS verification_test_seen_at,
-                    ps.first_real_event_at AS first_real_event_at,
-                    COALESCE(ps.paused,0) AS paused,
-                    ps.paused_reason AS paused_reason,
-                    COALESCE(ps.trial_enabled,0) AS trial_enabled,
-                    ps.trial_started_at AS trial_started_at,
-                    ps.trial_duration_days AS trial_duration_days,
-                    COALESCE(ps.refresh_in_progress,0) AS refresh_in_progress,
-                    ps.refresh_heartbeat_at AS refresh_heartbeat_at
-                 FROM pixel_sheets ps
-                 ORDER BY ps.created_at DESC`
-            );
+                    ps.client_name as clientName,
+                    ps.pixel_id as pixelId,
+                    ps.sheet_id as sheetId,
+                    ps.sheet_url as sheetUrl,
+                    ps.client_website as clientWebsite,
+                    COALESCE(ps.deletable, 1) as deletable,
+                    ps.created_at as createdAt,
+                    ps.last_sync_at as lastSyncAt,
+                    'Uncategorized' as industry,
+                    ps.segment_api as segmentApi,
+                    ps.segment_name as segmentName,
+                    NULL as deletionScheduled,
+                    COALESCE(ps.visitors, 0) as visitorCount,
+                    COALESCE(ps.events, 0) as eventCount
+                FROM pixel_sheets ps
+                ORDER BY ps.created_at DESC
+            `;
 
-            const pixels: any[] = [];
+            const [rows] = await connection.execute(query);
 
-            for (const row of rows as any[]) {
-                const clientName = row.clientName as string;
-                const pixelId = row.pixelId as string;
-                const tz = row.displayTimezone || 'America/New_York';
+            // Transform the data to match the frontend interface
+            const pixels = (rows as any[]).map((row: any) => ({
+                id: row.id.toString(),
+                clientName: row.clientName,
+                website: row.clientWebsite || (row.pixelId ? `https://${row.pixelId.replace('-', '.')}.com` : 'N/A'),
+                sheetUrl: row.sheetUrl,
+                segmentApi: row.segmentApi,
+                segmentName: row.segmentName,
+                createdAt: row.createdAt.toISOString(),
+                industry: row.industry,
+                eventCount: parseInt(row.eventCount) || 0,
+                visitorCount: parseInt(row.visitorCount) || 0,
+                deletionScheduled: row.deletionScheduled ? row.deletionScheduled.toISOString() : null,
+                lastSyncAt: row.lastSyncAt ? row.lastSyncAt.toISOString() : null,
+                deleteLocked: !(row.deletable === 1 || row.deletable === '1')
+            }));
 
-                // Cache key per client
-                let cached = ADMIN_METRICS_CACHE.get(clientName);
-                if (!cached || (Date.now() - cached.cachedAtMs) > ADMIN_METRICS_TTL_MS) {
-                    // Compute live + 7d aggregates
-                    let eventsToday = 0, visitorsToday = 0, lastRealEventAt: string | null = null, events7d = 0, avgDaily7d = 0;
-                    try {
-                        // 7d from daily table
-                        const agg = await readSevenDayAgg(connection, pixelId, tz);
-                        events7d = agg.events7d; avgDaily7d = agg.avgDaily7d;
-                    } catch (e: any) { log('⚠️ 7d aggregate failed', { clientName, message: e?.message }); }
-                    try {
-                        const live = await readLiveMetricsForClient(connection, clientName, pixelId, tz);
-                        eventsToday = live.eventsToday;
-                        visitorsToday = live.visitorsToday;
-                        lastRealEventAt = live.lastRealEventAt;
-                    } catch (e: any) { log('⚠️ live metrics failed', { clientName, message: e?.message }); }
-
-                    cached = {
-                        cachedAtMs: Date.now(),
-                        eventsToday,
-                        visitorsToday,
-                        lastRealEventAt,
-                        events7d,
-                        avgDaily7d
-                    };
-                    ADMIN_METRICS_CACHE.set(clientName, cached);
-                }
-
-                const status = deriveStatus(row, cached!);
-
-                pixels.push({
-                    id: String(row.id),
-                    clientName,
-                    website: row.clientWebsite || (row.pixelId ? `https://${String(row.pixelId).replace('-', '.')}.com` : 'N/A'),
-                    sheetUrl: row.sheetUrl,
-                    createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
-                    lastSyncAt: row.lastSyncAt ? new Date(row.lastSyncAt).toISOString() : null,
-                    deleteLocked: !(row.deletable === 1 || row.deletable === '1'),
-                    metrics: {
-                        eventsToday: cached!.eventsToday,
-                        visitorsToday: cached!.visitorsToday,
-                        events7d: cached!.events7d,
-                        avgDaily7d: cached!.avgDaily7d,
-                        lastRealEventAt: cached!.lastRealEventAt
-                    },
-                    status
-                });
-            }
-
-            log(`✅ Fetched ${pixels.length} pixels with live metrics`);
+            log(`✅ Fetched ${pixels.length} pixels from database`);
             res.json({ pixels });
 
         } finally {
@@ -1093,17 +920,16 @@ app.post("/admin/pixels/:pixelId/download", async (req, res) => {
         });
 
         try {
-            const [rows] = await connection.execute(
+            const [rows] = await connection.execute<RowDataPacket[]>(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
 
-            const rowsArr = rows as any[];
-            if (rowsArr.length === 0) {
+            if (rows.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
 
-            const clientName = rowsArr[0].client_name;
+            const clientName = rows[0].client_name;
             const result = await downloadClientData(clientName);
 
             if (result.success) {
@@ -1144,18 +970,18 @@ app.post("/admin/pixels/:pixelId/delete-from-simpleaudience", async (req, res) =
         });
 
         try {
-            const [rows] = await connection.execute(
+            const [rows] = await connection.execute<RowDataPacket[]>(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
 
-            const rowsArr2 = rows as any[];
-            if (rowsArr2.length === 0) {
+            if (rows.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
-            const clientName = rowsArr2[0].client_name;
+
+            const clientName = rows[0].client_name;
             // Check DB-backed deletable flag
-            const [lockRows] = await connection.execute(
+            const [lockRows] = await connection.execute<RowDataPacket[]>(
                 'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
@@ -1203,15 +1029,14 @@ app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
 
         let clientName: string | null = null;
         try {
-            const [rows] = await connection.execute(
+            const [rows] = await connection.execute<RowDataPacket[]>(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
-            const rowsArr3 = rows as any[];
-            if (rowsArr3.length === 0) {
+            if ((rows as any[]).length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
-            clientName = rowsArr3[0].client_name as string;
+            clientName = (rows as any[])[0].client_name as string;
         } finally {
             await connection.end();
         }
@@ -1227,7 +1052,7 @@ app.post("/admin/pixels/:pixelId/delete", async (req, res) => {
                 connectTimeout: 30000
             });
             try {
-                const [lockRows] = await conn.execute(
+                const [lockRows] = await conn.execute<RowDataPacket[]>(
                     'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
                     [pixelId]
                 );
@@ -1278,18 +1103,18 @@ app.post("/admin/pixels/:pixelId/delete-from-database", async (req, res) => {
         });
 
         try {
-            const [rows] = await connection.execute(
+            const [rows] = await connection.execute<RowDataPacket[]>(
                 'SELECT client_name FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
 
-            const rowsArr4 = rows as any[];
-            if (rowsArr4.length === 0) {
+            if (rows.length === 0) {
                 return res.status(404).json({ error: "Pixel not found" });
             }
-            const clientName = rowsArr4[0].client_name;
+
+            const clientName = rows[0].client_name;
             // Enforce DB-backed deletable flag
-            const [lockRows] = await connection.execute(
+            const [lockRows] = await connection.execute<RowDataPacket[]>(
                 'SELECT COALESCE(deletable,1) AS deletable FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
@@ -1359,7 +1184,7 @@ app.post("/admin/pixels/:pixelId/deletable", async (req, res) => {
         try {
             await ensureDeletableColumn(connection);
 
-            const [rows] = await connection.execute(
+            const [rows] = await connection.execute<RowDataPacket[]>(
                 'SELECT id FROM pixel_sheets WHERE id = ?',
                 [pixelId]
             );
@@ -1463,7 +1288,7 @@ app.get("/admin/pixels/:pixelId/sync/status", async (req, res) => {
 
         let lastSyncAt: string | null = null;
         try {
-            const [rows] = await connection.execute(
+            const [rows] = await connection.execute<any[]>(
                 "SELECT last_sync_at FROM pixel_sheets WHERE id = ?",
                 [pixelId]
             );
