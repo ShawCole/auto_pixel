@@ -287,16 +287,6 @@ try {
                 }
 
 
-
-                // CRITICAL FIX: Handle import_hash and skip conflicted dedupe_uuid
-                if (isset($event['import_hash'])) {
-                    $insert_data['import_hash'] = (string) $event['import_hash'];
-                    debugLog("Event $eventIndex has import_hash: " . substr($insert_data['import_hash'], 0, 16) . "...");
-                }
-                
-                // Explicitly UNSET dedupe_uuid to avoid "Generated column not allowed" errors
-                unset($insert_data['dedupe_uuid']);
-
                 // Persist full raw event JSON for audit/replay (central table), dedup by hash
                 try {
                     $rawJson = json_encode($event, JSON_UNESCAPED_SLASHES);
@@ -335,8 +325,27 @@ try {
                     $values[] = "'" . $mysqli->real_escape_string($value ?? '') . "'";
                 }
 
+                // DEDUPE CHECK: Check if this event already exists in the database
+                // Deduping by UUID + Event Type + Exact Timestamp
+                $chkUuid = $mysqli->real_escape_string($insert_data['uuid'] ?? '');
+                $chkType = $mysqli->real_escape_string($insert_data['event_type'] ?? '');
+                $chkTime = $mysqli->real_escape_string($insert_data['event_timestamp'] ?? '');
+
+                if ($chkUuid !== '' && $chkTime !== '') {
+                    $checkSql = "SELECT 1 FROM superpixel_resolution_log 
+                                 WHERE uuid = '$chkUuid' 
+                                 AND event_type = '$chkType' 
+                                 AND event_timestamp = '$chkTime' 
+                                 LIMIT 1";
+
+                    $checkResult = $mysqli->query($checkSql);
+                    if ($checkResult && $checkResult->num_rows > 0) {
+                        debugLog("Skipping duplicate event (already in DB): $chkUuid / $chkType / $chkTime");
+                        continue;
+                    }
+                }
+
                 // Step 1: Insert raw event into superpixel_resolution_log
-                // We use INSERT IGNORE and rely on the unique index on import_hash for robust deduplication.
                 $sql = "INSERT IGNORE INTO superpixel_resolution_log (" . implode(",", $columns) . ") VALUES (" . implode(",", $values) . ")";
                 debugLog("Executing event SQL for event $eventIndex");
                 if (!$mysqli->query($sql)) {

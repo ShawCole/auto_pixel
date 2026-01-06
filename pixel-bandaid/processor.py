@@ -119,13 +119,17 @@ class SimpleAudienceProcessor:
                 "activity_end_date": safe_get('activity_end_date'),
             }
 
-            # Generate Deterministic Dedupe UUID
-            # Hash of: pixel_id + event_type + hem_sha256 + event_timestamp + ip_address (salt)
+            # Generate Deterministic Import Hash
+            # Hash of: UUID + event_type + event_timestamp
             # This ensures that if we re-run the same CSV row, we get the exact same hash.
             import hashlib
-            dedupe_string = f"{event_obj['pixel_id']}|{event_obj['event_type']}|{event_obj['hem_sha256']}|{event_obj['event_timestamp']}|{event_obj['activity_start_date']}"
-            dedupe_uuid = hashlib.sha256(dedupe_string.encode('utf-8')).hexdigest()
-            event_obj['dedupe_uuid'] = dedupe_uuid
+            uid = safe_get('uuid')
+            etype = event_obj['event_type']
+            ets = event_obj['event_timestamp']
+            
+            hash_string = f"{uid}|{etype}|{ets}"
+            import_hash = hashlib.sha256(hash_string.encode('utf-8')).hexdigest()
+            event_obj['import_hash'] = import_hash
 
             # Gather resolution data (the big flat list of attributes)
             # We essentially dump the whole row into 'resolution' because pixel_import.php 
@@ -142,8 +146,8 @@ class SimpleAudienceProcessor:
                      # Convert to upper case key for PHP compatibility
                     resolution_data[col.upper()] = str(val)
             
-            # Pass dedupe_uuid in resolution as well just in case
-            resolution_data['DEDUPE_UUID'] = dedupe_uuid
+            # Pass import_hash in resolution as well
+            resolution_data['IMPORT_HASH'] = import_hash
             
             event_obj['resolution'] = resolution_data
             

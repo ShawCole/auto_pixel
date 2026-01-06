@@ -363,26 +363,26 @@ function ensureSchema($mysqli)
         // If it fails, we catch exception.
     }
 
-    // 2. superpixel_resolution_log: Robust Dedupe via dedupe_uuid
+    // 2. superpixel_resolution_log: Robust Dedupe via import_hash
     // First, ensure the column exists
-    $checkCol = $mysqli->query("SHOW COLUMNS FROM superpixel_resolution_log LIKE 'dedupe_uuid'");
+    $checkCol = $mysqli->query("SHOW COLUMNS FROM superpixel_resolution_log LIKE 'import_hash'");
     if ($checkCol && $checkCol->num_rows == 0) {
-        debugLog("Adding dedupe_uuid column to superpixel_resolution_log...");
+        debugLog("Adding import_hash column to superpixel_resolution_log...");
         try {
-            $mysqli->query("ALTER TABLE superpixel_resolution_log ADD COLUMN dedupe_uuid VARCHAR(64) AFTER uuid");
+            $mysqli->query("ALTER TABLE superpixel_resolution_log ADD COLUMN import_hash VARCHAR(64) AFTER uuid");
         } catch (Throwable $e) {
-            debugLog("Warning: Could not add dedupe_uuid column: " . $e->getMessage());
+            debugLog("Warning: Could not add import_hash column: " . $e->getMessage());
         }
     }
 
-    // Now ensure unique index on dedupe_uuid
-    $check2 = $mysqli->query("SHOW INDEX FROM superpixel_resolution_log WHERE Key_name = 'idx_dedupe_uuid'");
+    // Now ensure unique index on import_hash
+    $check2 = $mysqli->query("SHOW INDEX FROM superpixel_resolution_log WHERE Key_name = 'idx_import_hash'");
     if ($check2 && $check2->num_rows == 0) {
-        debugLog("Adding unique index idx_dedupe_uuid to superpixel_resolution_log...");
+        debugLog("Adding unique index idx_import_hash to superpixel_resolution_log...");
         try {
-            $mysqli->query("CREATE UNIQUE INDEX idx_dedupe_uuid ON superpixel_resolution_log (dedupe_uuid)");
+            $mysqli->query("CREATE UNIQUE INDEX idx_import_hash ON superpixel_resolution_log (import_hash)");
         } catch (Throwable $e) {
-            debugLog("Warning: Could not add unique dedupe index: " . $e->getMessage());
+            debugLog("Warning: Could not add unique import_hash index: " . $e->getMessage());
         }
     }
 }
