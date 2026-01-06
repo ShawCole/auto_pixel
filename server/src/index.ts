@@ -780,27 +780,40 @@ app.get("/admin/pixels", async (req, res) => {
                     const now = new Date();
                     const created = new Date(row.createdAt);
                     const lastEvent = row.lastEventAt ? new Date(row.lastEventAt) : null;
+
+                    // Try to parse oplet as a date if it's not the "No Resolutions" message
+                    let opletDate: Date | null = null;
+                    if (row.oplet && !row.oplet.includes("No Resolutions Found") && row.oplet.length > 5) {
+                        const parsed = new Date(row.oplet);
+                        if (!isNaN(parsed.getTime())) {
+                            opletDate = parsed;
+                        }
+                    }
+
+                    // Consolidate: use the most recent event timestamp from either source
+                    let effectiveLastEvent = lastEvent;
+                    if (opletDate && (!effectiveLastEvent || opletDate > effectiveLastEvent)) {
+                        effectiveLastEvent = opletDate;
+                    }
+
                     const isNew = (now.getTime() - created.getTime()) < 24 * 60 * 60 * 1000;
 
                     let primary = 'Active';
 
                     if (row.paused === 1) {
                         primary = 'Paused';
-                    } else if (row.oplet && row.oplet.includes("No Resolutions Found")) {
-                        primary = 'No Resolutions';
-                    } else if (row.oplet && row.oplet.length > 5) {
-                        // If we have an oplet string that isn't the "No Resolutions" message, it's a timestamp
-                        primary = 'Active';
-                    } else if (!lastEvent) {
-                        primary = isNew ? 'Awaiting Data' : 'No Data (Overdue)';
-                    } else {
-                        const hoursSinceLastEvent = (now.getTime() - lastEvent.getTime()) / (1000 * 60 * 60);
+                    } else if (effectiveLastEvent) {
+                        const hoursSinceLastEvent = (now.getTime() - effectiveLastEvent.getTime()) / (1000 * 60 * 60);
                         if (hoursSinceLastEvent > 24) {
                             const days = Math.floor(hoursSinceLastEvent / 24);
-                            primary = `Last Event: ${days}d ago`;
+                            primary = `Last: ${days}d ago`;
                         } else {
                             primary = 'Active';
                         }
+                    } else if (row.oplet && row.oplet.includes("No Resolutions Found")) {
+                        primary = 'No Resolutions';
+                    } else if (!effectiveLastEvent) {
+                        primary = isNew ? 'Awaiting Data' : 'No Data (Overdue)';
                     }
 
                     return {
@@ -823,7 +836,7 @@ app.get("/admin/pixels", async (req, res) => {
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
             res.json({
-                version: "1.0.2-oplet-status-v2",
+                version: "1.0.2-oplet-status-v3",
                 pixels
             });
 

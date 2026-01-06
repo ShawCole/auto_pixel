@@ -64,7 +64,7 @@ export async function createSegmentForPixel({ client, pixelName }: { client: str
         log('🧪 Running in HEADLESS mode');
     }
 
-    const driver = await new Builder().forBrowser("chrome").setChromeOptions(options).build();
+    const driver = await new Builder().forBrowser("chrome").setChromeOptions(options as any).build();
 
     try {
         log("🌐 Navigating to build.audiencelab.io login...");

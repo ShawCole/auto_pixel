@@ -27,6 +27,7 @@ interface Pixel {
         avgDaily7d: number
         lastRealEventAt: string | null
     }
+    oplet?: string
 }
 
 export default function AdminPanel() {
@@ -490,17 +491,37 @@ export default function AdminPanel() {
                                             <td className="p-4" style={{ width: '120px' }}>
                                                 <span
                                                     className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium truncate cursor-help ${pixel.status?.primary === 'Active' ? 'bg-green-100 text-green-800' :
-                                                            pixel.status?.primary === 'Awaiting Data' ? 'bg-yellow-100 text-yellow-800' :
-                                                                pixel.status?.primary === 'No Resolutions' ? 'bg-red-100 text-red-800' :
-                                                                    pixel.status?.primary === 'Paused' ? 'bg-gray-200 text-gray-800' :
-                                                                        'bg-orange-100 text-orange-800'
+                                                        pixel.status?.primary === 'Awaiting Data' ? 'bg-yellow-100 text-yellow-800' :
+                                                            pixel.status?.primary === 'No Resolutions' ? 'bg-red-100 text-red-800' :
+                                                                pixel.status?.primary === 'Paused' ? 'bg-gray-200 text-gray-800' :
+                                                                    'bg-orange-100 text-orange-800'
                                                         }`}
                                                     onMouseEnter={(e) => {
                                                         const lastEvent = pixel.metrics?.lastRealEventAt;
+                                                        const oplet = pixel.oplet;
                                                         const reason = pixel.status?.reason;
-                                                        let content = lastEvent
-                                                            ? `Last Event at: ${new Date(lastEvent).toLocaleString()}`
-                                                            : 'No events recorded';
+
+                                                        let aLabLine = 'A_Lab: N/A';
+                                                        if (oplet) {
+                                                            if (oplet.includes("No Resolutions Found")) {
+                                                                aLabLine = 'A_Lab: Not Installed';
+                                                            } else if (pixel.clientName === "VettaFi" && oplet.length < 5) {
+                                                                aLabLine = 'A_Lab: Can\'t Access Resolutions';
+                                                            } else if (oplet.length > 5) {
+                                                                const oDate = new Date(oplet);
+                                                                aLabLine = !isNaN(oDate.getTime())
+                                                                    ? `A_Lab: ${oDate.toLocaleString()}`
+                                                                    : `A_Lab: ${oplet}`;
+                                                            } else {
+                                                                aLabLine = `A_Lab: ${oplet}`;
+                                                            }
+                                                        }
+
+                                                        const serverLine = lastEvent
+                                                            ? `Server: ${new Date(lastEvent).toLocaleString()}`
+                                                            : 'Server: No events recorded';
+
+                                                        let content = `${aLabLine}\n${serverLine}`;
                                                         if (reason) {
                                                             content = `Reason: ${reason}\n${content}`;
                                                         }
