@@ -671,6 +671,10 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
  */
 async function startDailySyncForPixel(params: { pixelName: string, clientName: string }): Promise<{ started: boolean; logPath: string; command: string }> {
     const { pixelName, clientName } = params;
+
+    log(`🚀 Preparing targeted sync for ${clientName} (${pixelName})...`);
+    log(`🔧 Environment: isProduction=${isProduction}`);
+
     ensureDir(SYNC_LOG_DIR);
     ensureDir(SYNC_LOCK_DIR);
 
@@ -686,16 +690,27 @@ async function startDailySyncForPixel(params: { pixelName: string, clientName: s
     }
 
     const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
+
     // Command translates to: python3 daily_sync.py --days 1 --manual-pixel <pixel> --manual-client <client> --local-db
-    const cmd = `${PYTHON_BIN} ${DAILY_SYNC_SCRIPT} --days 1 --manual-pixel ${pixelName} --manual-client ${clientName} --local-db`;
+    const pythonBin = isProduction ? "/opt/auto-pixel/pixel-bandaid/venv/bin/python3" : "python3";
+    const scriptPath = isProduction ? "/opt/auto-pixel/pixel-bandaid/daily_sync.py" : path.resolve("../pixel-bandaid/daily_sync.py");
+
+    const cmd = `${pythonBin} ${scriptPath} --days 1 --manual-pixel ${pixelName} --manual-client ${clientName} --local-db`;
     const spawnCmd = `nohup ${cmd} >> ${logPath} 2>&1 & echo $!`;
 
-    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid" : "../pixel-bandaid";
+    log(`💻 Executing: ${cmd}`);
+    log(`📝 Logs at: ${logPath}`);
+
+    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid" : path.resolve("../pixel-bandaid");
 
     return await new Promise((resolve, reject) => {
         exec(spawnCmd, { cwd }, (err, stdout) => {
-            if (err) return reject(err);
+            if (err) {
+                log(`❌ Spawn Error for ${clientName}:`, err);
+                return reject(err);
+            }
             const pid = (stdout || "").toString().trim();
+            log(`✅ Started sync process with PID: ${pid}`);
             if (pid) {
                 try { fs.writeFileSync(lockPath, pid); } catch { }
                 watchPidAndCleanupLock(pid, lockPath, clientName);
