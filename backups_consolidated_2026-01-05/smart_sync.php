@@ -172,9 +172,12 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
     }
 }
 
+<<<<<<< HEAD
 /**
  * Returns an array: ['success' => bool, 'latest_event' => string|null]
  */
+=======
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 function syncEventsToSheet($mysqli, $clientName, $sheetId, $service)
 {
     global $EVENTS_LIMIT;
@@ -249,6 +252,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service)
         ];
     }
 
+<<<<<<< HEAD
     // Sort events by timestamp descending (PHP-side sort handles mixed date formats correctly)
     usort($events, function ($a, $b) {
         $t1 = strtotime($a[0]); // event_timestamp is index 0
@@ -256,6 +260,8 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service)
         return $t2 - $t1; // DESC order
     });
 
+=======
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
     if (empty($events)) {
         echo "No new event data to sync\n";
         return ['success' => true, 'latest_event' => null];
@@ -348,18 +354,26 @@ function syncSingleSheet($clientName, $sheetId, $isNewSheet = false)
     echo "Updating both tabs (Visitors + Events) for $clientName...\n";
 
     $visitorsSuccess = syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service);
+<<<<<<< HEAD
     $eventsResult = syncEventsToSheet($mysqli, $clientName, $sheetId, $service);
 
     // Normalize result (handle if it returns array or bool for backward compatibility if mixed)
     $eventsSuccess = is_array($eventsResult) ? $eventsResult['success'] : $eventsResult;
     $latestEvent = is_array($eventsResult) ? $eventsResult['latest_event'] : null;
+=======
+    $eventsSuccess = syncEventsToSheet($mysqli, $clientName, $sheetId, $service);
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
     $mysqli->close();
 
     if ($visitorsSuccess && $eventsSuccess) {
         echo "✅ Sync completed successfully for $clientName\n";
 
+<<<<<<< HEAD
         // Update last_sync_at timestamp AND last_event_at
+=======
+        // Update last_sync_at timestamp
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
         $pixelMysqli = new mysqli($dbHost, $dbUser, $dbPass, 'pixel');
         if ($pixelMysqli->connect_error) {
             echo "Warning: Could not update sync timestamp - connection failed: " . $pixelMysqli->connect_error . "\n";
@@ -647,4 +661,13 @@ if ($specificClient) {
     echo "Successfully synced: $successCount/" . count($sheetsToSync) . " sheets\n";
     echo "Next sync in 5 minutes\n";
     echo "Monitoring for new sheets every ${MONITOR_INTERVAL} seconds\n";
+<<<<<<< HEAD
 }
+=======
+}
+
+/**
+ * Uses User Credentials (Owner) to grant Service Account access AND enable public viewing.
+ */
+?>
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4

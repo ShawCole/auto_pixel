@@ -11,7 +11,11 @@ $dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 // Prefer explicit env override, fall back to standard path on servers
+<<<<<<< HEAD
 $credentialsPath = '/opt/auto-pixel/credentials.json';
+=======
+$credentialsPath = getenv('GOOGLE_APPLICATION_CREDENTIALS') ?: __DIR__ . '/credentials.json';
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
 // Get client name, pixel ID, and website URL from command line arguments
 if ($argc < 4) {

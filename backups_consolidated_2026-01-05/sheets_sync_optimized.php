@@ -5,60 +5,42 @@ require_once __DIR__ . '/vendor/autoload.php';
 use Google\Client;
 use Google\Service\Sheets;
 use Google\Service\Sheets\ValueRange;
-use Google\Service\Sheets\BatchUpdateValuesRequest;
 
-// Database configuration
 $dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-
-// Google Sheets configuration
+<<<<<<< HEAD
 $credentialsPath = '/opt/auto-pixel/credentials.json';
+=======
+$credentialsPath = __DIR__ . '/credentials.json';
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
-// Configuration for data limits and staggering
+// Configuration for data limits
 $VISITORS_LIMIT = 10000;    // Max visitors to sync
 $EVENTS_LIMIT = 100000;     // Max recent events to sync (Google Sheets max practical limit)
-$STAGGER_DELAY = 30;        // Seconds between client syncs (30 seconds = 2 clients per minute)
-$MAX_CLIENTS_PER_RUN = 10;  // Maximum clients to sync in one run (prevents rate limit issues)
 
-// Initialize Google Client
 function getGoogleClient()
 {
     global $credentialsPath;
-
     $client = new Client();
     $client->setAuthConfig($credentialsPath);
-    $client->setScopes([
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/drive'
-    ]);
-    $client->setSubject('scole@thynkdata.com');
-
+    $client->setScopes(['https://www.googleapis.com/auth/spreadsheets']);
     return $client;
 }
 
-// Sync visitors data to sheet
 function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
 {
-    echo "Syncing visitors for $clientName...\n";
+    global $VISITORS_LIMIT;
+    echo "Syncing visitors for $clientName (limit: $VISITORS_LIMIT)...\n";
 
-    // Get visitor data
+    // Get visitor data - most recent first, with activity priority
     $sql = "SELECT 
-        uuid,
-        first_name,
-        last_name,
-        company_name,
-        job_title,
-        personal_emails,
-        mobile_phone,
-        personal_city,
-        personal_state,
-        first_seen_at,
-        last_seen_at,
-        event_count
-    FROM superpixel_visitors
-    ORDER BY last_seen_at DESC
-    LIMIT 1000"; // Limit for performance
+        uuid, first_name, last_name, company_name, job_title, 
+        personal_emails, mobile_phone, personal_city, personal_state, 
+        first_seen_at, last_seen_at, event_count
+    FROM superpixel_visitors 
+    ORDER BY last_seen_at DESC, event_count DESC 
+    LIMIT $VISITORS_LIMIT";
 
     $result = $mysqli->query($sql);
     if (!$result) {
@@ -67,6 +49,7 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
     }
 
     $values = [];
+    $count = 0;
     while ($row = $result->fetch_assoc()) {
         $values[] = [
             $row['uuid'] ?? '',
@@ -82,6 +65,7 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
             $row['last_seen_at'] ?? '',
             $row['event_count'] ?? '0'
         ];
+        $count++;
     }
 
     if (empty($values)) {
@@ -89,26 +73,18 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
         return true;
     }
 
-    // Clear existing data (except header)
-    $clearRange = 'Visitors!A2:L1001';
     try {
+        // Clear existing data (except header) - expanded range for more visitors
+        $clearRange = 'Visitors!A2:L' . ($VISITORS_LIMIT + 10);
         $service->spreadsheets_values->clear($sheetId, $clearRange, new Google\Service\Sheets\ClearValuesRequest());
-    } catch (Exception $e) {
-        echo "Error clearing sheet: " . $e->getMessage() . "\n";
-    }
 
-    // Update sheet with new data
-    $range = 'Visitors!A2';
-    $body = new ValueRange([
-        'values' => $values
-    ]);
-
-    try {
-        $params = [
-            'valueInputOption' => 'RAW'
-        ];
+        // Update sheet with new data
+        $range = 'Visitors!A2';
+        $body = new ValueRange(['values' => $values]);
+        $params = ['valueInputOption' => 'RAW'];
         $service->spreadsheets_values->update($sheetId, $range, $body, $params);
-        echo "Updated " . count($values) . " visitor records\n";
+
+        echo "Updated $count visitor records (max: $VISITORS_LIMIT)\n";
         return true;
     } catch (Exception $e) {
         echo "Error updating visitors: " . $e->getMessage() . "\n";
@@ -116,29 +92,25 @@ function syncVisitorsToSheet($mysqli, $clientName, $sheetId, $service)
     }
 }
 
-// Sync recent events to sheet
 function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTime = null)
 {
-    echo "Syncing events for $clientName...\n";
+    global $EVENTS_LIMIT;
+    echo "Syncing events for $clientName (limit: $EVENTS_LIMIT)...\n";
 
-    // Build query with optional time filter
+    // For events, we want recent activity with a rolling window approach
     $sql = "SELECT 
-        event_timestamp,
-        event_type,
-        uuid,
-        first_name,
-        last_name,
-        company_name,
-        url,
-        referrer,
-        ip_address
+        event_timestamp, event_type, uuid, first_name, last_name, 
+        company_name, url, referrer, ip_address, created_at
     FROM superpixel_resolution_log";
 
     if ($lastSyncTime) {
+        // Incremental sync - get new events since last sync
         $sql .= " WHERE created_at > '$lastSyncTime'";
+        $sql .= " ORDER BY created_at DESC LIMIT 1000"; // Smaller batch for incremental
+    } else {
+        // Full sync - get most recent events
+        $sql .= " ORDER BY created_at DESC LIMIT $EVENTS_LIMIT";
     }
-
-    $sql .= " ORDER BY created_at DESC LIMIT 500"; // Recent events only
 
     $result = $mysqli->query($sql);
     if (!$result) {
@@ -147,6 +119,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
     }
 
     $values = [];
+    $count = 0;
     while ($row = $result->fetch_assoc()) {
         $fullName = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
         $values[] = [
@@ -159,6 +132,7 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
             $row['referrer'] ?? '',
             $row['ip_address'] ?? ''
         ];
+        $count++;
     }
 
     if (empty($values)) {
@@ -166,42 +140,28 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
         return true;
     }
 
-    // For events, we append new data instead of replacing
-    if (!$lastSyncTime) {
-        // First sync - clear and replace
-        $clearRange = 'Events Log!A2:H501';
-        try {
-            $service->spreadsheets_values->clear($sheetId, $clearRange, new Google\Service\Sheets\ClearValuesRequest());
-        } catch (Exception $e) {
-            echo "Error clearing sheet: " . $e->getMessage() . "\n";
-        }
-        $range = 'Events Log!A2';
-    } else {
-        // Incremental sync - append
-        $range = 'Events Log!A:H';
-    }
-
-    $body = new ValueRange([
-        'values' => $values
-    ]);
-
     try {
-        if ($lastSyncTime) {
-            // Append for incremental updates
-            $params = [
-                'valueInputOption' => 'RAW',
-                'insertDataOption' => 'INSERT_ROWS'
-            ];
-            $service->spreadsheets_values->append($sheetId, $range, $body, $params);
-        } else {
-            // Update for full refresh
-            $params = [
-                'valueInputOption' => 'RAW'
-            ];
+        if (!$lastSyncTime) {
+            // Full refresh - clear and replace with most recent events
+            $clearRange = 'Events Log!A2:H' . ($EVENTS_LIMIT + 10);
+            $service->spreadsheets_values->clear($sheetId, $clearRange, new Google\Service\Sheets\ClearValuesRequest());
+            $range = 'Events Log!A2';
+            $params = ['valueInputOption' => 'RAW'];
+            $body = new ValueRange(['values' => $values]);
             $service->spreadsheets_values->update($sheetId, $range, $body, $params);
+            echo "Full refresh: Updated $count event records\n";
+        } else {
+            // Incremental update - append new events to top
+            $range = 'Events Log!A2:H2';
+            $params = ['valueInputOption' => 'RAW', 'insertDataOption' => 'INSERT_ROWS'];
+            $body = new ValueRange(['values' => $values]);
+            $service->spreadsheets_values->append($sheetId, $range, $body, $params);
+            echo "Incremental: Added $count new event records\n";
+
+            // Trim old events if sheet gets too large
+            trimOldEvents($sheetId, $service);
         }
 
-        echo "Updated " . count($values) . " event records\n";
         return true;
     } catch (Exception $e) {
         echo "Error updating events: " . $e->getMessage() . "\n";
@@ -209,39 +169,52 @@ function syncEventsToSheet($mysqli, $clientName, $sheetId, $service, $lastSyncTi
     }
 }
 
-// Main sync function with staggering
+function trimOldEvents($sheetId, $service)
+{
+    global $EVENTS_LIMIT;
+
+    try {
+        // Get current row count
+        $response = $service->spreadsheets_values->get($sheetId, 'Events Log!A:A');
+        $rowCount = count($response->getValues() ?? []);
+
+        if ($rowCount > $EVENTS_LIMIT + 1) { // +1 for header
+            $excessRows = $rowCount - $EVENTS_LIMIT - 1;
+            $deleteRange = 'Events Log!' . ($EVENTS_LIMIT + 2) . ':' . $rowCount;
+
+            echo "Trimming $excessRows old event rows (keeping most recent $EVENTS_LIMIT)\n";
+
+            $service->spreadsheets_values->clear($sheetId, $deleteRange, new Google\Service\Sheets\ClearValuesRequest());
+        }
+    } catch (Exception $e) {
+        echo "Warning: Could not trim old events: " . $e->getMessage() . "\n";
+    }
+}
+
 function syncAllSheets()
 {
-    global $dbHost, $dbUser, $dbPass, $STAGGER_DELAY, $MAX_CLIENTS_PER_RUN;
+    global $dbHost, $dbUser, $dbPass;
 
-    // Connect to MySQL
     $mysqli = new mysqli($dbHost, $dbUser, $dbPass);
     if ($mysqli->connect_error) {
         die("MySQL connection failed: " . $mysqli->connect_error);
     }
 
-    // Get Google Sheets service
     $client = getGoogleClient();
     $service = new Sheets($client);
 
-    // Get all client sheets to sync, ordered by last sync time (oldest first)
-    $sql = "SELECT * FROM pixel.pixel_sheets 
-            WHERE sheet_id IS NOT NULL 
-            ORDER BY last_sync_at IS NULL DESC, last_sync_at ASC 
-            LIMIT $MAX_CLIENTS_PER_RUN";
+    // Get all client sheets to sync (excluding PENDING ones)
+    $sql = "SELECT * FROM pixel.pixel_sheets WHERE sheet_id IS NOT NULL AND sheet_id != 'PENDING'";
     $result = $mysqli->query($sql);
 
     if (!$result) {
         die("Error querying pixel_sheets: " . $mysqli->error);
     }
 
-    $clientCount = 0;
-    $startTime = time();
-
+    $sheetCount = 0;
     while ($sheet = $result->fetch_assoc()) {
-        $clientCount++;
-        echo "\n=== Syncing {$sheet['client_name']} (Sheet $clientCount) ===";
-        echo "\nStarted at: " . date('Y-m-d H:i:s') . "\n";
+        $sheetCount++;
+        echo "\n=== Syncing {$sheet['client_name']} (Sheet $sheetCount) ===\n";
 
         // Select client database
         $clientDb = $sheet['client_name'];
@@ -250,10 +223,10 @@ function syncAllSheets()
             continue;
         }
 
-        // Sync visitors
+        // Sync visitors (full refresh every time for data consistency)
         $visitorsSuccess = syncVisitorsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service);
 
-        // Sync events
+        // Sync events (incremental when possible)
         $eventsSuccess = syncEventsToSheet($mysqli, $sheet['client_name'], $sheet['sheet_id'], $service, $sheet['last_sync_at']);
 
         // Update last sync time if successful
@@ -266,23 +239,25 @@ function syncAllSheets()
             echo "❌ Sync completed with errors for {$sheet['client_name']}\n";
         }
 
-        // Stagger delay between clients (except for the last one)
-        if ($clientCount < $result->num_rows) {
-            echo "Waiting $STAGGER_DELAY seconds before next client...\n";
-            sleep($STAGGER_DELAY);
+        // Add delay between sheets to avoid API rate limits
+        if ($sheetCount > 1) {
+            echo "Waiting 2 seconds before next sheet...\n";
+            sleep(2);
         }
     }
 
-    $totalTime = time() - $startTime;
     $mysqli->close();
-
-    echo "\n🎉 Sync run completed - processed $clientCount client sheets in ${totalTime}s\n";
-    echo "Next sync run in 5 minutes\n";
+    echo "\n🎉 All syncs completed - processed $sheetCount client sheets\n";
 }
 
-// Run sync
+// Run sync with error handling
 if (php_sapi_name() === 'cli') {
-    syncAllSheets();
+    try {
+        syncAllSheets();
+    } catch (Exception $e) {
+        echo "💥 Fatal error during sync: " . $e->getMessage() . "\n";
+        exit(1);
+    }
 } else {
     die("This script must be run from command line\n");
 }

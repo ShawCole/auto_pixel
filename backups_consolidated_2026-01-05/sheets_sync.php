@@ -13,7 +13,11 @@ $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
 
 // Google Sheets configuration
+<<<<<<< HEAD
 $credentialsPath = '/opt/auto-pixel/credentials.json';
+=======
+$credentialsPath = __DIR__ . '/credentials.json';
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
 // Configuration for data limits and staggering
 $VISITORS_LIMIT = 10000;    // Max visitors to sync
@@ -32,8 +36,13 @@ function getGoogleClient()
         'https://www.googleapis.com/auth/spreadsheets',
         'https://www.googleapis.com/auth/drive'
     ]);
+<<<<<<< HEAD
+    // $client->setSubject('scole@thynkdata.com');
+    
+=======
     $client->setSubject('scole@thynkdata.com');
 
+>>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
     return $client;
 }
 

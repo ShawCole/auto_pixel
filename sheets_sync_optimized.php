@@ -9,11 +9,7 @@ use Google\Service\Sheets\ValueRange;
 $dbHost = '34.26.61.148';
 $dbUser = 'root';
 $dbPass = 'AccuPoint01!';
-<<<<<<< HEAD
 $credentialsPath = '/opt/auto-pixel/credentials.json';
-=======
-$credentialsPath = __DIR__ . '/credentials.json';
->>>>>>> 11d8aeca212436261df6d65df181aeb95d17b8f4
 
 // Configuration for data limits
 $VISITORS_LIMIT = 10000;    // Max visitors to sync
