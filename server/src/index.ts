@@ -25,9 +25,9 @@ function log(message: string, data?: any) {
 const isProduction = process.env.NODE_ENV === 'production';
 const PHP_BIN = process.env.PHP_BIN || 'php';
 const PYTHON_BIN = process.env.PYTHON_BIN || (isProduction ? '/opt/auto-pixel/pixel-bandaid/venv/bin/python3' : 'python3');
-const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || (isProduction ? "/var/log/auto-pixel" : "./logs");
+const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || (isProduction ? "/opt/auto-pixel/logs" : "./logs");
 const SYNC_LOCK_DIR = process.env.SYNC_LOCK_DIR || (isProduction ? "/opt/auto-pixel/.sync-locks" : "./locks");
-const DAILY_SYNC_SCRIPT = isProduction ? "/opt/auto-pixel/pixel-bandaid/daily_sync.py" : "../pixel-bandaid/daily_sync.py";
+const DAILY_SYNC_SCRIPT = isProduction ? "/opt/auto-pixel/pixel-bandaid/daily_sync.py" : path.resolve(__dirname, "../../pixel-bandaid/daily_sync.py");
 
 function ensureDir(p: string) {
     try { fs.mkdirSync(p, { recursive: true }); } catch { }
@@ -697,14 +697,14 @@ async function startDailySyncForPixel(params: { pixelName: string, clientName: s
 
     const cmd = `${pythonBin} ${scriptPath} --days 1 --manual-pixel ${pixelName} --manual-client ${clientName} --local-db`;
     const spawnCmd = `nohup ${cmd} >> ${logPath} 2>&1 & echo $!`;
+    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid" : path.resolve(__dirname, "../../pixel-bandaid");
 
     log(`💻 Executing: ${cmd}`);
     log(`📝 Logs at: ${logPath}`);
-
-    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid" : path.resolve("../pixel-bandaid");
+    log(`📂 Working Directory: ${cwd}`);
 
     return await new Promise((resolve, reject) => {
-        exec(spawnCmd, { cwd }, (err, stdout) => {
+        exec(spawnCmd, { cwd, shell: '/bin/bash' }, (err, stdout) => {
             if (err) {
                 log(`❌ Spawn Error for ${clientName}:`, err);
                 return reject(err);
