@@ -1,6 +1,7 @@
 <?php
 // batch_populate_import_hash.php
-// One-time script to populate import_hash for the last 30 days across all client databases.
+// One-time script to populate import_hash across all client databases.
+// Optimized to avoid "Duplicate entry" errors by indexing LAST.
 
 require_once __DIR__ . '/visitor_upsert_functions.php';
 
@@ -26,6 +27,11 @@ try {
     echo "Found " . count($clients) . " clients to process.\n";
 
     foreach ($clients as $client) {
+        if ($client == 'VettaFi') {
+            echo "\n>>> Skipping VettaFi (Manual Migration in Progress)\n";
+            continue;
+        }
+
         echo "\n>>> Processing Client: $client\n";
         $db = new mysqli($dbHost, $dbUser, $dbPass, $client);
         if ($db->connect_error) {
@@ -33,26 +39,26 @@ try {
             continue;
         }
 
-        // 1. Cleanup old schema (Drop dedupe_uuid and blocking indexes)
-        echo "Cleaning up old schema (dedupe_uuid)...\n";
-        // Drop index first if it exists
+        // 1. Cleanup old schema & indexes that block migration
+        echo "Cleaning up old schema & blocking indexes...\n";
         $db->query("DROP INDEX IF EXISTS uniq_event_conditional ON superpixel_resolution_log");
-        // Drop column if it exists
+        $db->query("DROP INDEX IF EXISTS idx_import_hash ON superpixel_resolution_log");
+
         $checkDedupe = $db->query("SHOW COLUMNS FROM superpixel_resolution_log LIKE 'dedupe_uuid'");
         if ($checkDedupe && $checkDedupe->num_rows > 0) {
             $db->query("ALTER TABLE superpixel_resolution_log DROP COLUMN dedupe_uuid");
         }
 
-        // 2. Ensure Schema (Add import_hash column/index if missing)
-        echo "Ensuring Schema (import_hash)...\n";
-        ensureSchema($db);
+        // 2. Add import_hash column (NOT UNIQUE yet)
+        echo "Adding import_hash column...\n";
+        $db->query("ALTER TABLE superpixel_resolution_log ADD COLUMN IF NOT EXISTS import_hash VARCHAR(64) AFTER uuid");
 
-        // 2. Clear out any ghost rows that would block uniqueness
+        // 3. Clear out any ghost rows that would block uniqueness
         echo "Cleaning ghost rows...\n";
         $db->query("DELETE FROM superpixel_resolution_log WHERE uuid IS NULL OR TRIM(uuid) = '' OR LENGTH(TRIM(uuid)) < 20");
 
-        // 3. Populate import_hash for the last 30 days
-        echo "Backfilling import_hash for last 30 days...\n";
+        // 4. Populate import_hash for the last 30 days
+        echo "Backfilling import_hash (30 days)...\n";
         $hashSql = "
             UPDATE superpixel_resolution_log
             SET import_hash = SHA2(CONCAT(COALESCE(uuid, ''), '|', COALESCE(event_type, ''), '|', COALESCE(event_timestamp, '')), 256)
@@ -67,7 +73,7 @@ try {
             echo "Error hashing rows: " . $db->error . "\n";
         }
 
-        // 4. Deduplicate existing hashes to ensure unique index can be created
+        // 5. Deduplicate existing hashes
         echo "Deduplicating...\n";
         $db->query("CREATE INDEX IF NOT EXISTS tmp_hash_idx ON superpixel_resolution_log(import_hash)");
         $db->query("
@@ -77,14 +83,18 @@ try {
         ");
         $db->query("DROP INDEX IF EXISTS tmp_hash_idx ON superpixel_resolution_log");
 
-        // 5. Ensure Unique Index
-        echo "Finalizing index...\n";
-        $db->query("CREATE UNIQUE INDEX IF NOT EXISTS idx_import_hash ON superpixel_resolution_log (import_hash)");
+        // 6. Finalize UNIQUE Index
+        echo "Creating Final Unique Index...\n";
+        if ($db->query("CREATE UNIQUE INDEX idx_import_hash ON superpixel_resolution_log (import_hash)")) {
+            echo "✅ Migration complete for $client\n";
+        } else {
+            echo "❌ Failed to create unique index for $client: " . $db->error . "\n";
+        }
 
         $db->close();
     }
 
-    echo "\n\nBatch migration complete!\n";
+    echo "\n\nBatch migration complete (skipped VettaFi)!\n";
 
 } catch (Throwable $e) {
     echo "Fatal Error: " . $e->getMessage() . "\n";
