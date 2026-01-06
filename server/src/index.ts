@@ -782,14 +782,17 @@ app.get("/admin/pixels", async (req, res) => {
                     const lastEvent = row.lastEventAt ? new Date(row.lastEventAt) : null;
                     const isNew = (now.getTime() - created.getTime()) < 24 * 60 * 60 * 1000;
 
-                    let primary = row.paused === 1 ? 'Paused' : 'Active';
+                    let primary = 'Active';
 
                     if (row.paused === 1) {
                         primary = 'Paused';
                     } else if (row.oplet && row.oplet.includes("No Resolutions Found")) {
                         primary = 'No Resolutions';
+                    } else if (row.oplet && row.oplet.length > 5) {
+                        // If we have an oplet string that isn't the "No Resolutions" message, it's a timestamp
+                        primary = 'Active';
                     } else if (!lastEvent) {
-                        primary = isNew ? 'Awaiting Events' : 'No Events (Overdue)';
+                        primary = isNew ? 'Awaiting Data' : 'No Data (Overdue)';
                     } else {
                         const hoursSinceLastEvent = (now.getTime() - lastEvent.getTime()) / (1000 * 60 * 60);
                         if (hoursSinceLastEvent > 24) {

@@ -489,7 +489,12 @@ export default function AdminPanel() {
                                             </td>
                                             <td className="p-4" style={{ width: '120px' }}>
                                                 <span
-                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium truncate cursor-help ${pixel.status?.primary === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                                                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium truncate cursor-help ${pixel.status?.primary === 'Active' ? 'bg-green-100 text-green-800' :
+                                                            pixel.status?.primary === 'Awaiting Data' ? 'bg-yellow-100 text-yellow-800' :
+                                                                pixel.status?.primary === 'No Resolutions' ? 'bg-red-100 text-red-800' :
+                                                                    pixel.status?.primary === 'Paused' ? 'bg-gray-200 text-gray-800' :
+                                                                        'bg-orange-100 text-orange-800'
+                                                        }`}
                                                     onMouseEnter={(e) => {
                                                         const lastEvent = pixel.metrics?.lastRealEventAt;
                                                         const reason = pixel.status?.reason;
