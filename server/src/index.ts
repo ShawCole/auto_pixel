@@ -822,7 +822,10 @@ app.get("/admin/pixels", async (req, res) => {
             }));
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
-            res.json({ pixels });
+            res.json({
+                version: "1.0.2-oplet-status-v2",
+                pixels
+            });
 
         } finally {
             await connection.end();
