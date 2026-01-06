@@ -779,9 +779,12 @@ app.get("/admin/pixels", async (req, res) => {
                 status: (() => {
                     const now = new Date();
                     const created = new Date(row.createdAt);
-                    const lastEvent = row.lastEventAt ? new Date(row.lastEventAt) : null;
 
-                    // Try to parse oplet as a date if it's not the "No Resolutions" message
+                    // Priority: If eventCount > 0, we have valid server events. 
+                    // (Ignoring lastEventAt if eventCount is 0 to exclude test UUID events)
+                    const lastServerEvent = row.eventCount > 0 && row.lastEventAt ? new Date(row.lastEventAt) : null;
+
+                    // Parse oplet as a date if it's a timestamp
                     let opletDate: Date | null = null;
                     if (row.oplet && !row.oplet.includes("No Resolutions Found") && row.oplet.length > 5) {
                         const parsed = new Date(row.oplet);
@@ -790,8 +793,8 @@ app.get("/admin/pixels", async (req, res) => {
                         }
                     }
 
-                    // Consolidate: use the most recent event timestamp from either source
-                    let effectiveLastEvent = lastEvent;
+                    // Consolidate: use the most recent valid event timestamp
+                    let effectiveLastEvent = lastServerEvent;
                     if (opletDate && (!effectiveLastEvent || opletDate > effectiveLastEvent)) {
                         effectiveLastEvent = opletDate;
                     }
@@ -810,10 +813,11 @@ app.get("/admin/pixels", async (req, res) => {
                         } else {
                             primary = 'Active';
                         }
-                    } else if (row.oplet && row.oplet.includes("No Resolutions Found")) {
-                        primary = 'No Resolutions';
-                    } else if (!effectiveLastEvent) {
-                        primary = isNew ? 'Awaiting Data' : 'No Data (Overdue)';
+                    } else if (isNew) {
+                        primary = 'Awaiting Data';
+                    } else {
+                        // No valid events and no resolutions and not new
+                        primary = 'Not Installed';
                     }
 
                     return {
@@ -836,7 +840,7 @@ app.get("/admin/pixels", async (req, res) => {
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
             res.json({
-                version: "1.0.2-oplet-status-v3",
+                version: "1.0.2-oplet-status-v4",
                 pixels
             });
 
