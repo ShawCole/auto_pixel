@@ -1,4 +1,5 @@
 import os
+import sys
 import argparse
 import subprocess
 import json
@@ -397,7 +398,7 @@ def run_oplet_sync(client_name):
     try:
         # We use the --client flag to poll only the current client
         process = subprocess.Popen(
-            ["python3", script_path, f"--client={client_name}"],
+            [sys.executable, script_path, f"--client={client_name}"],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True
