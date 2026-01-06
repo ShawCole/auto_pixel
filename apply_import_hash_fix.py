@@ -7,7 +7,8 @@ This adds support for the new import_hash field and removes the conflicted dedup
 import re
 from datetime import datetime
 
-TARGET_FILE = "/Users/ShawCole/Auto_Pixel/pixel-bandaid/pixel_import.php"
+import os
+TARGET_FILE = os.path.join(os.path.dirname(__file__), "pixel-bandaid", "pixel_import.php")
 
 # Read the current file
 with open(TARGET_FILE, 'r') as f:
