@@ -142,6 +142,10 @@ def main():
                 logger.info(f"Backfilling visitors for {client_db}...")
                 run_backfill(client_db)
 
+                # NEW: Run Professional Match Worker
+                logger.info(f"Matching professionals for {client_db} via match_worker.php...")
+                run_match_worker(client_db)
+
                 # NEW: Trigger Sheets Sync immediately
                 logger.info(f"Syncing {client_db} to Google Sheets...")
                 run_smart_sync(client_db)
@@ -344,6 +348,41 @@ def run_prepare_db(client_name):
 
     except Exception as e:
         logger.error(f"Failed to prepare DB for {client_name}: {e}")
+
+def run_match_worker(client_name):
+    """
+    Executes match_worker.php to enrich visitors with NPN/CRD from accupoint_solutions.
+    """
+    # match_worker is usually in the parent directory absolute to this script
+    script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "match_worker.php"))
+    
+    if not os.path.exists(script_path):
+        # Fallback to local dir if moved
+        script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "match_worker.php"))
+
+    if not os.path.exists(script_path):
+        logger.error(f"match_worker.php not found at: {script_path}")
+        return
+
+    try:
+        process = subprocess.Popen(
+            ["php", script_path, f"--client={client_name}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate()
+        
+        if "processing" in stdout.lower() or "targeting specific client" in stdout.lower():
+            logger.info(f"Match worker finished for {client_name}")
+        else:
+            logger.warning(f"Match worker output for {client_name}: {stdout.strip()}")
+        
+        if process.returncode != 0:
+            logger.error(f"Match Worker Script failed (code {process.returncode}). Stderr: {stderr}")
+
+    except Exception as e:
+        logger.error(f"Failed to run match_worker for {client_name}: {e}")
 
 def run_oplet_sync(client_name):
     """

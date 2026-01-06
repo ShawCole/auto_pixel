@@ -17,9 +17,11 @@ $MASTER_DB = 'accupoint_solutions';
 $BATCH_SIZE = 100;
 
 // --- LOGGING ---
-function workerLog($msg) {
+function workerLog($msg)
+{
     $log = '/var/log/auto-pixel/match_worker.log';
-    if (!is_dir(dirname($log))) mkdir(dirname($log), 0755, true);
+    if (!is_dir(dirname($log)))
+        mkdir(dirname($log), 0755, true);
     $line = "[" . date('Y-m-d H:i:s') . "] $msg";
     echo "$line\n";
     file_put_contents($log, "$line\n", FILE_APPEND);
@@ -27,27 +29,43 @@ function workerLog($msg) {
 
 // --- SETUP ---
 $mysqli = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $CENTRAL_DB);
-if ($mysqli->connect_error) exit("Central DB Error\n");
+if ($mysqli->connect_error)
+    exit("Central DB Error\n");
 
 // Get Active Clients
-$clients = $mysqli->query("SELECT client_name, client_slug FROM pixel_sheets WHERE status='active' AND paused=0")->fetch_all(MYSQLI_ASSOC);
+$targetClient = null;
+foreach ($argv as $arg) {
+    if (strpos($arg, '--client=') === 0) {
+        $targetClient = substr($arg, 9);
+    }
+}
+
+if ($targetClient) {
+    $clients = [['client_slug' => $targetClient]];
+    workerLog("Targeting specific client: $targetClient");
+} else {
+    $clients = $mysqli->query("SELECT client_name, client_slug FROM pixel_sheets WHERE status='active' AND paused=0")->fetch_all(MYSQLI_ASSOC);
+}
 $mysqli->close();
 
 // Connect to Master DB
 $master = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $MASTER_DB);
-if ($master->connect_error) exit("Master DB Error\n");
+if ($master->connect_error)
+    exit("Master DB Error\n");
 
 // --- PROCESSING LOOP ---
 foreach ($clients as $client) {
     $slug = $client['client_slug'];
-    
+
     try {
         $db = new mysqli($DB_HOST, $DB_USER, $DB_PASS, $slug);
-        if ($db->connect_error) continue;
+        if ($db->connect_error)
+            continue;
 
         // Verify V2 table exists
         if ($db->query("SHOW TABLES LIKE 'matched_professionals'")->num_rows === 0) {
-            $db->close(); continue;
+            $db->close();
+            continue;
         }
 
         // 1. Find Pending Visitors
@@ -63,7 +81,10 @@ foreach ($clients as $client) {
         $q = $db->query($sql);
         $visitors = $q ? $q->fetch_all(MYSQLI_ASSOC) : [];
 
-        if (empty($visitors)) { $db->close(); continue; }
+        if (empty($visitors)) {
+            $db->close();
+            continue;
+        }
 
         workerLog("Processing " . count($visitors) . " visitors for $slug");
 
@@ -71,13 +92,16 @@ foreach ($clients as $client) {
             $uuid = $v['uuid'];
             $vFn = trim($v['first_name'] ?? '');
             $vLn = trim($v['last_name'] ?? '');
-            
+
             // Consolidate Emails
             $emails = [];
-            if (!empty($v['email_best'])) $emails[] = $v['email_best'];
-            if (!empty($v['business_email'])) $emails[] = $v['business_email'];
+            if (!empty($v['email_best']))
+                $emails[] = $v['email_best'];
+            if (!empty($v['business_email']))
+                $emails[] = $v['business_email'];
             if (!empty($v['personal_emails'])) {
-                foreach(explode(',', $v['personal_emails']) as $e) $emails[] = trim($e);
+                foreach (explode(',', $v['personal_emails']) as $e)
+                    $emails[] = trim($e);
             }
             $emails = array_values(array_unique(array_filter($emails)));
 
@@ -115,13 +139,13 @@ foreach ($clients as $client) {
             // TIER 2 & 3: BIO MATCH (If Tier 1 failed)
             // ---------------------------------------------------------
             if (!$matchData && !empty($emails) && $vFn && $vLn) {
-                
+
                 // 1. Fetch ALL candidates for these emails
                 $phs = implode(',', array_fill(0, count($emails), '?'));
                 $types = str_repeat('s', count($emails));
                 $sqlBio = "SELECT Email, NPN, CRD, NPN_Active, CRD_Active, First_Name, Last_Name, is_rr, is_ia, is_agent 
                            FROM match_emails WHERE Email IN ($phs)";
-                
+
                 $stmt = $master->prepare($sqlBio);
                 $stmt->bind_param($types, ...$emails);
                 $stmt->execute();
@@ -135,7 +159,8 @@ foreach ($clients as $client) {
                     $cEmail = strtolower(trim($cand['Email']));
 
                     // Skip if no NPN/CRD (Safety)
-                    if (empty($cand['NPN']) && empty($cand['CRD'])) continue;
+                    if (empty($cand['NPN']) && empty($cand['CRD']))
+                        continue;
 
                     // CHECK: Strict (First + Last + Email)
                     if (strcasecmp($cFn, $vFn) === 0 && strcasecmp($cLn, $vLn) === 0) {
@@ -147,15 +172,17 @@ foreach ($clients as $client) {
                         $matchedEmail = $cEmail;
                         $matchedFn = $cFn;
                         $matchedLn = $cLn;
-                        break; 
+                        break;
                     }
 
                     // CHECK: Nickname (3 chars First + Last + Email)
                     // Only if we haven't found a score 100 yet
                     if ($score < 80) {
-                        if (strcasecmp($cLn, $vLn) === 0 && 
-                            stripos($cFn, substr($vFn, 0, 3)) === 0) {
-                            
+                        if (
+                            strcasecmp($cLn, $vLn) === 0 &&
+                            stripos($cFn, substr($vFn, 0, 3)) === 0
+                        ) {
+
                             $matchData = $cand;
                             $score = 80;
                             $reason = "Nickname: " . $cFn . " + Same Last & Email";
@@ -202,7 +229,7 @@ foreach ($clients as $client) {
                     $params[] = $matchData['email_lc'];
                     $types .= "s";
                 }
-                
+
                 $updateSql .= " WHERE uuid=?";
                 $params[] = $uuid;
                 $types .= "s";
@@ -229,10 +256,18 @@ foreach ($clients as $client) {
                                            confidence_score=?, reason=?,
                                            npn=?, crd=?, npn_active=?, crd_active=?
                                            WHERE uuid=? AND email=?");
-                    $emUpd->bind_param("ssisssiiss", 
-                        $matchedFn, $matchedLn, $score, $reason,
-                        $npn, $crd, $npnActive, $crdActive,
-                        $uuid, $matchedEmail
+                    $emUpd->bind_param(
+                        "ssisssiiss",
+                        $matchedFn,
+                        $matchedLn,
+                        $score,
+                        $reason,
+                        $npn,
+                        $crd,
+                        $npnActive,
+                        $crdActive,
+                        $uuid,
+                        $matchedEmail
                     );
                     $emUpd->execute();
                     $emUpd->close();
