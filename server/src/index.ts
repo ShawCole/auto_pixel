@@ -793,10 +793,12 @@ app.get("/admin/pixels", async (req, res) => {
                         }
                     }
 
-                    // Consolidated evidence of life
-                    let evidenceOfLife = lastServerEvent;
-                    if (opletDate && (!evidenceOfLife || opletDate > evidenceOfLife)) {
-                        evidenceOfLife = opletDate;
+                    // Timing Source for the Bubble: Prioritize actual server events
+                    let bubbleTimestamp = lastServerEvent;
+
+                    // Fallback to oplet only if we have events but no server-side timestamp
+                    if (!bubbleTimestamp && row.eventCount > 0 && opletDate) {
+                        bubbleTimestamp = opletDate;
                     }
 
                     const isNew = (now.getTime() - created.getTime()) < 24 * 60 * 60 * 1000;
@@ -807,19 +809,18 @@ app.get("/admin/pixels", async (req, res) => {
 
                     if (row.paused === 1) {
                         primary = 'Paused';
-                    } else if (evidenceOfLife) {
-                        const hoursSinceLastEvent = (now.getTime() - evidenceOfLife.getTime()) / (1000 * 60 * 60);
-                        if (hoursSinceLastEvent > 24) {
-                            const days = Math.floor(hoursSinceLastEvent / 24);
+                    } else if (bubbleTimestamp) {
+                        const hoursSinceActivity = (now.getTime() - bubbleTimestamp.getTime()) / (1000 * 60 * 60);
+                        if (hoursSinceActivity > 24) {
+                            const days = Math.floor(hoursSinceActivity / 24);
                             primary = `Last: ${days}d ago`;
                         } else {
                             primary = 'Active';
                         }
                     } else if (row.eventCount > 0) {
-                        // Events exist but no timestamp found
+                        // Events exist but no specific timestamp (Server or A_Lab) found
                         primary = 'Active';
                     } else if (hasNoResolutions && hasNoEvents) {
-                        // Explicitly requested: both empty => Not Installed
                         primary = 'Not Installed';
                     } else if (isNew) {
                         primary = 'Awaiting Data';
@@ -847,7 +848,7 @@ app.get("/admin/pixels", async (req, res) => {
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
             res.json({
-                version: "1.0.2-oplet-status-v6",
+                version: "1.0.2-oplet-status-v7",
                 pixels
             });
 
