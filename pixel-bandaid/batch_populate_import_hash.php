@@ -33,8 +33,18 @@ try {
             continue;
         }
 
-        // 1. Ensure Schema (Add column/index if missing)
-        echo "Ensuring Schema...\n";
+        // 1. Cleanup old schema (Drop dedupe_uuid and blocking indexes)
+        echo "Cleaning up old schema (dedupe_uuid)...\n";
+        // Drop index first if it exists
+        $db->query("DROP INDEX IF EXISTS uniq_event_conditional ON superpixel_resolution_log");
+        // Drop column if it exists
+        $checkDedupe = $db->query("SHOW COLUMNS FROM superpixel_resolution_log LIKE 'dedupe_uuid'");
+        if ($checkDedupe && $checkDedupe->num_rows > 0) {
+            $db->query("ALTER TABLE superpixel_resolution_log DROP COLUMN dedupe_uuid");
+        }
+
+        // 2. Ensure Schema (Add import_hash column/index if missing)
+        echo "Ensuring Schema (import_hash)...\n";
         ensureSchema($db);
 
         // 2. Clear out any ghost rows that would block uniqueness
