@@ -16,10 +16,12 @@ def run_poller():
     logger.info("Starting OPLET Poller run...")
     
     # Database Setup
-    db_host = os.getenv("MYSQL_HOST") or "34.26.61.148"
-    db_user = os.getenv("MYSQL_USER") or "root"
-    db_pass = os.getenv("MYSQL_PASSWORD") or "AccuPoint01!"
-    db_name = os.getenv("PIXEL_DB") or "pixel"
+    db_host = os.getenv("MYSQL_HOST") or os.getenv("DB_HOST") or "34.26.61.148"
+    db_user = os.getenv("MYSQL_USER") or os.getenv("DB_USER") or "root"
+    db_pass = os.getenv("MYSQL_PASSWORD") or os.getenv("DB_PASS") or "AccuPoint01!"
+    db_name = os.getenv("PIXEL_DB") or os.getenv("DB_NAME") or "pixel"
+    
+    # Use mysqlconnector, ensuring it's installed or fallback to pymysql if preferred
     conn_url = f"mysql+mysqlconnector://{db_user}:{db_pass}@{db_host}/{db_name}"
     engine = create_engine(conn_url)
     
