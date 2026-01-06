@@ -1,7 +1,10 @@
 import pandas as pd
 import json
 import os
+import logging
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 class SimpleAudienceProcessor:
     def __init__(self, visitors_suffix="_visitors"):
@@ -75,7 +78,7 @@ class SimpleAudienceProcessor:
             initial_len = len(df)
             df = df.drop_duplicates(subset=existing_cols)
             if len(df) < initial_len:
-                print(f"Removed {initial_len - len(df)} duplicate events from CSV.")
+                logger.info(f"[PROGRESS] Removed {initial_len - len(df)} duplicate events from CSV.")
                 
         # Fill all NaNs with empty string to prevent JSON serialization errors
         df = df.fillna("")

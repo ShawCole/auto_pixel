@@ -111,6 +111,7 @@ def main():
             
             try:
                 # Download
+                logger.info(f"[PROGRESS] Downloading CSV for {client_db}...")
                 raw_file_path = bot.download_pixel_data(client_db, days_to_pull)
                 
                 if not raw_file_path:
@@ -122,7 +123,7 @@ def main():
                 payload = processor.prepare_import_payload(raw_file_path)
                 
                 event_count = len(payload.get("events", []))
-                logger.info(f"Prepared payload with {event_count} events.")
+                logger.info(f"[PROGRESS] Found {event_count} events in CSV.")
                 
                 if event_count == 0:
                     logger.info("Skipping upload (0 events).")
@@ -136,26 +137,26 @@ def main():
                 run_prepare_db(client_db)
 
                 # Upload via PHP Script
-                logger.info(f"Uploading to database: {client_db} via pixel_import.php...")
+                logger.info(f"[PROGRESS] Uploading to database: {client_db}...")
                 run_pixel_import(payload, client_db)
                 
                 # Backfill Visitors
-                logger.info(f"Backfilling visitors for {client_db}...")
+                logger.info(f"[PROGRESS] Backfilling visitors for {client_db}...")
                 run_backfill(client_db)
 
                 # NEW: Run Professional Match Worker
-                logger.info(f"Matching professionals for {client_db} via match_worker.php...")
+                logger.info(f"[PROGRESS] Matching professionals for {client_db}...")
                 run_match_worker(client_db)
 
                 # NEW: Trigger Sheets Sync immediately
-                logger.info(f"Syncing {client_db} to Google Sheets...")
+                logger.info(f"[PROGRESS] Syncing to Google Sheets...")
                 run_smart_sync(client_db)
 
                 # NEW: Trigger Oplet Poller immediately
-                logger.info(f"Updating Oplet status for {client_db}...")
+                logger.info(f"[PROGRESS] Getting A_Lab Timestamp...")
                 run_oplet_sync(client_db)
                 
-                logger.info(f"Successfully processed {pixel_search_name}!")
+                logger.info(f"[PROGRESS] Sync complete for {pixel_search_name}!")
                 
             except Exception as e:
                 logger.error(f"Error processing {pixel_search_name}: {e}", exc_info=True)

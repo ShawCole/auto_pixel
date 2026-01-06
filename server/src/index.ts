@@ -44,17 +44,30 @@ function isPidAlive(pidStr: string): boolean {
     }
 }
 
-function watchPidAndCleanupLock(pidStr: string, lockPath: string, clientName: string) {
+async function watchPidAndCleanupLock(pidStr: string, lockPath: string, clientName: string) {
     const n = Number(pidStr);
     if (!n || Number.isNaN(n)) return;
-    const interval = setInterval(() => {
-        if (!isPidAlive(pidStr) || !fs.existsSync(`/proc/${pidStr}`)) {
+    const interval = setInterval(async () => {
+        if (!isPidAlive(pidStr)) {
             try {
                 if (fs.existsSync(lockPath)) {
                     fs.unlinkSync(lockPath);
                     log(`🧹 Cleared sync lock for ${clientName} (process ${pidStr} ended)`);
+
+                    // Update DB status to idle
+                    const mysql = await import("mysql2/promise");
+                    const connection = await mysql.createConnection({
+                        host: process.env.DB_HOST,
+                        user: process.env.DB_USER,
+                        password: process.env.DB_PASS,
+                        database: 'pixel'
+                    });
+                    await connection.execute("UPDATE pixel_sheets SET sync_status = 'idle' WHERE client_name = ?", [clientName]);
+                    await connection.end();
                 }
-            } catch { }
+            } catch (err: any) {
+                log(`⚠️ cleanup error for ${clientName}:`, err.message);
+            }
             clearInterval(interval);
         }
     }, 5000);
@@ -90,6 +103,24 @@ async function ensureDeletableColumn(connection: any): Promise<void> {
         }
     } catch (err: any) {
         log("⚠️ ensureDeletableColumn error:", { message: err.message });
+    }
+}
+
+async function ensureSyncStatusColumn(connection: any): Promise<void> {
+    try {
+        const [cols] = await connection.execute(
+            "SELECT COUNT(*) AS cnt FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pixel_sheets' AND COLUMN_NAME = 'sync_status'",
+            ['pixel']
+        );
+        const cnt = Number((cols as any[])[0].cnt ?? (cols as any[])[0].CNT ?? 0);
+        if (cnt === 0) {
+            await connection.execute(
+                "ALTER TABLE pixel_sheets ADD COLUMN sync_status VARCHAR(50) DEFAULT 'idle' AFTER poll_segments"
+            );
+            log("🛠️ Added 'sync_status' column to pixel.pixel_sheets (default: idle)");
+        }
+    } catch (err: any) {
+        log("⚠️ ensureSyncStatusColumn error:", { message: err.message });
     }
 }
 
@@ -703,6 +734,17 @@ async function startDailySyncForPixel(params: { pixelName: string, clientName: s
     log(`📝 Logs at: ${logPath}`);
     log(`📂 Working Directory: ${cwd}`);
 
+    // Update DB status to syncing
+    const mysql = await import("mysql2/promise");
+    const connection = await mysql.createConnection({
+        host: process.env.DB_HOST,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASS,
+        database: 'pixel'
+    });
+    await connection.execute("UPDATE pixel_sheets SET sync_status = 'syncing' WHERE client_name = ?", [clientName]);
+    await connection.end();
+
     return await new Promise((resolve, reject) => {
         exec(spawnCmd, { cwd, shell: '/bin/bash' }, (err, stdout) => {
             if (err) {
@@ -771,6 +813,7 @@ async function getClientByName(clientName: string): Promise<{ clientName: string
 
 // Get all pixels with stats
 app.get("/admin/pixels", async (req, res) => {
+    let connection: any = null;
     try {
         log("📊 Fetching all pixels for admin panel");
 
@@ -786,7 +829,7 @@ app.get("/admin/pixels", async (req, res) => {
         });
 
         // Create connection to pixel database
-        const connection = await mysql.createConnection({
+        connection = await mysql.createConnection({
             host: process.env.DB_HOST,
             user: process.env.DB_USER,
             password: process.env.DB_PASS,
@@ -797,8 +840,9 @@ app.get("/admin/pixels", async (req, res) => {
         log("✅ Database connection established");
 
         try {
-            // Ensure schema has deletable column
+            // Ensure schema has metadata columns
             await ensureDeletableColumn(connection);
+            await ensureSyncStatusColumn(connection);
             // Query pixel_sheets table and return live metrics (visitors/events) from central columns
             const query = `
                 SELECT 
@@ -813,6 +857,7 @@ app.get("/admin/pixels", async (req, res) => {
                     ps.last_sync_at as lastSyncAt,
                     ps.last_event_at as lastEventAt,
                     ps.oplet as oplet,
+                    ps.sync_status as syncStatus,
                     ps.industry as industry,
                     ps.paused as paused,
                     ps.paused_reason as pausedReason,
@@ -908,6 +953,7 @@ app.get("/admin/pixels", async (req, res) => {
                 eventCount: parseInt(row.eventCount) || 0,
                 visitorCount: parseInt(row.visitorCount) || 0,
                 oplet: row.oplet,
+                syncStatus: row.syncStatus || 'idle',
                 deletionScheduled: row.deletionScheduled ? row.deletionScheduled.toISOString() : null,
                 lastSyncAt: row.lastSyncAt ? row.lastSyncAt.toISOString() : null,
                 deleteLocked: !(row.deletable === 1 || row.deletable === '1')
@@ -920,7 +966,7 @@ app.get("/admin/pixels", async (req, res) => {
             });
 
         } finally {
-            await connection.end();
+            if (connection) await connection.end();
         }
 
     } catch (error: any) {
@@ -1398,46 +1444,56 @@ app.post("/admin/sheets/sync", async (req, res) => {
 app.get("/admin/pixels/:pixelId/sync/status", async (req, res) => {
     try {
         const { pixelId } = req.params;
-        const { clientName } = await getClientByPixelId(pixelId);
+        const clientInfo = await getClientByPixelId(pixelId);
+        const { clientName, pixelName } = clientInfo;
 
-        const lockPath = path.join(SYNC_LOCK_DIR, `${clientName}.lock`);
-        const inProgress = fs.existsSync(lockPath);
         const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
-        const logsPreview = readTail(logPath, 4000);
+        const lockPath = path.join(SYNC_LOCK_DIR, `${clientName}.lock`);
+
+        let inProgress = false;
+        if (fs.existsSync(lockPath)) {
+            const pid = fs.readFileSync(lockPath, 'utf8').trim();
+            inProgress = isPidAlive(pid);
+
+            // Cleanup stale lock if pid is dead
+            if (!inProgress) {
+                try { fs.unlinkSync(lockPath); } catch { }
+            }
+        }
+
+        const logs = readTail(logPath, 5000); // Get last 5KB
 
         const mysql = await import("mysql2/promise");
         const connection = await mysql.createConnection({
             host: process.env.DB_HOST,
             user: process.env.DB_USER,
             password: process.env.DB_PASS,
-            database: 'pixel',
-            connectTimeout: 30000
+            database: 'pixel'
         });
 
-        let lastSyncAt: string | null = null;
+        let statusData: any = {};
         try {
             const [rows] = await connection.execute<any[]>(
-                "SELECT last_sync_at FROM pixel_sheets WHERE id = ?",
+                "SELECT last_sync_at, sync_status FROM pixel_sheets WHERE id = ?",
                 [pixelId]
             );
-            if ((rows as any[]).length && (rows as any[])[0].last_sync_at) {
-                lastSyncAt = new Date((rows as any[])[0].last_sync_at).toISOString();
+            if ((rows as any[]).length) {
+                statusData = (rows as any[])[0];
             }
         } finally {
             await connection.end();
         }
 
-        res.json({ client: clientName, inProgress, lastSyncAt, logPath, logsPreview });
-
-        // Best-effort cleanup: if pid no longer exists, remove lock
-        if (inProgress) {
-            try {
-                const pid = fs.readFileSync(lockPath, 'utf8').trim();
-                if (pid && !fs.existsSync(`/proc/${pid}`)) fs.unlinkSync(lockPath);
-            } catch { }
-        }
-    } catch (e: any) {
-        res.status(500).json({ error: e.message || "Failed to read sync status" });
+        res.json({
+            inProgress,
+            logs,
+            clientName,
+            pixelName,
+            lastSyncAt: statusData.last_sync_at,
+            syncStatus: statusData.sync_status
+        });
+    } catch (err: any) {
+        res.status(500).json({ error: err.message || "Failed to read sync status" });
     }
 });
 

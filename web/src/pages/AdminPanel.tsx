@@ -28,6 +28,17 @@ interface Pixel {
         lastRealEventAt: string | null
     }
     oplet?: string
+    syncStatus?: string
+}
+
+interface SyncProgress {
+    pixelId: string;
+    clientName: string;
+    inProgress: boolean;
+    logs: string;
+    lastSyncAt: string | null;
+    currentStep: string;
+    details: string[];
 }
 
 export default function AdminPanel() {
@@ -52,42 +63,39 @@ export default function AdminPanel() {
         y: 0
     })
     const [syncing, setSyncing] = useState<Set<string>>(new Set())
+    const [syncingStatuses, setSyncingStatuses] = useState<Record<string, SyncProgress>>({})
     const hideTooltip = () => setTooltip({ show: false, content: '', x: 0, y: 0 })
     const showTooltip = (el: HTMLElement, content: string) => {
         const rect = el.getBoundingClientRect()
         setTooltip({ show: true, content, x: rect.left + rect.width / 2, y: rect.top })
     }
 
-    // Mock data - replace with actual API call
-    useEffect(() => {
-        const fetchPixels = async () => {
-            try {
-                setIsLoading(true)
-                const apiUrl = import.meta.env.VITE_API_URL ||
-                    (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://api.thynkdata.com')
+    const fetchPixels = async (silent = false) => {
+        try {
+            if (!silent) setIsLoading(true)
+            const apiUrl = import.meta.env.VITE_API_URL ||
+                (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://api.thynkdata.com')
 
-                const res = await fetch(`${apiUrl}/admin/pixels`)
-                if (!res.ok) {
-                    throw new Error('Failed to fetch pixels')
-                }
+            const res = await fetch(`${apiUrl}/admin/pixels`)
+            if (!res.ok) throw new Error('Failed to fetch pixels')
 
-                const data = await res.json()
-                // Map API response to expected format
-                const mappedPixels = (data.pixels || []).map((p: any) => ({
-                    ...p,
-                    eventCount: p.eventCount ?? p.metrics?.eventsToday ?? 0,
-                    visitorCount: p.visitorCount ?? p.metrics?.visitorsToday ?? 0,
-                    industry: p.industry ?? p.status?.primary ?? 'Uncategorized'
-                }))
-                setPixels(mappedPixels)
-                setFilteredPixels(mappedPixels)
-            } catch (err: any) {
-                setError(err.message || 'Failed to fetch pixels')
-            } finally {
-                setIsLoading(false)
-            }
+            const data = await res.json()
+            const mappedPixels = (data.pixels || []).map((p: any) => ({
+                ...p,
+                eventCount: p.eventCount ?? p.metrics?.eventsToday ?? 0,
+                visitorCount: p.visitorCount ?? p.metrics?.visitorsToday ?? 0,
+                industry: p.industry ?? p.status?.primary ?? 'Uncategorized'
+            }))
+            setPixels(mappedPixels)
+            setFilteredPixels(mappedPixels)
+        } catch (err: any) {
+            if (!silent) setError(err.message || 'Failed to fetch pixels')
+        } finally {
+            if (!silent) setIsLoading(false)
         }
+    }
 
+    useEffect(() => {
         fetchPixels()
     }, [])
 
@@ -235,6 +243,60 @@ export default function AdminPanel() {
         }
     }
 
+    const pollSyncStatus = async (pixelId: string) => {
+        const apiUrl = import.meta.env.VITE_API_URL ||
+            (window.location.hostname === 'localhost' ? 'http://localhost:4000' : 'https://api.thynkdata.com');
+
+        const interval = setInterval(async () => {
+            try {
+                const res = await fetch(`${apiUrl}/admin/pixels/${pixelId}/sync/status`);
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Extract [PROGRESS] markers
+                const progressLines = (data.logs || '')
+                    .split('\n')
+                    .filter((line: string) => line.includes('[PROGRESS]'))
+                    .map((line: string) => line.split('[PROGRESS]')[1].trim());
+
+                const currentStep = progressLines.length > 0 ? progressLines[progressLines.length - 1] : 'Initializing...';
+
+                setSyncingStatuses(prev => ({
+                    ...prev,
+                    [pixelId]: {
+                        pixelId,
+                        clientName: data.clientName,
+                        inProgress: data.inProgress,
+                        logs: data.logs,
+                        lastSyncAt: data.lastSyncAt,
+                        currentStep,
+                        details: progressLines
+                    }
+                }));
+
+                if (!data.inProgress) {
+                    clearInterval(interval);
+                    setSyncing(prev => {
+                        const next = new Set(prev);
+                        next.delete(pixelId);
+                        return next;
+                    });
+                    // Refresh data to show updated timestamps/counts
+                    fetchPixels(true);
+                    setTimeout(() => {
+                        setSyncingStatuses(prev => {
+                            const next = { ...prev };
+                            delete next[pixelId];
+                            return next;
+                        });
+                    }, 5000); // Keep toast for 5s after completion
+                }
+            } catch (err) {
+                console.error("Polling error:", err);
+            }
+        }, 2000);
+    };
+
     const handleRefresh = async (pixel: Pixel) => {
         try {
             setSyncing(prev => new Set(prev).add(pixel.id))
@@ -247,11 +309,14 @@ export default function AdminPanel() {
                 throw new Error(text || 'Failed to start sync')
             }
 
-            setSuccess(`Sync started for ${pixel.clientName}`)
+            setSuccess(`Sync initialized for ${pixel.clientName}. Watching progress...`)
             setTimeout(() => setSuccess(null), 3000)
+
+            // Start polling for status
+            pollSyncStatus(pixel.id);
+
         } catch (err: any) {
             setError(err.message || 'Failed to start sync')
-        } finally {
             setSyncing(prev => {
                 const next = new Set(prev)
                 next.delete(pixel.id)
@@ -529,7 +594,7 @@ export default function AdminPanel() {
                                                     }}
                                                     onMouseLeave={hideTooltip}
                                                 >
-                                                    {pixel.status?.primary || 'Uncategorized'}
+                                                    {syncing.has(pixel.id) ? 'Syncing...' : (pixel.status?.primary || 'Uncategorized')}
                                                 </span>
                                             </td>
                                             <td className="p-4 text-sm text-gray-900" style={{ width: '80px' }}>{(pixel.eventCount || 0).toLocaleString()}</td>
@@ -748,6 +813,36 @@ export default function AdminPanel() {
                         {tooltip.content}
                     </div>
                 )}
+
+                {/* Sync Progress Toasts */}
+                <div className="fixed bottom-20 right-4 flex flex-col gap-2 z-40">
+                    {Object.values(syncingStatuses).map(status => (
+                        <div key={status.pixelId} className="bg-white border shadow-xl rounded-lg p-4 w-80 animate-in slide-in-from-right">
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-bold text-gray-900 truncate">{status.clientName}</h4>
+                                {status.inProgress ? (
+                                    <RefreshCw className="w-4 h-4 text-blue-600 animate-spin" />
+                                ) : (
+                                    <div className="w-2 h-2 rounded-full bg-green-500" />
+                                )}
+                            </div>
+                            <div className="text-xs text-blue-600 font-medium mb-2 uppercase tracking-tight">
+                                {status.inProgress ? 'Syncing...' : 'Complete'}
+                            </div>
+                            <div className="bg-gray-50 rounded p-2 mb-2 max-h-32 overflow-y-auto font-mono text-[10px] text-gray-600">
+                                {status.details.slice(-3).map((d, i) => (
+                                    <div key={i} className={i === status.details.slice(-3).length - 1 ? 'text-gray-900 font-bold' : ''}>
+                                        • {d}
+                                    </div>
+                                ))}
+                                {status.details.length === 0 && <div className="italic">Starting sync pipeline...</div>}
+                            </div>
+                            <div className="text-[10px] text-gray-400">
+                                Last Step: {status.currentStep}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
         </div>
     )
