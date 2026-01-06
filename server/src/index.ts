@@ -793,10 +793,14 @@ app.get("/admin/pixels", async (req, res) => {
                         }
                     }
 
-                    // Consolidated evidence of life
-                    let evidenceOfLife = lastServerEvent;
-                    if (opletDate && (!evidenceOfLife || opletDate > evidenceOfLife)) {
-                        evidenceOfLife = opletDate;
+                    // Priority Rule: Server date is the Source of Truth for the bubble.
+                    // Fallback to A_Lab only if Server has NO data (eventCount 0).
+                    let bubbleTimestamp = lastServerEvent;
+                    let isFallback = false;
+
+                    if (!bubbleTimestamp && opletDate) {
+                        bubbleTimestamp = opletDate;
+                        isFallback = true;
                     }
 
                     const isNew = (now.getTime() - created.getTime()) < 24 * 60 * 60 * 1000;
@@ -807,11 +811,14 @@ app.get("/admin/pixels", async (req, res) => {
 
                     if (row.paused === 1) {
                         primary = 'Paused';
-                    } else if (evidenceOfLife) {
-                        const hoursSinceLastEvent = (now.getTime() - evidenceOfLife.getTime()) / (1000 * 60 * 60);
+                    } else if (bubbleTimestamp) {
+                        const hoursSinceLastEvent = (now.getTime() - bubbleTimestamp.getTime()) / (1000 * 60 * 60);
                         if (hoursSinceLastEvent > 24) {
                             const days = Math.floor(hoursSinceLastEvent / 24);
                             primary = `Last: ${days}d ago`;
+                        } else if (isFallback && !isNew) {
+                            // Platform sees events, but Server remains at 0.
+                            primary = 'Sync Pending';
                         } else {
                             primary = 'Active';
                         }
@@ -847,7 +854,7 @@ app.get("/admin/pixels", async (req, res) => {
 
             log(`✅ Fetched ${pixels.length} pixels from database`);
             res.json({
-                version: "1.0.2-oplet-status-v6",
+                version: "1.0.2-oplet-status-v7",
                 pixels
             });
 
