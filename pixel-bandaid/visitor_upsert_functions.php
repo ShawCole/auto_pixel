@@ -48,15 +48,11 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             $existing_columns[] = $row['Field'];
         }
 
-        // Define all possible visitor fields
+        // Define all possible visitor fields (Sync with superpixel_visitors schema)
         $possible_visitor_fields = [
             'uuid',
             'first_name',
             'last_name',
-            'company_name',
-            'job_title',
-            'personal_emails',
-            'mobile_phone',
             'personal_address',
             'personal_city',
             'personal_state',
@@ -71,16 +67,78 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             'income_range',
             'direct_number',
             'direct_number_dnc',
+            'mobile_phone',
             'mobile_phone_dnc',
+            'personal_phone',
+            'personal_phone_dnc',
+            'business_email',
+            'personal_emails',
+            'deep_verified_emails',
+            'sha256_personal_email',
+            'sha256_business_email',
             'hem_sha256',
-            'last_visited_url',
-            'last_element',
-            'last_percentage',
-            'last_referrer',
-            'last_timestamp',
-            'last_event',
+            'job_title',
+            'headline',
+            'department',
+            'seniority_level',
+            'inferred_years_experience',
+            'company_name_history',
+            'job_title_history',
+            'education_history',
+            'company_address',
+            'company_description',
+            'company_domain',
+            'company_employee_count',
+            'company_linkedin_url',
+            'company_name',
+            'company_phone',
+            'company_revenue',
+            'company_sic',
+            'company_naics',
+            'company_city',
+            'company_state',
+            'company_zip',
+            'company_industry',
+            'linkedin_url',
+            'twitter_url',
+            'facebook_url',
+            'social_connections',
+            'skills',
+            'interests',
+            'skiptrace_match_score',
+            'skiptrace_name',
+            'skiptrace_address',
+            'skiptrace_city',
+            'skiptrace_state',
+            'skiptrace_zip',
+            'skiptrace_landline_numbers',
+            'skiptrace_wireless_numbers',
+            'skiptrace_credit_rating',
+            'skiptrace_dnc',
+            'skiptrace_exact_age',
+            'skiptrace_ethnic_code',
+            'skiptrace_language_code',
+            'skiptrace_ip',
+            'skiptrace_b2b_address',
+            'skiptrace_b2b_phone',
+            'skiptrace_b2b_source',
+            'skiptrace_b2b_website',
+            'valid_phones',
+            'url',
+            'element',
+            'percentage',
+            'referrer',
+            'event_timestamp',
+            'event_type',
             'npn',
-            'crd'
+            'crd',
+            'ip_address',
+            'pixel_id',
+            'activity_start_date',
+            'activity_end_date',
+            'referrer_url',
+            'timestamp',
+            'title'
         ];
 
         // Only use fields that actually exist in the table
@@ -295,52 +353,137 @@ function backfillMissingVisitors($mysqli, $limit = 1000, $debug_context = "backf
 
         // --- PHASE 2: UPSERT (BACKFILL ENRICHED) ---
         // Insert new users found in the log who aren't in visitors yet
-        // Enhanced to pull names, emails, and other major fields
+        // Dynamically pull all shared columns between log and visitors
+
+        // Get columns from visitors table to know what we can insert into
+        $existing_columns = [];
+        $res = $mysqli->query("SHOW COLUMNS FROM `superpixel_visitors`");
+        while ($row = $res->fetch_assoc()) {
+            $existing_columns[] = $row['Field'];
+        }
+
+        $core_visitor_fields = [
+            'first_name',
+            'last_name',
+            'personal_address',
+            'personal_city',
+            'personal_state',
+            'personal_zip',
+            'personal_zip4',
+            'age_range',
+            'children',
+            'gender',
+            'homeowner',
+            'married',
+            'net_worth',
+            'income_range',
+            'direct_number',
+            'direct_number_dnc',
+            'mobile_phone',
+            'mobile_phone_dnc',
+            'personal_phone',
+            'personal_phone_dnc',
+            'business_email',
+            'personal_emails',
+            'deep_verified_emails',
+            'sha256_personal_email',
+            'sha256_business_email',
+            'hem_sha256',
+            'job_title',
+            'headline',
+            'department',
+            'seniority_level',
+            'inferred_years_experience',
+            'company_name_history',
+            'job_title_history',
+            'education_history',
+            'company_address',
+            'company_description',
+            'company_domain',
+            'company_employee_count',
+            'company_linkedin_url',
+            'company_name',
+            'company_phone',
+            'company_revenue',
+            'company_sic',
+            'company_naics',
+            'company_city',
+            'company_state',
+            'company_zip',
+            'company_industry',
+            'linkedin_url',
+            'twitter_url',
+            'facebook_url',
+            'social_connections',
+            'skills',
+            'interests',
+            'skiptrace_match_score',
+            'skiptrace_name',
+            'skiptrace_address',
+            'skiptrace_city',
+            'skiptrace_state',
+            'skiptrace_zip',
+            'skiptrace_landline_numbers',
+            'skiptrace_wireless_numbers',
+            'skiptrace_credit_rating',
+            'skiptrace_dnc',
+            'skiptrace_exact_age',
+            'skiptrace_ethnic_code',
+            'skiptrace_language_code',
+            'skiptrace_ip',
+            'skiptrace_b2b_address',
+            'skiptrace_b2b_phone',
+            'skiptrace_b2b_source',
+            'skiptrace_b2b_website',
+            'valid_phones',
+            'url',
+            'element',
+            'percentage',
+            'referrer',
+            'event_timestamp',
+            'event_type',
+            'npn',
+            'crd',
+            'ip_address',
+            'pixel_id',
+            'activity_start_date',
+            'activity_end_date',
+            'referrer_url',
+            'timestamp',
+            'title'
+        ];
+
+        $insert_cols = ['uuid', 'first_seen_at', 'last_seen_at'];
+        $select_vals = [
+            'uuid',
+            "DATE_FORMAT(MIN(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s')",
+            "DATE_FORMAT(MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s')"
+        ];
+        $update_clauses = [
+            "first_seen_at = LEAST(first_seen_at, VALUES(first_seen_at))",
+            "last_seen_at = GREATEST(last_seen_at, VALUES(last_seen_at))"
+        ];
+
+        foreach ($core_visitor_fields as $field) {
+            if (in_array($field, $existing_columns)) {
+                $insert_cols[] = "`$field`";
+                $select_vals[] = "MAX(NULLIF(`$field`, ''))";
+                // Only update if current is empty or new is better
+                $update_clauses[] = "`$field` = COALESCE(NULLIF(VALUES(`$field`), ''), `$field`)";
+            }
+        }
+
         $sql_upsert = "
-            INSERT INTO `superpixel_visitors` (
-                uuid, first_seen_at, last_seen_at, 
-                first_name, last_name, personal_city, personal_state, personal_zip, 
-                company_name, company_domain, job_title, 
-                deep_verified_emails, business_email, hem_sha256,
-                ip_address, pixel_id
-            )
-            SELECT
-              uuid,
-              DATE_FORMAT(MIN(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s'),
-              DATE_FORMAT(MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s'),
-              MAX(NULLIF(first_name, '')),
-              MAX(NULLIF(last_name, '')),
-              MAX(NULLIF(personal_city, '')),
-              MAX(NULLIF(personal_state, '')),
-              MAX(NULLIF(personal_zip, '')),
-              MAX(NULLIF(company_name, '')),
-              MAX(NULLIF(company_domain, '')),
-              MAX(NULLIF(job_title, '')),
-              MAX(NULLIF(deep_verified_emails, '')),
-              MAX(NULLIF(business_email, '')),
-              MAX(NULLIF(hem_sha256, '')),
-              MAX(NULLIF(ip_address, '')),
-              MAX(NULLIF(pixel_id, ''))
+            INSERT INTO `superpixel_visitors` (" . implode(', ', $insert_cols) . ")
+            SELECT " . implode(', ', $select_vals) . "
             FROM `superpixel_resolution_log`
             WHERE uuid IS NOT NULL AND LENGTH(uuid) > 20
             GROUP BY uuid
             HAVING MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)) >= NOW() - INTERVAL 45 DAY
-            ON DUPLICATE KEY UPDATE
-              first_seen_at = VALUES(first_seen_at),
-              last_seen_at  = VALUES(last_seen_at),
-              first_name    = COALESCE(NULLIF(VALUES(first_name), ''), first_name),
-              last_name     = COALESCE(NULLIF(VALUES(last_name), ''), last_name),
-              business_email = COALESCE(NULLIF(VALUES(business_email), ''), business_email),
-              deep_verified_emails = COALESCE(NULLIF(VALUES(deep_verified_emails), ''), deep_verified_emails),
-              company_name  = COALESCE(NULLIF(VALUES(company_name), ''), company_name),
-              job_title     = COALESCE(NULLIF(VALUES(job_title), ''), job_title)
-        ";
-
-        // Note: We ignore $limit here to ensure consistency, or we could add LIMIT if really needed but GROUP BY makes it hard.
-        // Given this runs daily/periodically, full sync for recent 45 days is preferred.
+            ON DUPLICATE KEY UPDATE " . implode(', ', $update_clauses);
 
         if ($mysqli->query($sql_upsert)) {
-            $stats['phase2_inserted'] = $mysqli->affected_rows; // Note: ON DUPLICATE KEY UPDATE affects return count (1 for insert, 2 for update)
+            $stats['phase2_inserted'] = $mysqli->affected_rows;
             debugLog("Phase 2: Upserted affected rows: " . $stats['phase2_inserted']);
         } else {
             debugLog("Phase 2 Error: " . $mysqli->error);
