@@ -141,6 +141,10 @@ def main():
                 # Backfill Visitors
                 logger.info(f"Backfilling visitors for {client_db}...")
                 run_backfill(client_db)
+
+                # NEW: Trigger Sheets Sync immediately
+                logger.info(f"Syncing {client_db} to Google Sheets...")
+                run_smart_sync(client_db)
                 
                 logger.info(f"Successfully processed {pixel_search_name}!")
                 
@@ -274,6 +278,40 @@ def run_backfill(client_name):
 
     except Exception as e:
         logger.error(f"Failed to run backfill for {client_name}: {e}")
+
+
+def run_smart_sync(client_name):
+    """
+    Executes smart_sync.php to push data to Google Sheets.
+    """
+    # smart_sync.php is located in the parent directory
+    script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "smart_sync.php"))
+    
+    if not os.path.exists(script_path):
+        logger.error(f"smart_sync.php not found at: {script_path}")
+        return
+
+    try:
+        # We use the --client flag to sync only the current client
+        process = subprocess.Popen(
+            ["php", script_path, f"--client={client_name}"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        stdout, stderr = process.communicate()
+        
+        # Log success/failure from smart_sync.php stdout
+        if "sync completed successfully" in stdout.lower():
+            logger.info(f"Sheets sync successful for {client_name}")
+        else:
+            logger.warning(f"Sheets sync output for {client_name}: {stdout.strip()}")
+        
+        if process.returncode != 0:
+            logger.error(f"Smart Sync Script failed (code {process.returncode}). Stderr: {stderr}")
+
+    except Exception as e:
+        logger.error(f"Failed to run smart_sync for {client_name}: {e}")
 
 
 def run_prepare_db(client_name):
