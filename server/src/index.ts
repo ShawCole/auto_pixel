@@ -24,8 +24,10 @@ function log(message: string, data?: any) {
 // Sync helpers and configuration
 const isProduction = process.env.NODE_ENV === 'production';
 const PHP_BIN = process.env.PHP_BIN || 'php';
-const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || "/var/log/auto-pixel";
-const SYNC_LOCK_DIR = process.env.SYNC_LOCK_DIR || "/opt/auto-pixel/.sync-locks";
+const PYTHON_BIN = process.env.PYTHON_BIN || (isProduction ? '/opt/auto-pixel/pixel-bandaid/venv/bin/python3' : 'python3');
+const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || (isProduction ? "/var/log/auto-pixel" : "./logs");
+const SYNC_LOCK_DIR = process.env.SYNC_LOCK_DIR || (isProduction ? "/opt/auto-pixel/.sync-locks" : "./locks");
+const DAILY_SYNC_SCRIPT = isProduction ? "/opt/auto-pixel/pixel-bandaid/daily_sync.py" : "../pixel-bandaid/daily_sync.py";
 
 function ensureDir(p: string) {
     try { fs.mkdirSync(p, { recursive: true }); } catch { }
@@ -663,7 +665,47 @@ async function startSmartSyncForClient(clientName: string): Promise<{ started: b
     });
 }
 
-async function getClientByPixelId(pixelId: string): Promise<{ clientName: string; sheetId: string | null }> {
+/**
+ * Triggers a targeted daily_sync.py run for a single pixel.
+ * This includes data download, hashing, visitor enrichment, sheet sync, and oplet update.
+ */
+async function startDailySyncForPixel(params: { pixelName: string, clientName: string }): Promise<{ started: boolean; logPath: string; command: string }> {
+    const { pixelName, clientName } = params;
+    ensureDir(SYNC_LOG_DIR);
+    ensureDir(SYNC_LOCK_DIR);
+
+    const lockPath = path.join(SYNC_LOCK_DIR, `${clientName}.lock`);
+    if (fs.existsSync(lockPath)) {
+        const m = fs.readFileSync(lockPath, 'utf8').trim();
+        if (!m || !isPidAlive(m)) {
+            try { fs.unlinkSync(lockPath); } catch { }
+            log(`🧹 Removed stale sync lock for ${clientName}`);
+        } else {
+            throw new Error(`Sync already in progress for ${clientName} (pid ${m})`);
+        }
+    }
+
+    const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
+    // Command translates to: python3 daily_sync.py --days 1 --manual-pixel <pixel> --manual-client <client> --local-db
+    const cmd = `${PYTHON_BIN} ${DAILY_SYNC_SCRIPT} --days 1 --manual-pixel ${pixelName} --manual-client ${clientName} --local-db`;
+    const spawnCmd = `nohup ${cmd} >> ${logPath} 2>&1 & echo $!`;
+
+    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid" : "../pixel-bandaid";
+
+    return await new Promise((resolve, reject) => {
+        exec(spawnCmd, { cwd }, (err, stdout) => {
+            if (err) return reject(err);
+            const pid = (stdout || "").toString().trim();
+            if (pid) {
+                try { fs.writeFileSync(lockPath, pid); } catch { }
+                watchPidAndCleanupLock(pid, lockPath, clientName);
+            }
+            resolve({ started: true, logPath, command: cmd });
+        });
+    });
+}
+
+async function getClientByPixelId(pixelId: string): Promise<{ clientName: string; pixelName: string; sheetId: string | null }> {
     const mysql = await import("mysql2/promise");
     const connection = await mysql.createConnection({
         host: process.env.DB_HOST,
@@ -674,11 +716,15 @@ async function getClientByPixelId(pixelId: string): Promise<{ clientName: string
     });
     try {
         const [rows] = await connection.execute<any[]>(
-            "SELECT client_name AS clientName, sheet_id AS sheetId FROM pixel_sheets WHERE id = ?",
+            "SELECT client_name AS clientName, pixel_name AS pixelName, sheet_id AS sheetId FROM pixel_sheets WHERE id = ?",
             [pixelId]
         );
         if (!(rows as any[]).length) throw new Error("Pixel not found");
-        return { clientName: (rows as any[])[0].clientName, sheetId: (rows as any[])[0].sheetId || null };
+        return {
+            clientName: (rows as any[])[0].clientName,
+            pixelName: (rows as any[])[0].pixelName,
+            sheetId: (rows as any[])[0].sheetId || null
+        };
     } finally {
         await connection.end();
     }
@@ -1294,22 +1340,13 @@ app.post("/admin/pixels/:pixelId/deletable", async (req, res) => {
 app.post("/admin/pixels/:pixelId/sync", async (req, res) => {
     try {
         const { pixelId } = req.params;
-        const { clientName, sheetId } = await getClientByPixelId(pixelId);
-        // Allow sync even if no sheet is connected; the PHP script will handle/log
+        const { clientName, pixelName, sheetId } = await getClientByPixelId(pixelId);
+        // Allow sync even if no sheet is connected
         if (!sheetId) {
-            log(`ℹ️ No sheet connected for ${clientName}; starting sync anyway`);
+            log(`ℹ️ No sheet connected for ${clientName}; starting targeted sync anyway`);
         }
 
-        if (isProduction) {
-            if (!fs.existsSync("/opt/auto-pixel/smart_sync.php")) {
-                return res.status(500).json({ error: "smart_sync.php not found on VM (/opt/auto-pixel/smart_sync.php)" });
-            }
-            if (!fs.existsSync("/etc/auto-pixel/thynk-intent-dev-463522-046f81c95700.json")) {
-                return res.status(500).json({ error: "Google credentials missing at /etc/auto-pixel/..." });
-            }
-        }
-
-        const { started, logPath, command } = await startSmartSyncForClient(clientName);
+        const { started, logPath, command } = await startDailySyncForPixel({ pixelName, clientName });
         res.json({ started, client: clientName, sheetId: sheetId || null, logPath, command });
     } catch (e: any) {
         res.status(500).json({ error: e.message || "Failed to start sync" });
