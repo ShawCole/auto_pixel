@@ -3,6 +3,22 @@
 // Include this file in all scripts that modify superpixel_resolution_log
 
 /**
+ * Normalizes ISO8601 timestamps to MySQL Datetime format
+ */
+function normalizeTimestamp($ts)
+{
+    if (empty($ts))
+        return 'CURRENT_TIMESTAMP';
+    // Remove trailing Z and replace T with space
+    $clean = str_replace(['Z', 'T'], ['', ' '], $ts);
+    // Ensure it looks like YYYY-MM-DD HH:MM:SS
+    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/', $clean)) {
+        return "'" . $clean . "'";
+    }
+    return "'$ts'"; // Fallback to raw if not matching standard cleaning
+}
+
+/**
  * Upserts visitor profile based on event data
  * 
  * @param mysqli $mysqli Database connection
@@ -143,9 +159,9 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
         // Determine the event timestamp to use for first/last seen
         $active_timestamp = 'CURRENT_TIMESTAMP';
         if (!empty($event_data['event_timestamp'])) {
-            $active_timestamp = "'" . $mysqli->real_escape_string($event_data['event_timestamp']) . "'";
+            $active_timestamp = normalizeTimestamp($event_data['event_timestamp']);
         } elseif (!empty($event_data['timestamp'])) {
-            $active_timestamp = "'" . $mysqli->real_escape_string($event_data['timestamp']) . "'";
+            $active_timestamp = normalizeTimestamp($event_data['timestamp']);
         }
 
         // Add last_seen_at update if the column exists
@@ -277,22 +293,47 @@ function backfillMissingVisitors($mysqli, $limit = 1000, $debug_context = "backf
             debugLog("Phase 1 Error: " . $mysqli->error);
         }
 
-        // --- PHASE 2: UPSERT (BACKFILL) ---
+        // --- PHASE 2: UPSERT (BACKFILL ENRICHED) ---
         // Insert new users found in the log who aren't in visitors yet
-        // CAST logic handles ISO8601 strings (2025-01-01T12:00:00Z) -> MySQL Datetime
+        // Enhanced to pull names, emails, and other major fields
         $sql_upsert = "
-            INSERT INTO `superpixel_visitors` (uuid, first_seen_at, last_seen_at)
+            INSERT INTO `superpixel_visitors` (
+                uuid, first_seen_at, last_seen_at, 
+                first_name, last_name, personal_city, personal_state, personal_zip, 
+                company_name, company_domain, job_title, 
+                deep_verified_emails, business_email, hem_sha256,
+                ip_address, pixel_id
+            )
             SELECT
               uuid,
               DATE_FORMAT(MIN(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s'),
-              DATE_FORMAT(MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s')
+              DATE_FORMAT(MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s'),
+              MAX(NULLIF(first_name, '')),
+              MAX(NULLIF(last_name, '')),
+              MAX(NULLIF(personal_city, '')),
+              MAX(NULLIF(personal_state, '')),
+              MAX(NULLIF(personal_zip, '')),
+              MAX(NULLIF(company_name, '')),
+              MAX(NULLIF(company_domain, '')),
+              MAX(NULLIF(job_title, '')),
+              MAX(NULLIF(deep_verified_emails, '')),
+              MAX(NULLIF(business_email, '')),
+              MAX(NULLIF(hem_sha256, '')),
+              MAX(NULLIF(ip_address, '')),
+              MAX(NULLIF(pixel_id, ''))
             FROM `superpixel_resolution_log`
             WHERE uuid IS NOT NULL AND LENGTH(uuid) > 20
             GROUP BY uuid
             HAVING MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)) >= NOW() - INTERVAL 45 DAY
             ON DUPLICATE KEY UPDATE
               first_seen_at = VALUES(first_seen_at),
-              last_seen_at  = VALUES(last_seen_at)
+              last_seen_at  = VALUES(last_seen_at),
+              first_name    = COALESCE(NULLIF(VALUES(first_name), ''), first_name),
+              last_name     = COALESCE(NULLIF(VALUES(last_name), ''), last_name),
+              business_email = COALESCE(NULLIF(VALUES(business_email), ''), business_email),
+              deep_verified_emails = COALESCE(NULLIF(VALUES(deep_verified_emails), ''), deep_verified_emails),
+              company_name  = COALESCE(NULLIF(VALUES(company_name), ''), company_name),
+              job_title     = COALESCE(NULLIF(VALUES(job_title), ''), job_title)
         ";
 
         // Note: We ignore $limit here to ensure consistency, or we could add LIMIT if really needed but GROUP BY makes it hard.
