@@ -815,6 +815,7 @@ app.get("/admin/pixels", async (req, res) => {
                 },
                 eventCount: parseInt(row.eventCount) || 0,
                 visitorCount: parseInt(row.visitorCount) || 0,
+                oplet: row.oplet,
                 deletionScheduled: row.deletionScheduled ? row.deletionScheduled.toISOString() : null,
                 lastSyncAt: row.lastSyncAt ? row.lastSyncAt.toISOString() : null,
                 deleteLocked: !(row.deletable === 1 || row.deletable === '1')
