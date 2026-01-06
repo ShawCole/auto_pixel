@@ -503,9 +503,7 @@ export default function AdminPanel() {
 
                                                         let aLabLine = 'A_Lab: N/A';
                                                         if (oplet) {
-                                                            if (pixel.clientName?.includes("VettaFi")) {
-                                                                aLabLine = 'A_Lab: Can\'t Access Resolutions';
-                                                            } else if (oplet.includes("No Resolutions Found")) {
+                                                            if (oplet.includes("No Resolutions Found")) {
                                                                 aLabLine = 'A_Lab: No Resolutions';
                                                             } else if (oplet.length > 5) {
                                                                 const oDate = new Date(oplet);
@@ -515,6 +513,8 @@ export default function AdminPanel() {
                                                             } else {
                                                                 aLabLine = `A_Lab: ${oplet}`;
                                                             }
+                                                        } else if (pixel.eventCount > 100) {
+                                                            aLabLine = 'A_Lab: Sync Pending';
                                                         }
 
                                                         const serverLine = (pixel.eventCount > 0 && lastEvent)
