@@ -101,11 +101,11 @@ def update_central_status(latest_platform_ts):
     $stmt->bind_param("ssii", $ts_var, $safe_last_event_at, $visitors, $events);
     if (!$stmt->execute()) die("Execute failed: " . $stmt->error);
     
-    if ($stmt->affected_rows === 0) {
+    if ($stmt->affected_rows === 0) {{
         echo "SUCCESS_BUT_NO_ROWS_CHANGED";
-    } else {
+    }} else {{
         echo "SUCCESS_UPDATED_" . $stmt->affected_rows;
-    }
+    }}
     
     echo "SUCCESS";
     $stmt->close();
