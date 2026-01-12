@@ -303,22 +303,57 @@ class SimpleAudienceAutomation:
              logging.warning(f"No data found for {pixel_name} even after {final_days} days.")
              raise Exception(f"No data found for {pixel_name} even after {final_days} days.")
 
-        # 3. Save Segment
-        logging.info("Saving Segment...")
-        save_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[4]/div[1]/button")))
-        save_btn.click()
-        time.sleep(1)
-        
-        # Enter Name: Last {final_days} Days - {pixel_name}
-        name_input = self.wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[5]/form/div[1]/input")))
-        name_input.clear()
-        name_input.send_keys(f"Last {final_days} Days - {pixel_name}")
-        
-        # Click Save
-        final_save_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[5]/form/div[3]/button[2]")))
-        final_save_btn.click()
+        # 3. Click "Save Segment" in Modal
+        logging.info("Confirming 'Save Segment' in modal...")
+        save_modal_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[@type='submit'][contains(., 'Save Segment')]")))
+        save_modal_btn.click()
         self._wait_for_overlays()
-        time.sleep(3)
+        time.sleep(5) # Wait for save
+
+        # 4. Find "Show API" button in Recent Segments
+        logging.info("Looking for 'Show API' button...")
+        show_api_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Show API')]")))
+        show_api_btn.click()
+        time.sleep(2)
+
+        # 5. Extract ID and API from green text div
+        segment_id = ""
+        segment_api = ""
+        try:
+             api_div = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "div.text-green-400")))
+             raw_text = api_div.text
+             
+             # Extract UUID from https://api.audiencelab.io/segments/{UUID}?page=1...
+             match = re.search(r'segments/([a-f0-9-]+)', raw_text, re.I)
+             if match:
+                 segment_id = match.group(1)
+                 segment_api = f"https://api.audiencelab.io/segments/{segment_id}?page=1&page_size=50"
+                 logging.info(f"Captured Segment ID: {segment_id}")
+             else:
+                 logging.warning(f"Could not parse segment ID from: {raw_text}")
+        except Exception as e:
+             logging.error(f"Failed to extract API details: {e}")
+
+        return {"segment_name": f"Last {final_days} Days - {pixel_name}", "segment_id": segment_id, "segment_api": segment_api}
+
+    def download_segment_by_platform_url(self, platform_url):
+        """Navigates directly to the segment studio page and triggers export."""
+        logging.info(f"Direct navigation to: {platform_url}")
+        self.driver.get(platform_url)
+        self._wait_for_overlays()
+        time.sleep(5)
+        
+        # Click Download Export
+        try:
+             download_btn = self.wait.until(EC.presence_of_element_located((By.XPATH, "//button[contains(., 'Download Export')]")))
+             self.driver.execute_script("arguments[0].scrollIntoView(true);", download_btn)
+             time.sleep(1)
+             self.driver.execute_script("arguments[0].click();", download_btn)
+        except Exception as e:
+             logging.error(f"Failed to click download button on direct URL page: {e}")
+             raise
+             
+        return self._wait_for_download("direct_sync")
 
     def download_segment(self, pixel_name):
         """Downloads the export from the Segments page."""
@@ -366,23 +401,27 @@ class SimpleAudienceAutomation:
         # Wait for file
         return self._wait_for_download(pixel_name)
 
-    def download_pixel_data(self, pixel_name, days=1):
-        """Downloads the pixel data for the given pixel name and days."""
-        # Check specifically for "Last X Days" if days > 4 (Historical/Custom)
-        expected_pattern = None
-        if days > 4:
-            expected_pattern = f"Last {days} Days"
+    def download_pixel_data(self, pixel_name, days=1, platform_url=None):
+        """Downloads the pixel data and returns (file_path, segment_metadata)."""
+        
+        # FAST PATH: If we have a direct URL, use it immediately
+        if platform_url:
+            logging.info(f"Fast path triggered for {pixel_name} using platform URL.")
+            file_path = self.download_segment_by_platform_url(platform_url)
+            return {"file_path": file_path, "metadata": None}
+
+        # Legacy Path: Search and verify
+        expected_pattern = f"Last {days} Days"
             
         if self.check_exists_in_segments(pixel_name, expected_name_pattern=expected_pattern):
-            return self.download_segment(pixel_name)
+            file_path = self.download_segment(pixel_name)
+            return {"file_path": file_path, "metadata": None}
         else:
-            # Handle historical pull or normal daily loop
-            if days > 4:
-                days_list = [days]
-            else:
-                days_list = [2, 3, 4]
-            self.create_segment(pixel_name, days_list=days_list)
-            return self.download_segment(pixel_name)
+            # Handle historical pull or normal daily loop (default to 2+ days for daily)
+            days_list = [days] if days > 4 else [2, 3, 4]
+            metadata = self.create_segment(pixel_name, days_list=days_list)
+            file_path = self.download_segment(pixel_name)
+            return {"file_path": file_path, "metadata": metadata}
     
     def _wait_for_overlays(self):
         try:
