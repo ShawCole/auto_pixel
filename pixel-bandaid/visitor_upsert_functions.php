@@ -249,6 +249,7 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
                        VALUES (" . implode(",", $visitor_values) . ")
                        ON DUPLICATE KEY UPDATE " . implode(", ", $update_clauses);
 
+        debugLog("Visitor fields for $debug_context: " . implode(",", $visitor_fields));
         debugLog("Executing visitor upsert for $debug_context");
 
         if (!$mysqli->query($visitor_sql)) {

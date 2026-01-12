@@ -321,7 +321,7 @@ try {
                     continue;
                 }
 
-                // Build SQL with safe escaping
+                // Normalize event_timestamp to strictly YYYY-MM-DD HH:MM:SS\n                if (isset($insert_data['event_timestamp'])) {\n                    $insert_data['event_timestamp'] = str_replace(['T', 'Z'], [' ', ''], substr($insert_data['event_timestamp'], 0, 19));\n                }\n\n                // Build SQL with safe escaping
                 $columns = [];
                 $values = [];
                 foreach ($insert_data as $key => $value) {
@@ -344,12 +344,12 @@ try {
                     debugLog($error);
                     throw new Exception($error);
                 }
-                if ($mysqli->affected_rows === 0) {
-                    debugLog("Duplicate event skipped (no-op) for event $eventIndex");
-                    continue;
+                $is_duplicate = ($mysqli->affected_rows === 0);
+                if ($is_duplicate) {
+                    debugLog("Duplicate event $eventIndex detected. Proceeding with visitor update/enrichment.");
+                } else {
+                    debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
                 }
-
-                debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
 
                 // Parse emails using included functions (fallback logic inside upsertVisitorFromEvent)
                 $uuid = $insert_data["uuid"] ?? "";

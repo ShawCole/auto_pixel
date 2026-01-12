@@ -114,6 +114,7 @@ export async function createPixel({ client, website }: { client: string, website
     let webhookVerified: boolean = false; // any row detected
     let webhookTestUuidVerified: boolean = false; // specific test UUID detected
     let webhookRowSample: any = undefined;
+    let finalCode: string = "";
     const TEST_UUID = 'dc0016d3803db4912441edb1b0';
 
     log(`🚨 DEBUG: COMPILATION TEST - Processing website URL: ${website}`);
@@ -699,72 +700,8 @@ export async function createPixel({ client, website }: { client: string, website
         await nextButton.click();
         log("✅ Next button clicked");
 
-        // 5. Fill Webhook URL
-        log("📝 Waiting for webhook URL field...");
-        const webhookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
-
-        // Try multiple selectors for the webhook URL field (optimized order)
-        let webhookUrlField;
-        try {
-            // Try finding by webhook-related attributes first (faster)
-            webhookUrlField = await driver.findElement(By.css('input[placeholder*="webhook"], input[placeholder*="url"], input[name*="webhook"], input[name*="url"]'));
-            log("✅ Webhook URL field found with webhook selector");
-        } catch (e) {
-            try {
-                // Fallback to xpath with shorter timeout
-                await driver.wait(until.elementLocated(By.xpath('/html/body/div[4]/form/div[2]/div/div/input')), 1000);
-                webhookUrlField = await driver.findElement(By.xpath('/html/body/div[4]/form/div[2]/div/div/input'));
-                log("✅ Webhook URL field found with xpath");
-            } catch (e2) {
-                try {
-                    // Try finding any input in the current modal/form
-                    webhookUrlField = await driver.findElement(By.css('form input[type="text"], form input[type="url"], form input:not([type="hidden"])'));
-                    log("✅ Webhook URL field found with generic input selector");
-                } catch (e3) {
-                    // Try finding any visible input
-                    const inputs = await driver.findElements(By.css('input'));
-                    for (const input of inputs) {
-                        const isDisplayed = await input.isDisplayed();
-                        if (isDisplayed) {
-                            webhookUrlField = input;
-                            log("✅ Webhook URL field found as visible input");
-                            break;
-                        }
-                    }
-                    if (!webhookUrlField) {
-                        throw new Error("Could not find webhook URL field");
-                    }
-                }
-            }
-        }
-
-        // Make sure element is interactable with multiple approaches
-        await driver.wait(until.elementIsEnabled(webhookUrlField), 1000);
-        await driver.executeScript("arguments[0].scrollIntoView(true);", webhookUrlField);
-        await delay(100); // Wait for scroll and rendering to complete
-
-        // Additional checks for element interactability
-        await driver.wait(until.elementIsVisible(webhookUrlField), 1000);
-
-        // Try JavaScript-based interaction if Selenium fails
-        try {
-            await webhookUrlField.clear();
-            await delay(150);
-            await webhookUrlField.sendKeys(webhookUrl);
-            log("✅ Webhook URL entered with Selenium");
-        } catch (interactionError) {
-            log("⚠️ Selenium interaction failed, trying JavaScript approach...");
-            // Use JavaScript to set the value directly
-            await driver.executeScript(`
-                arguments[0].focus();
-                arguments[0].value = '';
-                arguments[0].value = arguments[1];
-                arguments[0].dispatchEvent(new Event('input', { bubbles: true }));
-                arguments[0].dispatchEvent(new Event('change', { bubbles: true }));
-            `, webhookUrlField, webhookUrl);
-            await delay(150);
-            log("✅ Webhook URL entered with JavaScript");
-        }
+        // Webhook URL step skipped (user request to remove autowebhook)
+        log("⏭️ Skipping webhook URL entry as requested");
 
         // 6. Skip Test (workaround slow UI): proceed directly to Create step
         log("⏭️ Skipping webhook Test step; proceeding directly to Create");
@@ -1224,7 +1161,7 @@ export async function createPixel({ client, website }: { client: string, website
             );
 
             const decodedBestStr: string = String(decodedBest ?? '');
-            let finalCode = decodedBestStr.trim();
+            finalCode = decodedBestStr.trim();
 
             // If still empty, try preferred XPath again and click Copy button then re-read
             if (!finalCode) {
@@ -1508,135 +1445,8 @@ export async function createPixel({ client, website }: { client: string, website
                 log("⚠️ Could not close Install modal; continuing");
             }
 
-            // Open the Webhook dialog from the most recent row to set the URL
-            try {
-                log("🧭 Opening Webhook dialog for newest pixel row...");
-                let rowWebhookBtn;
-                try {
-                    rowWebhookBtn = await driver.findElement(By.xpath('/html/body/div[1]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/table/tbody/tr[1]/td[4]/div/button[3]'));
-                } catch {
-                    try { rowWebhookBtn = await driver.findElement(By.xpath("(//table//tbody//tr)[1]//button[contains(., 'Webhook') or @title='Webhook']")); } catch { }
-                }
-                if (rowWebhookBtn) {
-                    await driver.executeScript("arguments[0].scrollIntoView({behavior:'instant',block:'center'});", rowWebhookBtn);
-                    await delay(120);
-                    await driver.executeScript("arguments[0].click();", rowWebhookBtn);
-                    log("✅ Row Webhook dialog opened");
+            log("✅ Pixel creation process complete (webhook steps skipped)");
 
-                    // Ensure webhook URL is set
-                    try {
-                        const input = await driver.findElement(By.css('input[placeholder*="http"], input[name*="webhook"], input[type="url"]'));
-                        const hook = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
-                        const current = (await input.getAttribute('value')) || '';
-                        if (current.trim() !== hook) {
-                            await driver.executeScript("arguments[0].value='';", input);
-                            await delay(100);
-                            await input.sendKeys(hook);
-                            // Click Add/Save button if present
-                            try {
-                                const addBtn = await driver.findElement(By.xpath("//button[contains(normalize-space(.), 'Add')] | //button[contains(normalize-space(.), 'Save')]"));
-                                await driver.executeScript("arguments[0].click();", addBtn);
-                                log("✅ Webhook URL set/saved on row dialog");
-                                await delay(300);
-                            } catch {
-                                log("✅ Webhook URL filled (no Add/Save button found, assuming auto-save)");
-                            }
-                        } else {
-                            log("✅ Webhook URL already correctly set.");
-                        }
-                    } catch (e) { log("⚠️ Could not set row webhook URL"); }
-
-                    // Close the modal manually if the form didn't auto-close (common after Save/Add)
-                    try {
-                        let modalCloseBtn = await driver.findElement(By.xpath("//div[@role='dialog']//button[contains(normalize-space(.), 'Close') or @aria-label='Close']")).catch(() => null);
-                        if (modalCloseBtn) {
-                            await modalCloseBtn.click();
-                            log("✅ Webhook dialog closed after setting URL.");
-                        }
-                    } catch (e) { /* Ignore errors on closing modal */ }
-
-                } else {
-                    log("ℹ️ Could not find row Webhook action to set URL.");
-                }
-            } catch (e: any) {
-                log("⚠️ Failed to set Webhook URL on row dialog:", { message: e.message });
-            }
-
-            // --- OPTIMIZATION START: IMMEDIATE PROGRAMMATIC TEST + SHORT DB POLL ---
-            // 1) Send the canonical test payload immediately
-            try {
-                const hookUrl = `https://hook.thynkdata.com/pixel_import.php?client=${client}`;
-                const nowIso = new Date().toISOString();
-                const testUrl = `${website}?wldup=${nowIso.replace(/[:.-]/g, '').substring(0, 14)}-${Math.random().toString(36).substring(2, 8)}&fbclid=t`;
-                const payload = {
-                    events: [
-                        {
-                            pixel_id: "003daacb-d261-421c-9781-311df9c381d8",
-                            hem_sha256: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d",
-                            event_timestamp: nowIso,
-                            event_type: "page_view",
-                            ip_address: "35.191.85.117",
-                            activity_start_date: nowIso,
-                            activity_end_date: new Date(Date.now() + 60000).toISOString(),
-                            resolution: {
-                                UUID: TEST_UUID, FIRST_NAME: "Margaret", LAST_NAME: "Faz",
-                                PERSONAL_ADDRESS: "547 Pinewood Ln", PERSONAL_CITY: "San Antonio", PERSONAL_STATE: "TX", PERSONAL_ZIP: "78216", PERSONAL_ZIP4: "6911",
-                                AGE_RANGE: "65 and older", CHILDREN: "Y", GENDER: "F", HOMEOWNER: "Y", MARRIED: "Y",
-                                INCOME_RANGE: "Less than $20,000", NET_WORTH: "$75,000 to $99,999",
-                                DIRECT_NUMBER: "+12104382427, +12108237899, +17137836220, +14322144256", DIRECT_NUMBER_DNC: "Y, Y, Y, N",
-                                MOBILE_PHONE: "+12104382427, +14322144256, +12108237899", MOBILE_PHONE_DNC: "Y, N, Y",
-                                PERSONAL_PHONE: "+12104382427, +12108237899, +14322144256", PERSONAL_PHONE_DNC: "Y, Y, N",
-                                PERSONAL_EMAILS: "margaretfaz@gmail.com, mf7476439@gmail.com, mflores8589@gmail.com",
-                                SKIPTRACE_MATCH_SCORE: "11", SKIPTRACE_NAME: "MARGARET FLORES", SKIPTRACE_ADDRESS: "547 Pinewood Ln",
-                                SKIPTRACE_CITY: "San Antonio", SKIPTRACE_STATE: "TX", SKIPTRACE_ZIP: "78216", SKIPTRACE_CREDIT_RATING: "B", SKIPTRACE_DNC: "Y", SKIPTRACE_EXACT_AGE: "76", SKIPTRACE_LANGUAGE_CODE: "UX", SKIPTRACE_IP: "172.204.161.145",
-                                BUSINESS_EMAIL: "", DEEP_VERIFIED_EMAILS: "", SHA256_PERSONAL_EMAIL: "1458ee23320e30d920f099f57b11000b89ab82a7456bf39dd663d9d0858fd88d, 38e1e9e2bd652af38d5af129a5a763cd89dfaf0f84db99fdf9c1d4265bb56ecf, 2b863da80b0df29ce907336f4a55c91ef9b70fdc4c3f0b05846600dd2554d56f",
-                                SHA256_BUSINESS_EMAIL: "", JOB_TITLE: "", HEADLINE: "", DEPARTMENT: "", SENIORITY_LEVEL: "", INFERRED_YEARS_EXPERIENCE: "", EDUCATION_HISTORY: "", COMPANY_ADDRESS: "", COMPANY_DESCRIPTION: "", COMPANY_DOMAIN: "", COMPANY_EMPLOYEE_COUNT: "", COMPANY_NAME: "", COMPANY_PHONE: "", COMPANY_REVENUE: "", COMPANY_SIC: "", COMPANY_NAICS: "", COMPANY_CITY: "", COMPANY_STATE: "", COMPANY_ZIP: "", COMPANY_INDUSTRY: "", LINKEDIN_URL: "", TWITTER_URL: "", FACEBOOK_URL: "", SOCIAL_CONNECTIONS: "", SKILLS: "", INTERESTS: "", SKIPTRACE_LANDLINE_NUMBERS: "", SKIPTRACE_WIRELESS_NUMBERS: "", SKIPTRACE_B2B_ADDRESS: "", SKIPTRACE_B2B_PHONE: "", SKIPTRACE_B2B_SOURCE: "", SKIPTRACE_B2B_WEBSITE: "", VALID_PHONES: ""
-                            },
-                            event_data: { url: testUrl, referrer: "http://m.facebook.com/", title: website, timestamp: nowIso, percentage: 94, element: { attributes: { class: "elementor-button", href: "#gallery" }, classes: "elementor-button", id: null, tag: "A", text: "View custom cabinets\n" } }
-                        }
-                    ]
-                };
-                await fetch(hookUrl, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
-                log("🚀 Sent programmatic webhook test POST");
-            } catch (sendErr: any) {
-                log("⚠️ Programmatic webhook test send failed:", { message: sendErr?.message });
-            }
-
-            // 2) Poll the DB for a short duration (max 10s) to verify the row landed
-            try {
-                if (DB_HOST && DB_USER && DB_PASS) {
-                    const conn = await mysql.createConnection({ host: DB_HOST, user: DB_USER, password: DB_PASS, database: client, connectTimeout: 5000 });
-                    const start = Date.now();
-                    const timeout = 10000;
-                    let attempt = 0;
-                    log(`⏳ Verifying test row in DB (polling up to ${timeout / 1000}s)...`);
-                    while (Date.now() - start < timeout && !webhookTestUuidVerified) {
-                        attempt++;
-                        try {
-                            const [rowsTest]: any = await conn.query("SELECT id, uuid, event_timestamp, url, referrer FROM superpixel_resolution_log WHERE uuid = ? ORDER BY id DESC LIMIT 1", [TEST_UUID]);
-                            const foundTest = Array.isArray(rowsTest) && rowsTest.length > 0;
-                            if (foundTest) {
-                                webhookRowSample = rowsTest[0];
-                                webhookTestUuidVerified = true;
-                                webhookVerified = true;
-                                log(`✅ DB Verification successful on attempt ${attempt}`);
-                                break;
-                            }
-                        } catch (pollErr: any) {
-                            log(`⚠️ DB poll attempt ${attempt} error:`, { message: pollErr?.message });
-                        }
-                        await delay(500);
-                    }
-                    await conn.end();
-                    log(`📘 Final DB poll result: webhookTestUuidVerified=${webhookTestUuidVerified}`);
-                } else {
-                    log("ℹ️ DB env not configured; skipping DB verification");
-                }
-            } catch (dbErr: any) {
-                log("⚠️ Final DB verification failed:", { message: dbErr?.message });
-            }
-
-            // --- OPTIMIZATION END ---
 
             return { pixelCode: finalCode, webhookVerified, webhookTestUuidVerified, webhookRowSample };
         } else {
@@ -1653,4 +1463,4 @@ export async function createPixel({ client, website }: { client: string, website
         }
         cleanupTempDir(tmpBase);
     }
-} 
+}
