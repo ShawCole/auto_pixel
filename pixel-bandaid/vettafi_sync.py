@@ -93,9 +93,19 @@ def update_central_status(latest_platform_ts):
 
     // 2. Update central pixel_sheets
     $ts_var = "{latest_platform_ts}";
+    $safe_last_event_at = $last_event_at ? str_replace(['T', 'Z'], [' ', ''], $last_event_at) : null;
+    
     $stmt = $mysqli->prepare("UPDATE pixel_sheets SET oplet = ?, last_event_at = ?, visitors = ?, events = ? WHERE client_name = 'VettaFi'");
-    $stmt->bind_param("ssii", $ts_var, $last_event_at, $visitors, $events);
-    $stmt->execute();
+    if (!$stmt) die("Prepare failed: " . $mysqli->error);
+    
+    $stmt->bind_param("ssii", $ts_var, $safe_last_event_at, $visitors, $events);
+    if (!$stmt->execute()) die("Execute failed: " . $stmt->error);
+    
+    if ($stmt->affected_rows === 0) {
+        echo "SUCCESS_BUT_NO_ROWS_CHANGED";
+    } else {
+        echo "SUCCESS_UPDATED_" . $stmt->affected_rows;
+    }
     
     echo "SUCCESS";
     $stmt->close();
