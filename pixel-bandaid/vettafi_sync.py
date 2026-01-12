@@ -259,9 +259,13 @@ def sync_cycle():
             imported = import_batch_to_database(new_events, CLIENT_NAME)
             total_imported += imported
         
-        if stop_sync:
-            logger.info(f"    [STOP] Encountered existing data on Page {page}. Sync cycle ending.")
             break
+
+        # Capture the absolute newest TS from page 1 to update oplet
+        if page == 1 and events:
+            newest_platform_ts = events[0].get("EVENT_TIMESTAMP") or events[0].get("event_timestamp", "N/A")
+            logger.info(f"    -> Latest Platform TS: {newest_platform_ts}")
+            update_central_status(newest_platform_ts)
             
         page += 1
         if page > 2000: # Increased safety cap to allow for ~1 million event backlogs (500 * 2000)
@@ -269,21 +273,6 @@ def sync_cycle():
             break
 
     logger.info(f"Sync cycle complete. Total new events imported: {total_imported}")
-    
-    # Update central status at the end of every cycle, using the absolute newest TS seen
-    # This ensures the UI reflects the poller is active even if no NEW records were added.
-    if page == 1:
-        # If we didn't even get page 1, we can't update
-        pass
-    else:
-        # We fetch the latest TS from the VERY first page fetched (which is the most recent)
-        data = fetch_segment_page(1)
-        if data:
-            events = data.get("data", []) or data.get("events", []) or data.get("results", [])
-            if events:
-                newest_platform_ts = events[0].get("EVENT_TIMESTAMP") or events[0].get("event_timestamp", "N/A")
-                update_central_status(newest_platform_ts)
-
     return total_imported
 
 def main():
@@ -299,7 +288,7 @@ def main():
             
         # Wait before next poll cycle. 
         # User said "pull page 1 over and over", so we poll frequently but respect API load.
-        wait_interval = 300 # 5 minutes
+        wait_interval = 60 # 1 minute
         logger.info(f"Waiting {wait_interval}s until next poll...")
         time.sleep(wait_interval)
 
