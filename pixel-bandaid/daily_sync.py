@@ -48,22 +48,19 @@ def main():
     if args.historical_pull:
         logger.info("HISTORICAL PULL MODE: Pulling past 45 days.")
         days_to_pull = 45
-    elif days_to_pull == 1:
-        # Default to 2 days for daily overhead
-        days_to_pull = 2
 
     # 1. Fetch Active Pixels
     logger.info("--- Stage 1: Fetching Active Pixels ---")
     
     active_pixels = []
-    db_manager = None
-    
     if args.manual_pixel:
         logger.info(f"Manual Mode: Skipping DB fetch. Target: {args.manual_pixel}")
         active_pixels = [{'pixel_name': args.manual_pixel, 'client_name': args.manual_client or args.manual_pixel, 'sheet_id': 'MANUAL'}]
     else:
         # Determine if we should use SSH or local connection
+        # If running on the VM, we likely want local-db (use_ssh=False)
         use_ssh = not args.local_db
+        
         db_manager = SimpleAudienceDatabase(use_ssh=use_ssh)
         try:
             active_pixels = db_manager.get_active_pixels() 
@@ -91,9 +88,6 @@ def main():
             sheet_id = pixel_info.get('sheet_id')
             website_url = pixel_info.get('client_website') or f"https://{pixel_search_name}"
             
-            # Direct Link Optimization
-            platform_url = pixel_info.get('on_platform_segment_url')
-            
             # Handle USA_Financial redundancy
             if "USA_Financial" in client_db:
                 if processed_usa_financial:
@@ -105,6 +99,8 @@ def main():
             if not sheet_id or sheet_id == 'PENDING':
                 logger.info(f"Sheet missing for {client_db}. Creating now...")
                 try:
+                    # Capture pixel_id if possible, or use a dummy
+                    # In a real scenario, we'd need the actual pixel_id (UUID) from the UI or DB
                     dummy_pixel_id = "AUTO_CREATED" 
                     subprocess.run(["php", "create_client_sheet.php", client_db, dummy_pixel_id, website_url], check=True)
                     logger.info(f"Sheet creation triggered for {client_db}")
@@ -116,19 +112,7 @@ def main():
             try:
                 # Download
                 logger.info(f"[PROGRESS] Downloading CSV for {client_db}...")
-                sync_result = bot.download_pixel_data(pixel_search_name, days_to_pull, platform_url=platform_url)
-                
-                raw_file_path = sync_result.get("file_path")
-                metadata = sync_result.get("metadata")
-                
-                if metadata and db_manager:
-                    logger.info(f"Captured fresh metadata for {client_db}: {metadata}")
-                    db_manager.update_segment_metadata(
-                        client_db, 
-                        metadata["segment_id"], 
-                        metadata["segment_api"], 
-                        metadata["segment_name"]
-                    )
+                raw_file_path = bot.download_pixel_data(client_db, days_to_pull)
                 
                 if not raw_file_path:
                     logger.warning(f"No file downloaded for {client_db}")

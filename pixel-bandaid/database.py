@@ -53,7 +53,7 @@ class SimpleAudienceDatabase:
              engine = create_engine(conn_url)
              try:
                  with engine.connect() as conn:
-                      query = text("SELECT client_name, pixel_name, sheet_id, client_website, segment_id, on_platform_segment_url, segment_api FROM pixel_sheets WHERE paused = 0 AND visitors > 0 AND poll_segments = 1 AND client_name != 'VettaFi'")
+                      query = text("SELECT client_name, pixel_name, sheet_id, client_website FROM pixel_sheets WHERE paused = 0 AND visitors > 0 AND poll_segments = 1 AND client_name != 'VettaFi'")
                       result = conn.execute(query)
                       pixels = []
                       for row in result:
@@ -61,10 +61,7 @@ class SimpleAudienceDatabase:
                               "client_name": row[0], 
                               "pixel_name": row[1],
                               "sheet_id": row[2],
-                              "client_website": row[3],
-                              "segment_id": row[4],
-                              "on_platform_segment_url": row[5],
-                              "segment_api": row[6]
+                              "client_website": row[3]
                           })
                       print(f"Found {len(pixels)} active pixels.")
                       return pixels
@@ -86,7 +83,7 @@ class SimpleAudienceDatabase:
                 conn_url = f"mysql+mysqlconnector://{self.mysql_user}:{self.mysql_password}@127.0.0.1:{tunnel.local_bind_port}/{self.pixel_db}"
                 engine = create_engine(conn_url)
                 with engine.connect() as conn:
-                    query = text("SELECT client_name, pixel_name, sheet_id, client_website, segment_id, on_platform_segment_url, segment_api FROM pixel_sheets WHERE paused = 0 AND visitors > 0 AND poll_segments = 1 AND client_name != 'VettaFi'")
+                    query = text("SELECT client_name, pixel_name, sheet_id, client_website FROM pixel_sheets WHERE paused = 0 AND visitors > 0 AND poll_segments = 1 AND client_name != 'VettaFi'")
                     result = conn.execute(query)
                     pixels = []
                     for row in result:
@@ -94,10 +91,7 @@ class SimpleAudienceDatabase:
                             "client_name": row[0], 
                             "pixel_name": row[1],
                             "sheet_id": row[2],
-                            "client_website": row[3],
-                            "segment_id": row[4],
-                            "on_platform_segment_url": row[5],
-                            "segment_api": row[6]
+                            "client_website": row[3]
                         })
                     print(f"Found {len(pixels)} active pixels.")
                     return pixels
@@ -108,69 +102,6 @@ class SimpleAudienceDatabase:
     def get_active_pixels_extended(self):
         # Already updated get_active_pixels to return extended info
         return self.get_active_pixels()
-
-    def update_segment_metadata(self, client_name, segment_id, segment_api, segment_name):
-        """Updates segment metadata in the management database."""
-        logger.info(f"Updating segment metadata for {client_name}...")
-        
-        on_platform_segment_url = f"https://app.simpleaudience.io/home/accupoint-solutions/studio?segment={segment_id}"
-        
-        if not self.use_ssh:
-            conn_url = f"mysql+mysqlconnector://{self.mysql_user}:{self.mysql_password}@{self.mysql_host}:{self.mysql_port}/{self.pixel_db}"
-            engine = create_engine(conn_url)
-            try:
-                with engine.begin() as conn:
-                    query = text("""
-                        UPDATE pixel_sheets 
-                        SET segment_id = :sid, 
-                            on_platform_segment_url = :url, 
-                            segment_api = :api,
-                            segment_name = :name
-                        WHERE client_name = :cname
-                    """)
-                    conn.execute(query, {
-                        "sid": segment_id,
-                        "url": on_platform_segment_url,
-                        "api": segment_api,
-                        "name": segment_name,
-                        "cname": client_name
-                    })
-                logger.info("Metadata updated locally.")
-            except Exception as e:
-                logger.error(f"Failed to update metadata locally: {e}")
-            return
-
-        pkey = self._load_pkey()
-        try:
-            with SSHTunnelForwarder(
-                (self.ssh_host, self.ssh_port),
-                ssh_username=self.ssh_user,
-                ssh_password=self.ssh_password,
-                ssh_pkey=pkey,
-                remote_bind_address=(self.mysql_host, self.mysql_port),
-                set_keepalive=60
-            ) as tunnel:
-                conn_url = f"mysql+mysqlconnector://{self.mysql_user}:{self.mysql_password}@127.0.0.1:{tunnel.local_bind_port}/{self.pixel_db}"
-                engine = create_engine(conn_url)
-                with engine.begin() as conn:
-                    query = text("""
-                        UPDATE pixel_sheets 
-                        SET segment_id = :sid, 
-                            on_platform_segment_url = :url, 
-                            segment_api = :api,
-                            segment_name = :name
-                        WHERE client_name = :cname
-                    """)
-                    conn.execute(query, {
-                        "sid": segment_id,
-                        "url": on_platform_segment_url,
-                        "api": segment_api,
-                        "name": segment_name,
-                        "cname": client_name
-                    })
-                logger.info("Metadata updated via SSH.")
-        except Exception as e:
-            logger.error(f"Failed to update metadata via SSH: {e}")
 
     def upload_and_sync(self, events_csv, visitors_csv, target_db):
         print(f"Starting SSH Tunnel for database: {target_db}...")

@@ -64,6 +64,57 @@ def get_latest_timestamp():
     logger.warning("No latest timestamp found in DB or error occurred. Starting fresh.")
     return "1970-01-01T00:00:00Z"
 
+def update_central_status(latest_platform_ts):
+    """Update central pixel_sheets with the latest platform timestamp and server counts."""
+    if not latest_platform_ts or latest_platform_ts == "N/A":
+        return
+
+    logger.info(f"Updating central management status with platform TS: {latest_platform_ts}...")
+    php_path = "/opt/homebrew/bin/php" if os.path.exists("/opt/homebrew/bin/php") else "php"
+    php_code = f"""
+    $mysqli = new mysqli('34.26.61.148', 'root', 'AccuPoint01!', 'pixel');
+    if ($mysqli->connect_error) die("pixel db conn error");
+
+    $vettafi_db = new mysqli('34.26.61.148', 'root', 'AccuPoint01!', 'VettaFi');
+    if ($vettafi_db->connect_error) die("vettafi db conn error");
+
+    // 1. Get current stats from VettaFi DB
+    $res_v = $vettafi_db->query("SELECT COUNT(*) as v FROM superpixel_visitors");
+    $stats_v = $res_v->fetch_assoc();
+    $visitors = $stats_v['v'] ?: 0;
+
+    $res_e = $vettafi_db->query("SELECT COUNT(*) as e FROM superpixel_resolution_log");
+    $stats_e = $res_e->fetch_assoc();
+    $events = $stats_e['e'] ?: 0;
+
+    $res_max = $vettafi_db->query("SELECT MAX(event_timestamp) as last FROM superpixel_resolution_log");
+    $stats_max = $res_max->fetch_assoc();
+    $last_event_at = $stats_max['last'] ?: null;
+
+    // 2. Update central pixel_sheets
+    $stmt = $mysqli->prepare("UPDATE pixel_sheets SET oplet = ?, last_event_at = ?, visitors = ?, events = ? WHERE client_name = 'VettaFi'");
+    $stmt->bind_param("ssii", "{latest_platform_ts}", $last_event_at, $visitors, $events);
+    $stmt->execute();
+    
+    echo "SUCCESS";
+    $stmt->close();
+    $mysqli->close();
+    $vettafi_db->close();
+    """
+    try:
+        process = subprocess.run(
+            [php_path, "-r", php_code],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        if "SUCCESS" in process.stdout:
+            logger.info("✅ Central management status updated successfully")
+        else:
+            logger.error(f"Failed to update central status: {process.stdout} {process.stderr}")
+    except Exception as e:
+        logger.error(f"Error updating central status: {e}")
+
 def fetch_segment_page(page_number):
     """Fetch a single page from the segment API with rate limiting and backoff."""
     url = f"{SEGMENT_API_URL}?page={page_number}&page_size={PAGE_SIZE}"
@@ -152,30 +203,13 @@ def import_batch_to_database(events, client_name, retries=3):
             
             stdout, stderr = process.communicate()
             
-            if process.returncode == 0:
-                try:
-                    # Look for JSON in stdout (might contain debug logs above it)
-                    json_start = stdout.find('{"status"')
-                    if json_start != -1:
-                        result = json.loads(stdout[json_start:])
-                        if result.get("status") == "success":
-                            counts = result.get("counts", {})
-                            return {
-                                "inserted": int(counts.get("inserted", 0)),
-                                "duplicates": int(counts.get("duplicates", 0)),
-                                "skipped": int(counts.get("skipped", 0))
-                            }
-                    elif '"status":"success"' in stdout:
-                        return {"inserted": len(events), "duplicates": 0, "skipped": 0}
-                except Exception as e:
-                    logger.warning(f"Failed to parse import JSON: {e}")
-                    if '"status":"success"' in stdout:
-                        return {"inserted": len(events), "duplicates": 0, "skipped": 0}
-            
-            logger.error(f"Import failed (Attempt {attempt}): {stderr or stdout}")
-            if attempt < retries:
-                time.sleep(attempt * 5)
-        return {"inserted": 0, "duplicates": 0, "skipped": len(events)}
+            if process.returncode == 0 and '"status":"success"' in stdout:
+                return len(events)
+            else:
+                logger.error(f"Import failed (Attempt {attempt}): {stderr or stdout}")
+                if attempt < retries:
+                    time.sleep(attempt * 5)
+        return 0
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -222,14 +256,8 @@ def sync_cycle():
                 
         if new_events:
             logger.info(f"    -> Importing {len(new_events)} new events...")
-            counts = import_batch_to_database(new_events, CLIENT_NAME)
-            
-            ins = counts.get("inserted", 0)
-            dupe = counts.get("duplicates", 0)
-            skip = counts.get("skipped", 0)
-            
-            logger.info(f"    -> Batch Result: {ins} NEW records | {dupe} Duplicates Enriched | {skip} Skipped")
-            total_imported += ins
+            imported = import_batch_to_database(new_events, CLIENT_NAME)
+            total_imported += imported
         
         if stop_sync:
             logger.info(f"    [STOP] Encountered existing data on Page {page}. Sync cycle ending.")
@@ -241,6 +269,21 @@ def sync_cycle():
             break
 
     logger.info(f"Sync cycle complete. Total new events imported: {total_imported}")
+    
+    # Update central status at the end of every cycle, using the absolute newest TS seen
+    # This ensures the UI reflects the poller is active even if no NEW records were added.
+    if page == 1:
+        # If we didn't even get page 1, we can't update
+        pass
+    else:
+        # We fetch the latest TS from the VERY first page fetched (which is the most recent)
+        data = fetch_segment_page(1)
+        if data:
+            events = data.get("data", []) or data.get("events", []) or data.get("results", [])
+            if events:
+                newest_platform_ts = events[0].get("EVENT_TIMESTAMP") or events[0].get("event_timestamp", "N/A")
+                update_central_status(newest_platform_ts)
+
     return total_imported
 
 def main():
