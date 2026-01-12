@@ -24,10 +24,10 @@ function log(message: string, data?: any) {
 // Sync helpers and configuration
 const isProduction = process.env.NODE_ENV === 'production';
 const PHP_BIN = process.env.PHP_BIN || 'php';
-const PYTHON_BIN = process.env.PYTHON_BIN || (isProduction ? '/opt/auto-pixel/pixel-bandaid/venv/bin/python3' : 'python3');
+const PYTHON_BIN = process.env.PYTHON_BIN || (isProduction ? '/opt/auto-pixel/pixel-bandaid-v2/venv/bin/python3' : 'python3');
 const SYNC_LOG_DIR = process.env.SYNC_LOG_DIR || (isProduction ? "/opt/auto-pixel/logs" : "./logs");
 const SYNC_LOCK_DIR = process.env.SYNC_LOCK_DIR || (isProduction ? "/opt/auto-pixel/.sync-locks" : "./locks");
-const DAILY_SYNC_SCRIPT = isProduction ? "/opt/auto-pixel/pixel-bandaid/daily_sync.py" : path.resolve(__dirname, "../../pixel-bandaid/daily_sync.py");
+const DAILY_SYNC_SCRIPT = isProduction ? "/opt/auto-pixel/pixel-bandaid-v2/daily_sync.py" : path.resolve(__dirname, "../../pixel-bandaid-v2/daily_sync.py");
 
 function ensureDir(p: string) {
     try { fs.mkdirSync(p, { recursive: true }); } catch { }
@@ -723,12 +723,12 @@ async function startDailySyncForPixel(params: { pixelName: string, clientName: s
     const logPath = path.join(SYNC_LOG_DIR, `sync-${clientName}.log`);
 
     // Command translates to: python3 daily_sync.py --days 1 --manual-pixel <pixel> --manual-client <client> --local-db
-    const pythonBin = isProduction ? "/opt/auto-pixel/pixel-bandaid/venv/bin/python3" : "python3";
-    const scriptPath = isProduction ? "/opt/auto-pixel/pixel-bandaid/daily_sync.py" : path.resolve("../pixel-bandaid/daily_sync.py");
+    const pythonBin = isProduction ? "/opt/auto-pixel/pixel-bandaid-v2/venv/bin/python3" : "python3";
+    const scriptPath = isProduction ? "/opt/auto-pixel/pixel-bandaid-v2/daily_sync.py" : path.resolve("../pixel-bandaid-v2/daily_sync.py");
 
     const cmd = `${pythonBin} ${scriptPath} --days 1 --manual-pixel ${pixelName} --manual-client ${clientName} --local-db`;
     const spawnCmd = `nohup ${cmd} >> ${logPath} 2>&1 & echo $!`;
-    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid" : path.resolve(__dirname, "../../pixel-bandaid");
+    const cwd = isProduction ? "/opt/auto-pixel/pixel-bandaid-v2" : path.resolve(__dirname, "../../pixel-bandaid-v2");
 
     log(`💻 Executing: ${cmd}`);
     log(`📝 Logs at: ${logPath}`);

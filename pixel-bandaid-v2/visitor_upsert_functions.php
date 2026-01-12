@@ -3,6 +3,22 @@
 // Include this file in all scripts that modify superpixel_resolution_log
 
 /**
+ * Normalizes ISO8601 timestamps to MySQL Datetime format
+ */
+function normalizeTimestamp($ts)
+{
+    if (empty($ts))
+        return 'CURRENT_TIMESTAMP';
+    // Remove trailing Z and replace T with space
+    $clean = str_replace(['Z', 'T'], ['', ' '], $ts);
+    // Ensure it looks like YYYY-MM-DD HH:MM:SS
+    if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/', $clean)) {
+        return "'" . $clean . "'";
+    }
+    return "'$ts'"; // Fallback to raw if not matching standard cleaning
+}
+
+/**
  * Upserts visitor profile based on event data
  * 
  * @param mysqli $mysqli Database connection
@@ -32,15 +48,11 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             $existing_columns[] = $row['Field'];
         }
 
-        // Define all possible visitor fields
+        // Define all possible visitor fields (Sync with superpixel_visitors schema)
         $possible_visitor_fields = [
             'uuid',
             'first_name',
             'last_name',
-            'company_name',
-            'job_title',
-            'personal_emails',
-            'mobile_phone',
             'personal_address',
             'personal_city',
             'personal_state',
@@ -55,16 +67,78 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
             'income_range',
             'direct_number',
             'direct_number_dnc',
+            'mobile_phone',
             'mobile_phone_dnc',
+            'personal_phone',
+            'personal_phone_dnc',
+            'business_email',
+            'personal_emails',
+            'deep_verified_emails',
+            'sha256_personal_email',
+            'sha256_business_email',
             'hem_sha256',
-            'last_visited_url',
-            'last_element',
-            'last_percentage',
-            'last_referrer',
-            'last_timestamp',
-            'last_event',
+            'job_title',
+            'headline',
+            'department',
+            'seniority_level',
+            'inferred_years_experience',
+            'company_name_history',
+            'job_title_history',
+            'education_history',
+            'company_address',
+            'company_description',
+            'company_domain',
+            'company_employee_count',
+            'company_linkedin_url',
+            'company_name',
+            'company_phone',
+            'company_revenue',
+            'company_sic',
+            'company_naics',
+            'company_city',
+            'company_state',
+            'company_zip',
+            'company_industry',
+            'linkedin_url',
+            'twitter_url',
+            'facebook_url',
+            'social_connections',
+            'skills',
+            'interests',
+            'skiptrace_match_score',
+            'skiptrace_name',
+            'skiptrace_address',
+            'skiptrace_city',
+            'skiptrace_state',
+            'skiptrace_zip',
+            'skiptrace_landline_numbers',
+            'skiptrace_wireless_numbers',
+            'skiptrace_credit_rating',
+            'skiptrace_dnc',
+            'skiptrace_exact_age',
+            'skiptrace_ethnic_code',
+            'skiptrace_language_code',
+            'skiptrace_ip',
+            'skiptrace_b2b_address',
+            'skiptrace_b2b_phone',
+            'skiptrace_b2b_source',
+            'skiptrace_b2b_website',
+            'valid_phones',
+            'url',
+            'element',
+            'percentage',
+            'referrer',
+            'event_timestamp',
+            'event_type',
             'npn',
-            'crd'
+            'crd',
+            'ip_address',
+            'pixel_id',
+            'activity_start_date',
+            'activity_end_date',
+            'referrer_url',
+            'timestamp',
+            'title'
         ];
 
         // Only use fields that actually exist in the table
@@ -143,9 +217,9 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
         // Determine the event timestamp to use for first/last seen
         $active_timestamp = 'CURRENT_TIMESTAMP';
         if (!empty($event_data['event_timestamp'])) {
-            $active_timestamp = "'" . $mysqli->real_escape_string($event_data['event_timestamp']) . "'";
+            $active_timestamp = normalizeTimestamp($event_data['event_timestamp']);
         } elseif (!empty($event_data['timestamp'])) {
-            $active_timestamp = "'" . $mysqli->real_escape_string($event_data['timestamp']) . "'";
+            $active_timestamp = normalizeTimestamp($event_data['timestamp']);
         }
 
         // Add last_seen_at update if the column exists
@@ -175,6 +249,7 @@ function upsertVisitorFromEvent($mysqli, $event_data, $debug_context = "unknown"
                        VALUES (" . implode(",", $visitor_values) . ")
                        ON DUPLICATE KEY UPDATE " . implode(", ", $update_clauses);
 
+        debugLog("Visitor fields for $debug_context: " . implode(",", $visitor_fields));
         debugLog("Executing visitor upsert for $debug_context");
 
         if (!$mysqli->query($visitor_sql)) {
@@ -262,110 +337,198 @@ function batchUpsertVisitorsFromEvents($mysqli, $events_data, $debug_context = "
  */
 function backfillMissingVisitors($mysqli, $limit = 1000, $debug_context = "backfill")
 {
-    debugLog("Starting backfill of missing visitors for $debug_context (limit: $limit)");
+    debugLog("Starting Robust Visitor Sync (4-Phase) for $debug_context");
+    $stats = ['phase1_deleted' => 0, 'phase2_inserted' => 0, 'phase3_updated' => 0];
 
-    // Get schema-aware column list for events table
-    $columnsResult = $mysqli->query("SHOW COLUMNS FROM superpixel_resolution_log");
-    $event_columns = [];
-    while ($row = $columnsResult->fetch_assoc()) {
-        $event_columns[] = $row['Field'];
-    }
-
-    // Build SELECT clause with only existing columns
-    $select_columns = [];
-    $required_columns = [
-        'uuid',
-        'first_name',
-        'last_name',
-        'company_name',
-        'job_title',
-        'personal_emails',
-        'mobile_phone',
-        'personal_address',
-        'personal_city',
-        'personal_state',
-        'personal_zip',
-        'hem_sha256',
-        'url',
-        'element',
-        'percentage',
-        'referrer',
-        'timestamp',
-        'event_type',
-        'npn',
-        'crd'
-    ];
-
-    foreach ($required_columns as $col) {
-        if (in_array($col, $event_columns)) {
-            $select_columns[] = $col;
+    try {
+        // --- PHASE 1: GARBAGE COLLECTION ---
+        // Remove invisible UUIDs that break joins
+        $sql_clean = "DELETE FROM `superpixel_visitors` WHERE uuid IS NULL OR TRIM(uuid) = '' OR LENGTH(TRIM(uuid)) < 20";
+        if ($mysqli->query($sql_clean)) {
+            $stats['phase1_deleted'] = $mysqli->affected_rows;
+            if ($stats['phase1_deleted'] > 0)
+                debugLog("Phase 1: Deleted {$stats['phase1_deleted']} ghost rows");
+        } else {
+            debugLog("Phase 1 Error: " . $mysqli->error);
         }
-    }
 
-    $column_list = implode(', ', $select_columns);
+        // --- PHASE 2: UPSERT (BACKFILL ENRICHED) ---
+        // Insert new users found in the log who aren't in visitors yet
+        // Dynamically pull all shared columns between log and visitors
 
-    // Find events with UUIDs that don't have visitor records
-    // Get list of missing UUIDs first, then get their latest event data
-    $sql = "SELECT DISTINCT r.uuid
-            FROM superpixel_resolution_log r 
-            LEFT JOIN superpixel_visitors v ON r.uuid = v.uuid 
-            WHERE v.uuid IS NULL 
-              AND r.uuid IS NOT NULL 
-              AND r.uuid != '' 
-              AND r.uuid != 'null'
-            LIMIT $limit";
+        // Get columns from visitors table to know what we can insert into
+        $existing_columns = [];
+        $res = $mysqli->query("SHOW COLUMNS FROM `superpixel_visitors`");
+        while ($row = $res->fetch_assoc()) {
+            $existing_columns[] = $row['Field'];
+        }
 
-    $uuidResult = $mysqli->query($sql);
-    if (!$uuidResult) {
-        debugLog("Error getting missing UUIDs for $debug_context: " . $mysqli->error);
+        $core_visitor_fields = [
+            'first_name',
+            'last_name',
+            'personal_address',
+            'personal_city',
+            'personal_state',
+            'personal_zip',
+            'personal_zip4',
+            'age_range',
+            'children',
+            'gender',
+            'homeowner',
+            'married',
+            'net_worth',
+            'income_range',
+            'direct_number',
+            'direct_number_dnc',
+            'mobile_phone',
+            'mobile_phone_dnc',
+            'personal_phone',
+            'personal_phone_dnc',
+            'business_email',
+            'personal_emails',
+            'deep_verified_emails',
+            'sha256_personal_email',
+            'sha256_business_email',
+            'hem_sha256',
+            'job_title',
+            'headline',
+            'department',
+            'seniority_level',
+            'inferred_years_experience',
+            'company_name_history',
+            'job_title_history',
+            'education_history',
+            'company_address',
+            'company_description',
+            'company_domain',
+            'company_employee_count',
+            'company_linkedin_url',
+            'company_name',
+            'company_phone',
+            'company_revenue',
+            'company_sic',
+            'company_naics',
+            'company_city',
+            'company_state',
+            'company_zip',
+            'company_industry',
+            'linkedin_url',
+            'twitter_url',
+            'facebook_url',
+            'social_connections',
+            'skills',
+            'interests',
+            'skiptrace_match_score',
+            'skiptrace_name',
+            'skiptrace_address',
+            'skiptrace_city',
+            'skiptrace_state',
+            'skiptrace_zip',
+            'skiptrace_landline_numbers',
+            'skiptrace_wireless_numbers',
+            'skiptrace_credit_rating',
+            'skiptrace_dnc',
+            'skiptrace_exact_age',
+            'skiptrace_ethnic_code',
+            'skiptrace_language_code',
+            'skiptrace_ip',
+            'skiptrace_b2b_address',
+            'skiptrace_b2b_phone',
+            'skiptrace_b2b_source',
+            'skiptrace_b2b_website',
+            'valid_phones',
+            'url',
+            'element',
+            'percentage',
+            'referrer',
+            'event_timestamp',
+            'event_type',
+            'npn',
+            'crd',
+            'ip_address',
+            'pixel_id',
+            'activity_start_date',
+            'activity_end_date',
+            'referrer_url',
+            'timestamp',
+            'title'
+        ];
+
+        $insert_cols = ['uuid', 'first_seen_at', 'last_seen_at'];
+        $select_vals = [
+            'uuid',
+            "DATE_FORMAT(MIN(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s')",
+            "DATE_FORMAT(MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s')"
+        ];
+        $update_clauses = [
+            "first_seen_at = LEAST(first_seen_at, VALUES(first_seen_at))",
+            "last_seen_at = GREATEST(last_seen_at, VALUES(last_seen_at))"
+        ];
+
+        foreach ($core_visitor_fields as $field) {
+            if (in_array($field, $existing_columns)) {
+                $insert_cols[] = "`$field`";
+                $select_vals[] = "MAX(NULLIF(`$field`, ''))";
+                // Only update if current is empty or new is better
+                $update_clauses[] = "`$field` = COALESCE(NULLIF(VALUES(`$field`), ''), `$field`)";
+            }
+        }
+
+        $sql_upsert = "
+            INSERT INTO `superpixel_visitors` (" . implode(', ', $insert_cols) . ")
+            SELECT " . implode(', ', $select_vals) . "
+            FROM `superpixel_resolution_log`
+            WHERE uuid IS NOT NULL AND LENGTH(uuid) > 20
+            GROUP BY uuid
+            HAVING MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)) >= NOW() - INTERVAL 45 DAY
+            ON DUPLICATE KEY UPDATE " . implode(', ', $update_clauses);
+
+        if ($mysqli->query($sql_upsert)) {
+            $stats['phase2_inserted'] = $mysqli->affected_rows;
+            debugLog("Phase 2: Upserted affected rows: " . $stats['phase2_inserted']);
+        } else {
+            debugLog("Phase 2 Error: " . $mysqli->error);
+        }
+
+        // --- PHASE 3: FORCE SYNC (SAFETY NET) ---
+        // Catch-all for any existing rows that drifted or were just inserted with CURRENT_TIMESTAMP by generic import
+        $sql_force = "
+            UPDATE `superpixel_visitors` v
+            JOIN (
+              SELECT
+                uuid,
+                DATE_FORMAT(MIN(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s') as true_first_seen_str,
+                DATE_FORMAT(MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)), '%Y-%m-%d %H:%i:%s') as true_last_seen_str
+              FROM `superpixel_resolution_log`
+              WHERE uuid IS NOT NULL AND LENGTH(uuid) > 20
+              GROUP BY uuid
+              HAVING MAX(CAST(REPLACE(REPLACE(event_timestamp, 'Z', ''), 'T', ' ') AS DATETIME)) >= NOW() - INTERVAL 45 DAY
+            ) stats ON v.uuid = stats.uuid
+            SET
+              v.first_seen_at = stats.true_first_seen_str,
+              v.last_seen_at  = stats.true_last_seen_str
+            WHERE DATE_FORMAT(v.last_seen_at,  '%Y-%m-%d %H:%i:%s') != stats.true_last_seen_str
+               OR DATE_FORMAT(v.first_seen_at, '%Y-%m-%d %H:%i:%s') != stats.true_first_seen_str
+        ";
+
+        if ($mysqli->query($sql_force)) {
+            $stats['phase3_updated'] = $mysqli->affected_rows;
+            if ($stats['phase3_updated'] > 0)
+                debugLog("Phase 3: Corrected {$stats['phase3_updated']} rows with timestamp drift");
+        } else {
+            debugLog("Phase 3 Error: " . $mysqli->error);
+        }
+
+    } catch (Exception $e) {
+        debugLog("Backfill Exception: " . $e->getMessage());
         return ['backfilled_count' => 0, 'error_count' => 1];
     }
 
-    $backfilled_count = 0;
-    $error_count = 0;
-
-    // For each missing UUID, get the latest event and create visitor
-    while ($uuidRow = $uuidResult->fetch_assoc()) {
-        $uuid = $uuidRow['uuid'];
-
-        // Get the latest event for this UUID
-        $eventSql = "SELECT " . implode(', ', $select_columns) . "
-                     FROM superpixel_resolution_log 
-                     WHERE uuid = ? 
-                     ORDER BY timestamp DESC 
-                     LIMIT 1";
-
-        $stmt = $mysqli->prepare($eventSql);
-        if (!$stmt) {
-            debugLog("Failed to prepare event query for UUID $uuid: " . $mysqli->error);
-            $error_count++;
-            continue;
-        }
-
-        $stmt->bind_param("s", $uuid);
-        $stmt->execute();
-        $eventResult = $stmt->get_result();
-
-        if ($eventData = $eventResult->fetch_assoc()) {
-            $event_context = "$debug_context-uuid_" . substr($uuid, 0, 8);
-
-            if (upsertVisitorFromEvent($mysqli, $eventData, $event_context)) {
-                $backfilled_count++;
-            } else {
-                $error_count++;
-            }
-        } else {
-            $error_count++;
-        }
-
-        $stmt->close();
-    }
-
-    debugLog("Backfill complete for $debug_context: $backfilled_count backfilled, $error_count errors");
-
+    // Return format expected by caller (aggregating inserts/updates)
     return [
-        'backfilled_count' => $backfilled_count,
-        'error_count' => $error_count
+        'backfilled_count' => $stats['phase2_inserted'] + $stats['phase3_updated'],
+        'error_count' => 0,
+        'details' => $stats
     ];
 }
 
@@ -385,26 +548,26 @@ function ensureSchema($mysqli)
         // If it fails, we catch exception.
     }
 
-    // 2. superpixel_resolution_log: Robust Dedupe via dedupe_uuid
+    // 2. superpixel_resolution_log: Robust Dedupe via import_hash
     // First, ensure the column exists
-    $checkCol = $mysqli->query("SHOW COLUMNS FROM superpixel_resolution_log LIKE 'dedupe_uuid'");
+    $checkCol = $mysqli->query("SHOW COLUMNS FROM superpixel_resolution_log LIKE 'import_hash'");
     if ($checkCol && $checkCol->num_rows == 0) {
-        debugLog("Adding dedupe_uuid column to superpixel_resolution_log...");
+        debugLog("Adding import_hash column to superpixel_resolution_log...");
         try {
-            $mysqli->query("ALTER TABLE superpixel_resolution_log ADD COLUMN dedupe_uuid VARCHAR(64) AFTER uuid");
+            $mysqli->query("ALTER TABLE superpixel_resolution_log ADD COLUMN import_hash VARCHAR(64) AFTER uuid");
         } catch (Throwable $e) {
-            debugLog("Warning: Could not add dedupe_uuid column: " . $e->getMessage());
+            debugLog("Warning: Could not add import_hash column: " . $e->getMessage());
         }
     }
 
-    // Now ensure unique index on dedupe_uuid
-    $check2 = $mysqli->query("SHOW INDEX FROM superpixel_resolution_log WHERE Key_name = 'idx_dedupe_uuid'");
+    // Now ensure unique index on import_hash
+    $check2 = $mysqli->query("SHOW INDEX FROM superpixel_resolution_log WHERE Key_name = 'idx_import_hash'");
     if ($check2 && $check2->num_rows == 0) {
-        debugLog("Adding unique index idx_dedupe_uuid to superpixel_resolution_log...");
+        debugLog("Adding unique index idx_import_hash to superpixel_resolution_log...");
         try {
-            $mysqli->query("CREATE UNIQUE INDEX idx_dedupe_uuid ON superpixel_resolution_log (dedupe_uuid)");
+            $mysqli->query("CREATE UNIQUE INDEX idx_import_hash ON superpixel_resolution_log (import_hash)");
         } catch (Throwable $e) {
-            debugLog("Warning: Could not add unique dedupe index: " . $e->getMessage());
+            debugLog("Warning: Could not add unique import_hash index: " . $e->getMessage());
         }
     }
 }

@@ -119,31 +119,28 @@ class SimpleAudienceProcessor:
                 "activity_end_date": safe_get('activity_end_date'),
             }
 
-            # Generate Deterministic Dedupe UUID
-            # Hash of: pixel_id + event_type + hem_sha256 + event_timestamp + ip_address (salt)
-            # This ensures that if we re-run the same CSV row, we get the exact same hash.
+            # Generate Deterministic Import Hash (Logic from vettafi_sync.py)
+            # Hash of: uuid + event_type + timestamp
             import hashlib
-            dedupe_string = f"{event_obj['pixel_id']}|{event_obj['event_type']}|{event_obj['hem_sha256']}|{event_obj['event_timestamp']}|{event_obj['activity_start_date']}"
-            dedupe_uuid = hashlib.sha256(dedupe_string.encode('utf-8')).hexdigest()
-            event_obj['dedupe_uuid'] = dedupe_uuid
+            uuid_val = safe_get('uuid')
+            etype_val = event_obj['event_type']
+            ets_val = event_obj['event_timestamp']
+            
+            hash_str = f"{uuid_val}|{etype_val}|{ets_val}"
+            import_hash = hashlib.sha256(hash_str.encode()).hexdigest()
+            event_obj['import_hash'] = import_hash
 
             # Gather resolution data (the big flat list of attributes)
             # We essentially dump the whole row into 'resolution' because pixel_import.php 
             # looks for keys like 'FIRST_NAME', 'personal_city', etc. inside $pixel_data (which comes from 'resolution')
-            # The CSV columns are lowercase now (we did that above). 
-            # pixel_import.php checks for UPPERCASE keys (e.g. $pixel_data['FIRST_NAME']) 
-            # inside $pixel_data. Wait, lines 146+ of pixel_import.php show:
-            # "uuid" => isset($pixel_data['UUID']) ? ...
-            # So pixel_import.php expects UPPERCASE keys in 'resolution'.
-            
             resolution_data = {}
             for col, val in row.items():
-                if pd.notna(val):
-                     # Convert to upper case key for PHP compatibility
+                if pd.notna(val) and str(val).strip() != "":
+                     # Convert to upper case key for PHP compatibility (as expected by visitor_upsert_functions.php)
                     resolution_data[col.upper()] = str(val)
             
-            # Pass dedupe_uuid in resolution as well just in case
-            resolution_data['DEDUPE_UUID'] = dedupe_uuid
+            # Pass import_hash in resolution as well just in case
+            resolution_data['IMPORT_HASH'] = import_hash
             
             event_obj['resolution'] = resolution_data
             

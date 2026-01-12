@@ -2,10 +2,13 @@ import os
 import argparse
 import subprocess
 import json
+import time
 import logging
 from automation import SimpleAudienceAutomation
 from processor import SimpleAudienceProcessor
 from database import SimpleAudienceDatabase
+from api_discovery_bot import ApiDiscoveryBot
+from oplet_bot import OpletBot
 from dotenv import load_dotenv
 
 # Setup logging
@@ -29,7 +32,7 @@ PIXEL_IMPORT_SCRIPT = os.path.abspath(os.path.join(BASE_DIR, "pixel_import.php")
 
 def main():
     parser = argparse.ArgumentParser(description="Daily Pixel Sync (Band-Aid Solution)")
-    parser.add_argument("--days", type=int, default=1, help="Number of days to export (default: 1)")
+    parser.add_argument("--days", type=int, default=3, help="Number of days to export (default: 3)")
     parser.add_argument("--download-dir", type=str, default="./downloads", help="Directory for downloads")
     parser.add_argument("--headless", action="store_true", default=True, help="Run browser in headless mode")
     parser.add_argument("--no-headless", action="store_false", dest="headless", help="Run browser in headed mode")
@@ -37,6 +40,7 @@ def main():
     parser.add_argument("--dry-run", action="store_true", help="Do not actually upload data, just simulate")
     parser.add_argument("--manual-pixel", type=str, help="Skip DB fetch and manually process this pixel name")
     parser.add_argument("--manual-client", type=str, help="Client DB name for manual pixel (defaults to pixel name)")
+    parser.add_argument("--client", type=str, help="Specifically process this client name from database")
     
     parser.add_argument("--historical-pull", action="store_true", help="One-time pull for past 45 days")
     
@@ -58,19 +62,28 @@ def main():
     else:
         # Determine if we should use SSH or local connection
         # If running on the VM, we likely want local-db (use_ssh=False)
+        # Determine if we should use SSH or local connection
         use_ssh = not args.local_db
-        
         db_manager = SimpleAudienceDatabase(use_ssh=use_ssh)
         try:
             active_pixels = db_manager.get_active_pixels() 
+            
+            # If --client is specified, filter for that client only
+            if args.client:
+                active_pixels = [p for p in active_pixels if p['client_name'].lower() == args.client.lower()]
+                logger.info(f"Filtered for specific client: {args.client} (Found {len(active_pixels)})")
+            
+            logger.info(f"Fetched {len(active_pixels)} active pixels from database.")
         except Exception as e:
             logger.error(f"Failed to fetch active pixels: {e}")
             return
 
     if not active_pixels:
         logger.info("No active pixels found to process.")
+        print("[DEBUG] active_pixels list is empty. Returning.")
         return
-
+    
+    print(f"[DEBUG] Processing {len(active_pixels)} pixels now...")
     # 2. Automation Setup
     logger.info(f"\n--- Stage 2: Selenium Automation (Headless: {args.headless}) ---")
     bot = SimpleAudienceAutomation(download_dir=args.download_dir, headless=args.headless)
@@ -82,42 +95,114 @@ def main():
         processed_usa_financial = False
         
         for pixel_info in active_pixels:
-            client_db = pixel_info['client_name']
-            pixel_search_name = pixel_info['pixel_name']
+            client_display_name = pixel_info['client_name'] # e.g. USA_Financial_NEW
+            database_name = pixel_info['pixel_name']      # e.g. usafinancial.com
             sheet_id = pixel_info.get('sheet_id')
-            website_url = pixel_info.get('client_website') or f"https://{pixel_search_name}"
+            website_url = pixel_info.get('client_website') or f"https://{database_name}"
             
             # Handle USA_Financial redundancy
-            if "USA_Financial" in client_db:
+            if "USA_Financial" in client_display_name:
                 if processed_usa_financial:
-                    logger.info(f"Skipping redundant financial pixel: {client_db}")
+                    logger.info(f"Skipping redundant financial pixel: {client_display_name}")
                     continue
                 processed_usa_financial = True
 
             # CHECK: Does it have a Google Sheet?
-            if not sheet_id or sheet_id == 'PENDING':
-                logger.info(f"Sheet missing for {client_db}. Creating now...")
+            if not sheet_id or sheet_id == 'MISSING' or sheet_id == '':
+                logger.info(f"No sheet ID for {database_name}. Attempting to trigger creation...")
                 try:
-                    # Capture pixel_id if possible, or use a dummy
                     # In a real scenario, we'd need the actual pixel_id (UUID) from the UI or DB
                     dummy_pixel_id = "AUTO_CREATED" 
-                    subprocess.run(["php", "create_client_sheet.php", client_db, dummy_pixel_id, website_url], check=True)
-                    logger.info(f"Sheet creation triggered for {client_db}")
+                    subprocess.run(["php", "create_client_sheet.php", database_name, dummy_pixel_id, website_url], check=True)
+                    logger.info(f"Sheet creation triggered for {database_name}")
                 except Exception as e:
-                    logger.error(f"Failed to create sheet for {client_db}: {e}")
+                    logger.error(f"Failed to create sheet for {database_name}: {e}")
             
-            logger.info(f"\n>> Processing Pixel: {pixel_search_name} (Database: {client_db})")
+            logger.info(f"\n>> Processing Pixel: {database_name} (Client: {client_display_name})")
             
             try:
-                # Download
-                raw_file_path = bot.download_pixel_data(client_db, days_to_pull)
+                # --- STAGE 2: DOWNLOAD & METADATA ---
+                logger.info(f"--- Stage 2: Download & Client Metadata for {database_name} ---")
                 
-                if not raw_file_path:
-                    logger.warning(f"No file downloaded for {client_db}")
-                    continue
+                stored_url = pixel_info.get('on_platform_segment_url')
+                metadata = {}
+                raw_file_path = None
+                
+                # Fast Path: If we have a stored URL, skip search/creation
+                if stored_url and stored_url != 'MISSING' and stored_url != '':
+                    logger.info(f"Fast Path enabled for {client_display_name}. Using stored URL: {stored_url}")
+                    raw_file_path, metadata = bot.capture_segment_metadata(client_display_name, existing_url=stored_url, days=days_to_pull)
+                else:
+                    # No stored URL: Search for existing 3, 4, or 5 day segments
+                    logger.info(f"No stored URL for {client_display_name}. Searching for existing segments...")
+                    
+                    found_url = None
+                    actual_pattern = None
+                    
+                    # Search specifically for days_to_pull first, then fallback to others
+                    search_days = [days_to_pull]
+                    for d in [3, 4, 5]:
+                        if d not in search_days:
+                            search_days.append(d)
+                            
+                    for d in search_days:
+                        pattern = f"Last {d} Days - {client_display_name}"
+                        logger.info(f"Checking for segment: '{pattern}'")
+                        url = bot.check_exists_in_segments(client_display_name, expected_name_pattern=pattern)
+                        if url:
+                            logger.info(f"Found existing segment: '{pattern}' at {url}")
+                            found_url = url
+                            actual_pattern = pattern
+                            break
+                    
+                    if found_url:
+                        raw_file_path, metadata = bot.capture_segment_metadata(client_display_name, existing_url=found_url, days=days_to_pull)
+                        if not metadata:
+                            metadata = {}
+                        metadata['segment_name'] = actual_pattern
+                    else:
+                        # None of the 3-5 day segments exist: Create new one
+                        expected_pattern = f"Last {days_to_pull} Days - {client_display_name}"
+                        logger.info(f"No suitable segment found. Creating '{expected_pattern}' now...")
+                        bot.create_segment(client_display_name, days_list=[days_to_pull])
+                        time.sleep(5)
+                        
+                        raw_file_path, metadata = bot.capture_segment_metadata(client_display_name, days=days_to_pull)
+                        if not metadata:
+                            metadata = {}
+                        metadata['segment_name'] = expected_pattern
+                
+                # Update DB with Stage 2 metadata (Oplet, Row Count, Segment URL, ID, API)
+                if metadata:
+                    db_manager.update_pixel_metadata(client_display_name, database_name, metadata)
+
+                # --- STAGE 3: API DISCOVERY (Admin) ---
+                # logger.info(f"--- Stage 3: API Discovery (Admin) for {database_name} ---")
+                # discovery_bot = ApiDiscoveryBot(headless=args.headless)
+                # discovery_bot.process_single_pixel(pixel_info) 
+                # discovery_bot.close()
+                # 
+                # Bypass Note: We now derive segment_id and segment_api from on_platform_segment_url in Stage 2.
+                # Re-fetch the pixel to show the final 5 fields
+                updated_pixels = db_manager.get_active_pixels()
+                updated_pixel = next((p for p in updated_pixels if p['pixel_name'] == database_name), None)
+                
+                if updated_pixel:
+                    logger.info("\n" + "="*50)
+                    logger.info(f"LIFECYCLE VERIFICATION FOR {database_name}")
+                    logger.info(f"1. segment_name: {updated_pixel.get('segment_name')}")
+                    logger.info(f"2. segment_api: {updated_pixel.get('segment_api')}")
+                    logger.info(f"3. segment_id: {updated_pixel.get('segment_id')}")
+                    logger.info(f"4. on_platform_segment_url: {updated_pixel.get('on_platform_segment_url')}")
+                    logger.info(f"5. on_platform_url: {updated_pixel.get('on_platform_url')}")
+                    logger.info(f"EXTRA - oplet: {updated_pixel.get('last_event_at')}")
+                    logger.info(f"EXTRA - visitors: {updated_pixel.get('visitors')}")
+                    logger.info("="*50 + "\n")
+                else:
+                    logger.warning(f"Could not re-fetch updated pixel {database_name} for final verification logging.")
                 
                 # Process to Payload
-                logger.info(f"Preparing payload for {client_db}...")
+                logger.info(f"Preparing payload for {database_name}...")
                 payload = processor.prepare_import_payload(raw_file_path)
                 
                 event_count = len(payload.get("events", []))
@@ -132,20 +217,24 @@ def main():
                      continue
 
                 # Prepare DB (Ensure Indices)
-                run_prepare_db(client_db)
+                run_prepare_db(client_display_name)
 
                 # Upload via PHP Script
-                logger.info(f"Uploading to database: {client_db} via pixel_import.php...")
-                run_pixel_import(payload, client_db)
+                logger.info(f"Uploading to database: {client_display_name} via pixel_import.php...")
+                run_pixel_import(payload, client_display_name)
                 
                 # Backfill Visitors
-                logger.info(f"Backfilling visitors for {client_db}...")
-                run_backfill(client_db)
+                logger.info(f"Backfilling visitors for {client_display_name}...")
+                run_backfill(client_display_name)
                 
-                logger.info(f"Successfully processed {pixel_search_name}!")
+                # Sync to Google Sheets
+                logger.info(f"Syncing {client_display_name} to Google Sheets...")
+                run_sheet_sync(client_display_name)
+                
+                logger.info(f"Successfully processed {database_name}!")
                 
             except Exception as e:
-                logger.error(f"Error processing {pixel_search_name}: {e}", exc_info=True)
+                logger.error(f"Error processing {database_name}: {e}", exc_info=True)
                 # Continue to next pixel
     
     finally:
@@ -302,6 +391,38 @@ def run_prepare_db(client_name):
 
     except Exception as e:
         logger.error(f"Failed to prepare DB for {client_name}: {e}")
+
+def run_sheet_sync(client_name):
+    """
+    Executes smart_sync.php to update Google Sheets.
+    """
+    env = os.environ.copy()
+    env["CLIENT_NAME"] = client_name
+    
+    # smart_sync.php is in the parent directory (pixel-bandaid)
+    # relative to daily_sync.py in pixel-bandaid-v2
+    script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "smart_sync.php"))
+    
+    if not os.path.exists(script_path):
+        # Fallback to current directory if not found in parent
+        script_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "smart_sync.php"))
+
+    try:
+        process = subprocess.Popen(
+            ["php", script_path, "--client=" + client_name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env=env,
+            text=True
+        )
+        stdout, stderr = process.communicate()
+        
+        logger.info(f"Sheet Sync Output: {stdout.strip()}")
+        if stderr:
+            logger.warning(f"Sheet Sync Stderr: {stderr}")
+
+    except Exception as e:
+        logger.error(f"Failed to run sheet sync for {client_name}: {e}")
 
 if __name__ == "__main__":
     main()
