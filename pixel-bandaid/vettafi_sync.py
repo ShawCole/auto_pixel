@@ -152,13 +152,30 @@ def import_batch_to_database(events, client_name, retries=3):
             
             stdout, stderr = process.communicate()
             
-            if process.returncode == 0 and '"status":"success"' in stdout:
-                return len(events)
-            else:
-                logger.error(f"Import failed (Attempt {attempt}): {stderr or stdout}")
-                if attempt < retries:
-                    time.sleep(attempt * 5)
-        return 0
+            if process.returncode == 0:
+                try:
+                    # Look for JSON in stdout (might contain debug logs above it)
+                    json_start = stdout.find('{"status"')
+                    if json_start != -1:
+                        result = json.loads(stdout[json_start:])
+                        if result.get("status") == "success":
+                            counts = result.get("counts", {})
+                            return {
+                                "inserted": int(counts.get("inserted", 0)),
+                                "duplicates": int(counts.get("duplicates", 0)),
+                                "skipped": int(counts.get("skipped", 0))
+                            }
+                    elif '"status":"success"' in stdout:
+                        return {"inserted": len(events), "duplicates": 0, "skipped": 0}
+                except Exception as e:
+                    logger.warning(f"Failed to parse import JSON: {e}")
+                    if '"status":"success"' in stdout:
+                        return {"inserted": len(events), "duplicates": 0, "skipped": 0}
+            
+            logger.error(f"Import failed (Attempt {attempt}): {stderr or stdout}")
+            if attempt < retries:
+                time.sleep(attempt * 5)
+        return {"inserted": 0, "duplicates": 0, "skipped": len(events)}
     finally:
         if os.path.exists(temp_file_path):
             os.remove(temp_file_path)
@@ -205,8 +222,14 @@ def sync_cycle():
                 
         if new_events:
             logger.info(f"    -> Importing {len(new_events)} new events...")
-            imported = import_batch_to_database(new_events, CLIENT_NAME)
-            total_imported += imported
+            counts = import_batch_to_database(new_events, CLIENT_NAME)
+            
+            ins = counts.get("inserted", 0)
+            dupe = counts.get("duplicates", 0)
+            skip = counts.get("skipped", 0)
+            
+            logger.info(f"    -> Batch Result: {ins} NEW records | {dupe} Duplicates Enriched | {skip} Skipped")
+            total_imported += ins
         
         if stop_sync:
             logger.info(f"    [STOP] Encountered existing data on Page {page}. Sync cycle ending.")

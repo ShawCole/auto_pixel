@@ -87,6 +87,11 @@ try {
 
         if (isset($decoded['events']) && is_array($decoded['events'])) {
             $events = $decoded['events'];
+            
+            $total_received = count($events);
+            $total_inserted = 0;
+            $total_duplicates = 0;
+            $total_skipped = 0;
 
             foreach ($events as $eventIndex => $event) {
 
@@ -318,6 +323,7 @@ try {
                 $eventUuid = $insert_data['uuid'] ?? '';
                 if (empty($eventUuid) || trim($eventUuid) === '') {
                     debugLog("WARNING: Skipping event $eventIndex - no UUID present (unresolved visitor)");
+                    $total_skipped++;
                     continue;
                 }
 
@@ -347,8 +353,10 @@ try {
                 $is_duplicate = ($mysqli->affected_rows === 0);
                 if ($is_duplicate) {
                     debugLog("Duplicate event $eventIndex detected. Proceeding with visitor update/enrichment.");
+                    $total_duplicates++;
                 } else {
                     debugLog("Successfully inserted event $eventIndex to superpixel_resolution_log");
+                    $total_inserted++;
                 }
 
                 // Parse emails using included functions (fallback logic inside upsertVisitorFromEvent)
@@ -361,8 +369,16 @@ try {
             }
         }
 
-        debugLog("All events processed successfully");
-        echo json_encode(['status' => 'success']);
+        debugLog("All events processed successfully. Summary: Received: $total_received, Inserted: $total_inserted, Duplicates: $total_duplicates, Skipped: $total_skipped");
+        echo json_encode([
+            'status' => 'success', 
+            'counts' => [
+                'received' => $total_received,
+                'inserted' => $total_inserted,
+                'duplicates' => $total_duplicates,
+                'skipped' => $total_skipped
+            ]
+        ]);
 
     } else {
         // http_response_code(405);
