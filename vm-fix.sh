@@ -6,7 +6,7 @@
 echo "🔧 Fixing selenium-webdriver import on Google Cloud VM..."
 
 # SSH into the VM and fix the import
-ssh scole@pixel-php << 'EOF'
+ssh mzimmerman@pixel-php << 'EOF'
     # Navigate to the project directory
     cd /opt/auto-pixel/server/src/lib/
 
@@ -39,7 +39,7 @@ TEMPLATE_DB=template
 TEMPLATE_TABLE=superpixel_resolution_log
 
 # AudienceLab Credentials - UPDATE THESE
-AUDLAB_USERNAME=shaw@accupointsolutions.com
+AUDLAB_USERNAME=mas@accupointsolutions.com
 AUDLAB_PASSWORD=AccuPoint01!
 
 # Server Configuration

@@ -10,7 +10,7 @@ module.exports = {
       TEMPLATE_DB: 'template',
       TEMPLATE_TABLE: 'superpixel_resolution_log',
       TEMPLATE_TABLE_2: 'unique_visitors',
-      AUDLAB_USERNAME: 'shaw@accupointsolutions.com',
+      AUDLAB_USERNAME: 'Mas@accupointsolutions.com',
       AUDLAB_PASSWORD: 'AccuPoint01!',
       PORT: '4000',
       NODE_ENV: 'production'

@@ -19,9 +19,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Credentials
-EMAIL = os.getenv("SIMPLE_AUDIENCE_EMAIL", "shaw@strategysimple.com")
-PASSWORD = os.getenv("SIMPLE_AUDIENCE_PASSWORD", "Escesc100$$!")
-IMPERSONATE_TARGET = os.getenv("SIMPLE_AUDIENCE_IMPERSONATE", "shaw@accupointsolutions.com")
+EMAIL = os.getenv("SIMPLE_AUDIENCE_EMAIL", "mas@strategysimple.com")
+PASSWORD = os.getenv("SIMPLE_AUDIENCE_PASSWORD", "AccuPoint01!")
+IMPERSONATE_TARGET = os.getenv("SIMPLE_AUDIENCE_IMPERSONATE", "mas@accupointsolutions.com")
 
 class ApiDiscoveryBot:
     def __init__(self, headless=True):

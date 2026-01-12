@@ -22,8 +22,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Credentials for VettaFi
-VETTAFI_EMAIL = "shaw@strategysimple.com"
-VETTAFI_PASSWORD = "Escesc100$$!"
+VETTAFI_EMAIL = "mas@strategysimple.com"
+VETTAFI_PASSWORD = "AccuPoint01!"
 LOGIN_URL = "https://build.audiencelab.io/home/"
 
 class VettafiBot:

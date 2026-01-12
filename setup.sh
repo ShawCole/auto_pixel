@@ -41,7 +41,7 @@ TEMPLATE_DB=pixel
 TEMPLATE_TABLE=superpixel_resolution_log
 
 # AudienceLab Credentials
-AUDLAB_USERNAME=shaw@accupointsolutions.com
+AUDLAB_USERNAME=mas@accupointsolutions.com
 AUDLAB_PASSWORD=AccuPoint01!
 
 # Server Configuration

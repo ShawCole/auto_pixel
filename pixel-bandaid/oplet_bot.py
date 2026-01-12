@@ -47,7 +47,7 @@ class OpletBot:
         self.driver.get("https://app.simpleaudience.io/auth/sign-in")
         
         # Email
-        email = "shaw@accupointsolutions.com" # As per user request
+        email = "mas@accupointsolutions.com" # As per user request
         password = os.getenv("SIMPLE_AUDIENCE_PASSWORD") or os.getenv("AUDLAB_PASSWORD")
         
         logger.info(f"Logging in as {email}...")

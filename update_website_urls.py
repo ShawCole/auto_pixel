@@ -106,7 +106,7 @@ class WebsiteURLUpdater:
             logger.info("🔐 Entering login credentials...")
             username_field.clear()
             time.sleep(0.1)
-            username_field.send_keys(os.getenv('SIMPLEAUDIENCE_EMAIL', 'shaw@accupointsolutions.com'))
+            username_field.send_keys(os.getenv('SIMPLEAUDIENCE_EMAIL', 'mas@accupointsolutions.com'))
             logger.info("✅ Username entered")
             time.sleep(0.1)
             
