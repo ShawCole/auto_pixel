@@ -92,8 +92,9 @@ def update_central_status(latest_platform_ts):
     $last_event_at = $stats_max['last'] ?: null;
 
     // 2. Update central pixel_sheets
+    $ts_var = "{latest_platform_ts}";
     $stmt = $mysqli->prepare("UPDATE pixel_sheets SET oplet = ?, last_event_at = ?, visitors = ?, events = ? WHERE client_name = 'VettaFi'");
-    $stmt->bind_param("ssii", "{latest_platform_ts}", $last_event_at, $visitors, $events);
+    $stmt->bind_param("ssii", $ts_var, $last_event_at, $visitors, $events);
     $stmt->execute();
     
     echo "SUCCESS";
