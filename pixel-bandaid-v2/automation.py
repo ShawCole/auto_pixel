@@ -497,9 +497,10 @@ class SimpleAudienceAutomation:
             time.sleep(5) # Give time for table to filter and load
 
         metadata = {
-            "row_count": None,
-            "oplet": None,
+            "row_count": "0",
+            "oplet": "No Resolutions Found",
             "on_platform_segment_url": None,
+            "on_platform_url": None,
             "segment_name": None
         }
         downloaded_file_path = None
@@ -534,6 +535,7 @@ class SimpleAudienceAutomation:
         
         # --- Common Logic (Common to both paths once in Studio) ---
         metadata["on_platform_segment_url"] = platform_url
+        metadata["on_platform_url"] = platform_url
 
         try:
             # --- FAST PATH: DERIVE ID & API ---
