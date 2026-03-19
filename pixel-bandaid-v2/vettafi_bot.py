@@ -22,8 +22,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Credentials for VettaFi
-VETTAFI_EMAIL = "mas@strategysimple.com"
-VETTAFI_PASSWORD = "AccuPoint01!"
+VETTAFI_EMAIL = os.getenv("VETTAFI_EMAIL", "mas@strategysimple.com")
+VETTAFI_PASSWORD = os.getenv("VETTAFI_PASSWORD", "AccuPoint01!")
 LOGIN_URL = "https://build.audiencelab.io/home/"
 
 class VettafiBot:
@@ -250,7 +250,7 @@ class VettafiBot:
         self.driver.quit()
 
 if __name__ == "__main__":
-    bot = VettafiBot(headless=False)
+    bot = VettafiBot(headless=True)
     try:
         bot.login()
         seg_name = bot.create_16_day_segment("VettaFi")

@@ -136,3 +136,6 @@ pixel_import*.php
 # Historical AI chats (contain potential secrets)
 previous_auto_pixel_chats_with_ai_builder/
 pixel-bandaid/downloads/
+
+# Credentials (never commit)
+dry_run_credentials.json

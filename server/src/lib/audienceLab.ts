@@ -487,9 +487,46 @@ export async function createPixel({ client, website }: { client: string, website
         log(`🔍 VERBOSE: Modal position/size: x=${modalRect.x}, y=${modalRect.y}, width=${modalRect.width}, height=${modalRect.height}`);
 
         // Now continue with the robust modal/form automation and toast logic...
+
+        // 1b. Select V4 (Beta) pixel provider
+        log("🔘 Selecting V4 (Beta) pixel provider...");
+        try {
+            // Try finding the V4 button/toggle by text content
+            const v4Selectors = [
+                By.xpath(`//div[@role='dialog']//button[contains(normalize-space(.),'V4')]`),
+                By.xpath(`//div[@role='dialog']//*[contains(normalize-space(.),'V4 (Beta)') and (self::button or self::div[contains(@class,'cursor')])]`),
+                By.xpath(`//button[contains(normalize-space(.),'V4')]`),
+            ];
+            let v4Button;
+            for (const sel of v4Selectors) {
+                try {
+                    v4Button = await driver.findElement(sel);
+                    if (await v4Button.isDisplayed()) {
+                        log("✅ V4 (Beta) button found");
+                        break;
+                    }
+                    v4Button = null;
+                } catch { v4Button = null; }
+            }
+            if (v4Button) {
+                try {
+                    await v4Button.click();
+                    log("✅ V4 (Beta) selected via click");
+                } catch {
+                    await driver.executeScript("arguments[0].click();", v4Button);
+                    log("✅ V4 (Beta) selected via JS click");
+                }
+                await delay(300);
+            } else {
+                log("⚠️ V4 (Beta) button not found — may already be selected or not present");
+            }
+        } catch (e: any) {
+            log(`⚠️ Could not select V4 (Beta): ${e.message}`);
+        }
+
         // 2. Fill Website Name
         log("📝 Waiting for website name field...");
-        const websiteName = client + '_v3';
+        const websiteName = client + '_v4';
 
         // Try multiple selectors for the website name field (optimized order)
         let websiteNameField;

@@ -1,0 +1,133 @@
+[
+  {
+    "index": 0,
+    "segment_name": "API Test",
+    "cells": [
+      "API Test",
+      "AlphaScale V2 Missing Domains",
+      "Audience",
+      "103",
+      "Feb 26 2026, 7:02 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=d25d4875-f425-411f-b290-aa65352d9d20",
+    "api_url_from_page": "https://api.audiencelab.io/segments/d25d4875-f425-411f-b290-aa65352d9d20?page=1&page_size=50"
+  },
+  {
+    "index": 1,
+    "segment_name": "AccuPoint Pixel Test",
+    "cells": [
+      "AccuPoint Pixel Test",
+      "accupoint_solutions_new_v4",
+      "Pixel",
+      "35",
+      "Feb 26 2026, 6:47 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=9ce3fcb5-3f18-45a1-8846-3f124ecd7d54"
+  },
+  {
+    "index": 2,
+    "segment_name": "AlphaScale Template 2",
+    "cells": [
+      "AlphaScale Template 2",
+      "AlphaScale V2",
+      "Audience",
+      "4241",
+      "Feb 23 2026, 10:57 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=a62e9333-4b66-466f-8f52-760eb939e9a9"
+  },
+  {
+    "index": 3,
+    "segment_name": "AlphaScale Template",
+    "cells": [
+      "AlphaScale Template",
+      "AlphaScale V2 2nd List",
+      "Audience",
+      "0",
+      "Feb 23 2026, 10:52 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=40858d46-fb4f-4825-8d7d-e42dc42b8f92"
+  },
+  {
+    "index": 4,
+    "segment_name": "AlphaScale V2 UUID",
+    "cells": [
+      "AlphaScale V2 UUID",
+      "AlphaScale V2 2nd List",
+      "Audience",
+      "606",
+      "Feb 10 2026, 4:27 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=0aee9226-5900-495c-b02e-9a4d92998fcf"
+  },
+  {
+    "index": 5,
+    "segment_name": "AlphaScale v2 Filtered",
+    "cells": [
+      "AlphaScale v2 Filtered",
+      "AlphaScale V2",
+      "Audience",
+      "4241",
+      "Feb 10 2026, 4:20 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=1ab5a58c-5155-4b01-953d-ac7a4e322a02"
+  },
+  {
+    "index": 6,
+    "segment_name": "AccuPoint Solutions Pixel Test",
+    "cells": [
+      "AccuPoint Solutions Pixel Test",
+      "accupoint_solutions_new_v3",
+      "Pixel",
+      "593",
+      "Feb 2 2026, 7:47 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=2375c30e-3455-4c1c-8fe3-c2caaedfb6c9"
+  },
+  {
+    "index": 7,
+    "segment_name": "AccuPoint Solutions Pixel",
+    "cells": [
+      "AccuPoint Solutions Pixel",
+      "accupoint_solutions_new_v3",
+      "Pixel",
+      "498",
+      "Feb 2 2026, 11:56 AM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=fb3ec73c-93e4-469a-92cb-6c8b9ca442c7"
+  },
+  {
+    "index": 8,
+    "segment_name": "ACQuireup TEST",
+    "cells": [
+      "ACQuireup TEST",
+      "AcquireUp_v3",
+      "Pixel",
+      "20903",
+      "Jan 30 2026, 4:37 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=30eee5b5-3f9c-47a8-a070-73a7a96c8bce"
+  },
+  {
+    "index": 9,
+    "segment_name": "test",
+    "cells": [
+      "test",
+      "Luson - HNW Consumer",
+      "Audience",
+      "2741",
+      "Jan 30 2026, 4:10 PM",
+      ""
+    ],
+    "studio_url": "https://build.audiencelab.io/home/accupoint-solutions/studio?segment=965ac822-8669-4e74-88a3-6c608df9909a"
+  }
+]

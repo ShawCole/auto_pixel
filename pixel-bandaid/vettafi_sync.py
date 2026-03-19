@@ -262,6 +262,7 @@ def sync_cycle():
             else:
                 # We reached already ingested data
                 stop_sync = True
+                break
         
         logger.info(f"    Analysis: {len(new_events)} NEW events | {len(events) - len(new_events)} EXIST in DB")
                 
@@ -270,8 +271,6 @@ def sync_cycle():
             imported = import_batch_to_database(new_events, CLIENT_NAME)
             total_imported += imported
         
-            break
-
         # Capture the absolute newest TS from page 1 to update oplet
         if page == 1 and events:
             newest_platform_ts = events[0].get("EVENT_TIMESTAMP") or events[0].get("event_timestamp", "N/A")

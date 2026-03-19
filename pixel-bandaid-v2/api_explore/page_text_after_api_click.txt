@@ -1,0 +1,1152 @@
+A
+AccuPoint Solutions
+Audience
+Audience Lists
+Studio
+Segments
+Enrichment
+Integrations
+Pixel
+Sync
+Workflows
+Settings
+Usage
+Settings
+Members
+M
+mas
+mas@accupointsolutions.com
+New Texas Telephone Solicitors Law Sept 2025
+View Details
+Toggle Sidebar
+Home
+Accupoint Solutions
+Studio
+Studio
+BETA
+Create segments from your existing audiences using powerful filters
+Templates
+Save as Template
+My Templates
+AlphaScale Sort UUID
+Owner: mas@accupointsolutions.com
+AlphaScale Sort
+Owner: mas@accupointsolutions.com
+Click a template to apply it. Click the trash icon to delete.
+1. Choose Dataset
+All Sources
+SerenityWM RIA Firm Selling
+29 records
+2/27/2026
+Audience
+AlphaScale V2 Missing Domains No titles
+1,192 records
+2/25/2026
+Audience
+AlphaScale V2 Missing Domains
+141 records
+2/25/2026
+Audience
+accupoint_solutions_new_v4
+28 records
+2/23/2026
+V4
+Pixel
+AlphaScale V2 2nd List
+606 records
+2/10/2026
+Audience
+AlphaScale V2
+4,241 records
+2/10/2026
+Audience
+Ty J. Young Book of Business
+175 records
+2/6/2026
+Audience
+CLTC Premade
+88 records
+2/4/2026
+Audience
+TruVestments Investors
+7,430 records
+2/3/2026
+Audience
+Luson - HNW Consumer
+4,009 records
+1/30/2026
+Audience
+Luson Media (Consumer)
+16,352 records
+1/27/2026
+Audience
+AlphaScale
+201 records
+1/21/2026
+Audience
+Luson Media
+456 records
+1/20/2026
+Audience
+Med Sup Insurance
+996,049 records
+1/8/2026
+Audience
+Stock Screening and Research USAM
+1,780 records
+1/7/2026
+Audience
+Show More
+Selected Dataset
+Name:
+AlphaScale V2 Missing Domains
+Type:
+👥 Audience
+Records:
+141
+Status:
+🔵 Data
+2. Build Filters
+Clear All
+AND
+Root Group
+[Contact] Business Email
+is not empty
+Add Rule
+Add Group
+1 filter applied. Data will be filtered using AND logic.
+3. Choose Visible Fields
+8 of 74 fields selected
+All Groups
+Select All Visible
+Deselect All Visible
+Age Range
+string
+contact
+Business Email
+string[]
+Only first
+contact
+Children
+string
+contact
+Company Address
+string
+contact
+Company City
+string
+contact
+Company Description
+string
+contact
+Company Domain
+string
+contact
+Company Employee Count
+string
+contact
+Company Industry
+string
+contact
+Company NAICS
+string
+contact
+Company Name
+string
+contact
+Company Name History
+string[]
+Only first
+contact
+Company Phone
+string[]
+Only first
+contact
+Company Revenue
+string
+contact
+Company SIC
+string[]
+Only first
+contact
+Company State
+string
+contact
+Company ZIP
+string
+contact
+Company LinkedIn URL
+string
+contact
+Personal Verified Emails
+string[]
+Only first
+contact
+Business Verified Emails
+string[]
+Only first
+contact
+Department
+string
+contact
+Direct Number
+string[]
+Only first
+contact
+Direct Number DNC
+string[]
+Only first
+contact
+Education History
+json
+contact
+Facebook URL
+string
+contact
+Twitter URL
+string
+contact
+First Name
+string
+contact
+Gender
+string
+contact
+Headline
+string
+contact
+Homeowner
+string
+contact
+Income Range
+string
+contact
+Inferred Years Experience
+string
+contact
+Interests
+string[]
+Only first
+contact
+Job Title
+string
+contact
+Job Title History
+string[]
+Only first
+contact
+Last Name
+string
+contact
+LinkedIn URL
+string
+contact
+Married
+string
+contact
+Mobile Phone
+string[]
+Only first
+contact
+Mobile Phone DNC
+string[]
+Only first
+contact
+Net Worth
+string
+contact
+Personal Address
+string
+contact
+Personal City
+string
+contact
+Personal Emails
+string[]
+Only first
+contact
+Personal Phone
+string[]
+Only first
+contact
+Personal Phone DNC
+string[]
+Only first
+contact
+Personal State
+string
+contact
+Personal ZIP
+string
+contact
+Personal ZIP4
+string
+contact
+Seniority Level
+string
+contact
+SHA256 Business Email
+string[]
+Only first
+contact
+SHA256 Personal Email
+string[]
+Only first
+contact
+Skills
+string[]
+Only first
+contact
+Skiptrace Address
+string
+contact
+Skiptrace B2B Address
+string
+contact
+Skiptrace B2B Phone
+string
+contact
+Skiptrace B2B Source
+string
+contact
+Skiptrace B2B Website
+string
+contact
+Skiptrace City
+string
+contact
+Skiptrace Credit Rating
+string
+contact
+Skiptrace DNC
+string
+contact
+Skiptrace Ethnic Code
+string
+contact
+Skiptrace Exact Age
+number
+contact
+Skiptrace IP
+string
+contact
+Skiptrace Landline Numbers
+string
+contact
+Skiptrace Language Code
+string
+contact
+Skiptrace Match Score
+number
+contact
+Skiptrace Name
+string
+contact
+Skiptrace State
+string
+contact
+Skiptrace Wireless Numbers
+string
+contact
+Skiptrace ZIP
+string
+contact
+Social Connections
+string
+contact
+UUID
+string
+contact
+Valid Phones
+string[]
+Only first
+Validation
+Selected Fields (8)
+Age Range
+Business Email
+Children
+Company Address
+Company City
+Company Description
+Company Domain
+Company Employee Count
+4. Create Segments
+Segment Loaded: d25d4875...
+Save Current
+Current Configuration
+Loaded Segment: API Test
+Filters:
+1 filter
+AND logic
+Fields:
+8 fields
+Age Range, Business Email, Children +5 more
+Total Rows:
+103
+100 loaded
+Status:
+Segment Active
+ID: d25d4875...
+Recent Segments
+API Test
+103 rows
+2/26/2026
+Load Segment
+Hide API
+Segment API:
+Copy
+https://api.audiencelab.io/segments/d25d4875-f425-411f-b290-aa65352d9d20?page=1&page_size=50
+💡 This endpoint always returns up-to-date data with your saved filters and fields.
+🔑 Add header: X-API-KEY: your_api_key
+5. View Table
+100 of 103 records
+Updated 6:54:06 PM
+AGE RANGE
+BUSINESS EMAIL
+CHILDREN
+COMPANY ADDRESS
+COMPANY CITY
+COMPANY DESCRIPTION
+COMPANY DOMAIN
+COMPANY EMPLOYEE COUNT
+brian.brown@bmo.com, brian.brown@cmegroup.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+nancy.butler@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+scott.whitley@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+john.oh@prudential.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+seshu.vuppalapati@bmo.com, seshuvuppalapati@cummin...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+austin.rennick@aah.org, austin.rennick@advocatehea...
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+douglas.levasseur@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+25-34
+syed.rahat@citigroup.com, syed.rahat@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+chuck.sharbrough@wellsfargo.com, csharbrough@ibm.c...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+jonathan.courtney@bankofthewest.com, jonathan.cour...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+maxwell.zhu@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+kalpana.yendluri@ally.com, kalpana.yendluri@bmo.co...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+colin.green@bmo.com, cgreen@ci.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+sunny.naru@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+deborah.korompilas@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+kaushik.muralidharan@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+christina.jordan@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+shane.klein@bmo.com, shane_klein@hsbc.ca
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+jeffrey.plutte@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+jesse.slovenec@bmo.com
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+gia.nikolova@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+65 and older
+julia.schmidt@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+vaibhav.bhanot@bmo.com, vbhanot@massmutual.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+gaurav.rewal@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+nataliya.hytonen@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+marc.mckay@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+javier.arqueros@bmo.com, jarqueros@zenith-american...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+kelly.hougom@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+huda.hameed@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+dominic.mccabe@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+scott.weber@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+hamish.forrest@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+john.kelly@bankofthewest.com, johnj.kelly@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+michaelmiranda@nualumni.com, michael.miranda@bmo.c...
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+scott.corirossi@harrisbank.com, scott.corirossi@bm...
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+matthew.paige@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+anthony.cardinuto@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+william.pilsbury@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+trilok.veligeti@bmo.com, tveligeti@amazon.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+yongming.xu@io-tahoe.com, yongming.xu@bmo.com
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+jkemmerer@leapfog.com, hotrod1956@wildblue.net, ji...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+ivana.donevska@bmo.com, ivana.donevska@adtalem.com...
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+michelle.liposky@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+25-34
+james.duff@bmo.com, james.duff@harrisbank.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+james.nuzzo@bmo.com, james.nuzzo@pnc.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+lien.nguyen@bankofthewest.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+ram.rajaram@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+dominique.fracchia@bankofthewest.com, dominique.fr...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+gregory.b.geist@chase.com, greg.geist@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+pete.schmidt@bmo.com
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+laurie.szpak@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+65 and older
+robert.holtz@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+rita.sweiss@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+gabe.young@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+25-34
+aleta.kaplan@bmo.com, aleta.kaplan@micorp.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+pradip.nandi@bmo.com
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+henry.kan@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+jodi.dayborn@bankofthewest.com, jodi.dayborn@bmo.c...
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+gaurav.vadera@bmo.com, gaurav.vadera@northerntrust...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+25-34
+jennifer.terrones@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+natalia.engert@bankofthewest.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+tim.sieferman@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+roberts@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+bret.anderson@bmo.com, bret.anderson@bankofthewest...
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+cheri.mann@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+patrick.donlin@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+sornakumar.chellamani@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+michelle.palmer@bmo.com, michelle.palmer@cnh.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+clare.pierce@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+sonia.gabrielson@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+kash.gauni@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+alan.m.sloan@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+25-34
+santhosh.kanjula@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+kake0109@flash.net, kelly.reese@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+jayne.hartley@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+25-34
+kingdamo@msu.edu, damon.king@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+amir.beg@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+renee.pezzi@bmo.com, rpezzi@athpower.com, renee.pe...
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+david.donarski@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+emily.westphal@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+linda.taliani@bankofthewest.com, linda.taliani@bmo...
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+molly.hogan@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+paul.odonovan@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+meera.das@barclays.com, meera.das@circlehealthgrou...
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+drew.r.galow@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+thecla.hanssen@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+adam.sater@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+ttsaganos@gte.net
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+victor.polich@bankofthewest.com, victor.polich@bmo...
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+anthony.tintinalli@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+jeremiah.morton@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+mollie.gawronski@harrisbank.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+mike.leggett@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+18-24
+justin.boisvert@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+ranee.berliant@bmo.com, ranee.berliant@colliers.co...
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+monica.genz@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+35-44
+devin.mathis@bmo.com, devin.mathis@bankofthewest.c...
+N
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+55-64
+shamim.bari@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+45-54
+janie.cervera@bmo.com
+Y
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+kamil@markowicz.info, kamil.markowicz@bmo.com
+100 king street west
+toronto
+as your local bmo mortgage specialist, i'm here to...
+bmo.com
+10000+
+100 of 103 records
+Previous
+Page 1 of 2
+Next
+6. Export
+Export Summary
+Fields:
+8 selected
+Total Rows:
+103
+Download
+API
+Current Data Export
+Export your current filtered data as-is right now.
+✓ Current filters applied
+✓ Snapshot of current data
+🎯 Persistent Segment API
+Save as segment to get a permanent, always-updated API endpoint.
+✓ Always up-to-date data
+✓ Stable endpoint URL
+✓ Auto-updates with new data
+🔗 Segment API Usage
+This endpoint returns filtered, paginated data for a saved segment. Use your API key in the X-API-Keyheader and pass pagination params as query strings.
+GET /segments/{segment_id} (curl)
+Copy
+curl -X GET "https://api.audiencelab.io/segments/d25d4875-f425-411f-b290-aa65352d9d20?page=1&page_size=50" -H "X-API-Key: your-api-key"
+JavaScript / Node.js
+Copy
+// JavaScript fetch const res = await fetch('https://api.audiencelab.io/segments/d25d4875-f425-411f-b290-aa65352d9d20?page=1&page_size=50', { headers: { 'X-API-Key': 'your-api-key' } }); const json = await res.json(); console.log(json);
+Python (requests)
+Copy
+import requests url = "https://api.audiencelab.io/segments/d25d4875-f425-411f-b290-aa65352d9d20" headers = { 'X-API-Key': 'your-api-key' } params = { 'page': 1, 'page_size': 50 } resp = requests.get(url, headers=headers, params=params) data = resp.json() print(data)
+Example Response
+{ "segment_id": "d25d4875-f425-411f-b290-aa65352d9d20", "segment_name": "Example Segment", "total_records": 456, "page_size": 50, "page": 1, "total_pages": 10, "has_more": true, "data": [ { "FIRST_NAME": "John", "LAST_NAME": "Doe", "COMPANY_STATE": "CA" } ] }
+Progress
+Dataset Selected
+Fields Selected
+Data Loaded

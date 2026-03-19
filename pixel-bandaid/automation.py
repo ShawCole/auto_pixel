@@ -10,12 +10,23 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 from webdriver_manager.chrome import ChromeDriverManager
 from dotenv import load_dotenv
 
 load_dotenv()
 
 import tempfile
+
+# Base URL — all navigation uses this
+BASE_URL = "https://build.audiencelab.io"
+WORKSPACE_PATH = "/home/accupoint-solutions"
+
+# Impersonation credentials
+LOGIN_EMAIL = os.getenv("AUDIENCE_LAB_EMAIL", "shaw@strategysimple.com")
+LOGIN_PASSWORD = os.getenv("AUDIENCE_LAB_PASSWORD", "Escesc100$$!")
+IMPERSONATE_TARGET = os.getenv("SIMPLE_AUDIENCE_IMPERSONATE", "mas@accupointsolutions.com")
+
 
 class SimpleAudienceAutomation:
     def __init__(self, download_dir="./downloads", headless=False):
@@ -25,117 +36,246 @@ class SimpleAudienceAutomation:
 
         chrome_options = Options()
         if headless:
-             chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--window-size=1920,1080")
+             chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--window-size=2560,1440")
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--disable-gpu")
-        
-        # KEY FIX: Force a unique temporary directory for EVERY run.
-        # This bypasses any lock files left by previous zombie processes.
+
+        # Force a unique temporary directory for EVERY run.
         self.user_data_dir = tempfile.mkdtemp()
         chrome_options.add_argument(f"--user-data-dir={self.user_data_dir}")
-        
+
         prefs = {"download.default_directory": self.download_dir}
         chrome_options.add_experimental_option("prefs", prefs)
-        
-        self.driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+
+        # Fix: ChromeDriverManager().install() can return wrong file (THIRD_PARTY_NOTICES).
+        # Resolve the actual chromedriver binary from the same directory.
+        driver_path = ChromeDriverManager().install()
+        driver_dir = os.path.dirname(driver_path)
+        actual_binary = os.path.join(driver_dir, "chromedriver")
+        if os.path.isfile(actual_binary) and os.access(actual_binary, os.X_OK):
+            driver_path = actual_binary
+
+        self.driver = webdriver.Chrome(service=Service(driver_path), options=chrome_options)
         self.wait = WebDriverWait(self.driver, 45)
 
+    # ── Login via impersonation (shaw@ → impersonate mas@) ──────────────
     def login(self):
-        print("Logging in...")
-        try:
-            self.driver.get("https://app.simpleaudience.io/auth/sign-in")
-            
-            email_field = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "input[placeholder='your@email.com']")))
-            email = os.getenv("SIMPLE_AUDIENCE_EMAIL") or os.getenv("AUDLAB_USERNAME")
-            email_field.send_keys(email)
-            
-            password_field = self.driver.find_element(By.CSS_SELECTOR, "input[type='password']")
-            password = os.getenv("SIMPLE_AUDIENCE_PASSWORD") or os.getenv("AUDLAB_PASSWORD")
-            password_field.send_keys(password)
-            password_field.send_keys(Keys.ENTER)
-            
-            # Wait for session to establish and check for workspace selection
-            print("Waiting for workspace selection...")
-            self._wait_for_overlays()
-            time.sleep(3) # Give it a moment to render the grid
-            
-            try:
-                # User provided specific XPath for the workspace card
-                workspace_xpath = "/html/body/div[2]/div/div[2]/div[2]/div[2]/div/div/a"
-                
-                # Check if we are already on dashboard (sidebar exists)
-                if self.driver.find_elements(By.XPATH, "//aside"):
-                    print("Already on dashboard.")
-                else:
-                    # Try finding the specific workspace card
-                    try:
-                        workspace_link = self.wait.until(EC.element_to_be_clickable((By.XPATH, workspace_xpath)))
-                        print("Found AccuPoint Solutions workspace (via explicit XPath). Clicking...")
-                        workspace_link.click()
-                    except:
-                        # Fallback: Search by text key
-                        print("Explicit XPath failed, looking for 'AccuPoint Solutions' text...")
-                        workspace_link = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//a[contains(., 'AccuPoint Solutions')] | //div[contains(text(), 'AccuPoint Solutions')]")))
-                        workspace_link.click()
-                        
-                    # Wait for dashboard to load after click
-                    print("Waiting for dashboard to load...")
-                    self.wait.until(EC.presence_of_element_located((By.XPATH, "//aside | //a[contains(@href, '/pixel')]")))
-                    
-            except Exception as e:
-                print(f"Workspace selection warning: {e}. Checking if we are just logged in anyway...")
-                if self.driver.find_elements(By.XPATH, "//aside"):
-                     print("Recovered: Dashboard is visible.")
-                else:
-                     raise e
-            
-            print("Login flow complete.")
-        except Exception as e:
-            self.save_screenshot("login_failure.png")
-            print(f"Login failed: {e}")
-            raise
+        """Login as shaw@strategysimple.com, select account, impersonate mas@accupointsolutions.com."""
+        print(f"[LOGIN] Logging in as {LOGIN_EMAIL}...")
+        self.driver.get(BASE_URL)
 
+        # Email field
+        email_inp = self.wait.until(EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "input[type='email'], input[placeholder='your@email.com']")
+        ))
+        email_inp.clear()
+        email_inp.send_keys(LOGIN_EMAIL)
+        email_inp.send_keys(Keys.ENTER)
+
+        # Password field (may appear on same or next page)
+        pass_inp = self.wait.until(EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, "input[type='password']")
+        ))
+        pass_inp.clear()
+        pass_inp.send_keys(LOGIN_PASSWORD)
+        pass_inp.send_keys(Keys.ENTER)
+
+        time.sleep(8)
+        print(f"[LOGIN] Login submitted. URL: {self.driver.current_url}")
+        self.save_screenshot("01_login_done.png")
+
+        # ── Select account: simple|AUDIENCE ──
+        self._select_account()
+
+        # ── Impersonate mas@ ──
+        self._impersonate()
+
+        print("[LOGIN] Impersonation complete. Ready to operate as AccuPoint Solutions.")
+
+    def _select_account(self):
+        """Select the simple|AUDIENCE account after login."""
+        print("[LOGIN] Selecting account: simple|AUDIENCE...")
+
+        # Check if we're already in an account
+        if "AccuPoint Solutions" in self.driver.page_source or "Audience Lists" in self.driver.page_source:
+            print("[LOGIN] Already in an account. Skipping selection.")
+            return
+
+        for label in ["simple|AUDIENCE", "SimpleAudience"]:
+            try:
+                target = self.wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, f"//*[contains(text(), '{label}')]")
+                ))
+                try:
+                    target.click()
+                except Exception:
+                    self.driver.execute_script("arguments[0].click();", target)
+                time.sleep(5)
+                print(f"[LOGIN] Selected account via '{label}'")
+                self.save_screenshot("02_account_selected.png")
+                return
+            except Exception:
+                continue
+
+        # Fallback: click 2nd card
+        cards = self.driver.find_elements(By.XPATH, "//div[contains(@class, 'grid')]//div[contains(@class, 'cursor-pointer')]")
+        if len(cards) >= 2:
+            cards[1].click()
+            time.sleep(5)
+            self.save_screenshot("02_account_fallback.png")
+        else:
+            self.save_screenshot("02_account_fail.png")
+            raise Exception("Account selection failed")
+
+    def _impersonate(self):
+        """Navigate to Teams, find AccuPoint Solutions, impersonate mas@."""
+        print("[LOGIN] Navigating to Teams page...")
+        self.driver.get(f"{BASE_URL}/home/simple-audience/white-label/teams")
+        time.sleep(8)
+
+        # Wait for teams page
+        self.wait.until(EC.presence_of_element_located(
+            (By.XPATH, "//input[@placeholder='Search by name...']")
+        ))
+        self.save_screenshot("03_teams_page.png")
+
+        # Search for AccuPoint Solutions
+        print("[LOGIN] Searching for AccuPoint Solutions...")
+        search_box = self.driver.find_element(By.XPATH, "//input[@placeholder='Search by name...']")
+        search_box.clear()
+        search_box.send_keys("AccuPoint")
+        time.sleep(3)
+        self.save_screenshot("03_teams_search.png")
+
+        # Click Manage on AccuPoint Solutions
+        found = False
+        try:
+            manage_link = self.wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//div[h3[contains(text(), 'AccuPoint')]]//a[contains(text(), 'Manage')]")
+            ))
+            manage_link.click()
+            found = True
+            print("[LOGIN] Found AccuPoint Solutions. Clicked Manage.")
+        except Exception:
+            # Fallback: paginate
+            print("[LOGIN] Search didn't filter. Paginating...")
+            search_box.clear()
+            time.sleep(2)
+            for page_num in range(2):
+                try:
+                    self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(1)
+                    next_btn = self.driver.find_element(By.XPATH,
+                        "//button[@aria-label='Go to next page'] | //button[contains(@class, 'next')] | //a[text()='>']")
+                    self.driver.execute_script("arguments[0].click();", next_btn)
+                    time.sleep(4)
+                except Exception as e:
+                    print(f"[LOGIN] Pagination click {page_num + 1} failed: {e}")
+
+            try:
+                manage_link = self.wait.until(EC.element_to_be_clickable(
+                    (By.XPATH, "//div[h3[contains(text(), 'AccuPoint')]]//a[contains(text(), 'Manage')]")
+                ))
+                manage_link.click()
+                found = True
+            except Exception:
+                pass
+
+        if not found:
+            self.save_screenshot("03_accupoint_not_found.png")
+            raise Exception("AccuPoint Solutions team not found")
+
+        time.sleep(3)
+        self.save_screenshot("04_team_members.png")
+
+        # Find target user row and click three dots menu
+        print(f"[LOGIN] Finding user row for {IMPERSONATE_TARGET}...")
+        actions = ActionChains(self.driver)
+        user_row = self.driver.find_element(By.XPATH, f"//tr[contains(., '{IMPERSONATE_TARGET}')]")
+        dots = user_row.find_element(By.TAG_NAME, "button")
+        actions.move_to_element(dots).click().perform()
+        time.sleep(2)
+
+        # Click View
+        print("[LOGIN] Clicking 'View'...")
+        target_url = None
+        try:
+            view_link = self.wait.until(EC.presence_of_element_located(
+                (By.XPATH, "/html/body/div[5]/div/div/div[3]//a")
+            ))
+            target_url = view_link.get_attribute("href")
+        except Exception:
+            view_link = self.wait.until(EC.presence_of_element_located(
+                (By.XPATH, "//a[normalize-space()='View']")
+            ))
+            target_url = view_link.get_attribute("href")
+
+        if target_url:
+            self.driver.get(target_url)
+        else:
+            self.driver.execute_script("arguments[0].click();", view_link)
+        time.sleep(2)
+
+        # Click Impersonate button
+        print("[LOGIN] Clicking 'Impersonate'...")
+        imp_btn = self.wait.until(EC.element_to_be_clickable(
+            (By.XPATH, "//button[contains(., 'Impersonate')]")
+        ))
+        self.driver.execute_script("arguments[0].click();", imp_btn)
+        time.sleep(1)
+
+        # Type CONFIRM
+        print("[LOGIN] Typing CONFIRM...")
+        confirm_inp = self.wait.until(EC.presence_of_element_located(
+            (By.XPATH, "//input[@placeholder='Type CONFIRM'] | //input")
+        ))
+        confirm_inp.send_keys("CONFIRM")
+        confirm_inp.send_keys(Keys.ENTER)
+
+        print("[LOGIN] Impersonation initiated. Waiting for redirect...")
+        time.sleep(10)
+
+        # Navigate to AccuPoint workspace home
+        self.driver.get(f"{BASE_URL}{WORKSPACE_PATH}")
+        time.sleep(5)
+        self.save_screenshot("05_impersonated.png")
+        print(f"[LOGIN] Impersonated. URL: {self.driver.current_url}")
+
+    # ── Navigation ──────────────────────────────────────────────────────
     def navigate_to_page(self, page_name):
         """Navigates to a specific page via the sidebar."""
         logging.info(f"Navigating to {page_name}...")
         try:
-            # Try finding link by text first
             link = self.wait.until(EC.element_to_be_clickable((By.XPATH, f"//a[contains(., '{page_name}')]")))
             link.click()
         except:
-            # Fallback to direct URL (Workspace Specific)
-            print(f"Sidebar click failed for {page_name}, trying callback URL...")
+            print(f"Sidebar click failed for {page_name}, trying direct URL...")
             if page_name.lower() == "studio":
-                self.driver.get("https://app.simpleaudience.io/home/accupoint-solutions/studio")
+                self.driver.get(f"{BASE_URL}{WORKSPACE_PATH}/studio")
             elif page_name.lower() == "segments":
-                self.driver.get("https://app.simpleaudience.io/home/accupoint-solutions/segment")
-        
+                self.driver.get(f"{BASE_URL}{WORKSPACE_PATH}/segment")
+
         self._wait_for_overlays()
         time.sleep(3)
 
-    def check_exists_in_segments(self, pixel_name):
-        """Checks if a segment for this pixel already exists using specific table cell verification."""
-        logging.info(f"Checking for existing segment for {pixel_name}...")
+    # ── Segment check ───────────────────────────────────────────────────
     def check_exists_in_segments(self, pixel_name, expected_name_pattern=None):
         """Checks if a segment for this pixel already exists using specific table cell verification."""
         logging.info(f"Checking for existing segment for {pixel_name}...")
-        
-        # Optimize: Go directly to search URL
-        url = f"https://app.simpleaudience.io/home/accupoint-solutions/segment?query={pixel_name}"
+
+        url = f"{BASE_URL}{WORKSPACE_PATH}/segment?query={pixel_name}"
         self.driver.get(url)
         self._wait_for_overlays()
         time.sleep(3)
-        
+
         try:
-            # Check specific table cell for results
             cell_xpath = "/html/body/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div[1]/table/tbody/tr[1]/td[1]"
             try:
                  first_cell = self.driver.find_element(By.XPATH, cell_xpath)
                  cell_text = first_cell.text.lower()
-                 
-                 # If we have a specific pattern (e.g. "last 45 days"), check for it
+
                  if expected_name_pattern:
                      if expected_name_pattern.lower() in cell_text:
                          logging.info(f"Found specific segment '{expected_name_pattern}' for {pixel_name}.")
@@ -143,29 +283,28 @@ class SimpleAudienceAutomation:
                      else:
                          logging.info(f"Existing segment found but does not match pattern '{expected_name_pattern}'.")
                          return False
-                 
-                 # Default loose check
+
                  if pixel_name.lower() in cell_text:
                      logging.info(f"Found existing segment for {pixel_name} in table.")
                      return True
             except:
-                 pass # Cell not found or empty
-            
+                 pass
+
         except Exception as e:
             logging.warning(f"Error checking segments: {e}")
-        
+
         return False
 
+    # ── Segment creation ────────────────────────────────────────────────
     def create_segment(self, pixel_name, days_list=[2, 3, 4]):
         """Creates a new segment in Studio with filter for last X days."""
         logging.info(f"Creating new segment for {pixel_name}...")
         self.navigate_to_page("Studio")
         self._wait_for_overlays()
         time.sleep(2)
-        
+
         # 1. Select Dataset
         try:
-            # Try generic valid selector first because absolute paths are brittle and slow if they timeout
             dataset_search = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//input[@placeholder='Search datasets...'] | //input[contains(@class, 'border-input')]")))
         except:
             logging.info("Generic search input not found, trying absolute fallback...")
@@ -174,23 +313,33 @@ class SimpleAudienceAutomation:
         dataset_search.click()
         dataset_search.send_keys(pixel_name)
         time.sleep(2)
-        
-        # Click first result
+
+        # Click first result — user-provided XPath for the dataset card
         try:
-            first_result = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div[3]/div/div")))
+            first_result = self.wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[3]/div[1]/div[3]/div/div")
+            ))
             first_result.click()
         except Exception as e:
             logging.error(f"Dataset for '{pixel_name}' not found in search results. Skipping.")
+            self.save_screenshot(f"dataset_not_found_{pixel_name}.png")
             raise Exception(f"Dataset not found for '{pixel_name}'")
-        
+
         time.sleep(2)
         self._wait_for_overlays()
 
-        # 2. Setup Filter (Once)
+        # 2. Setup Filter
         logging.info(f"Setting up filter logic...")
-        
-        # Click "Add Filter"
-        add_filter_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/button")))
+
+        # Click "Add First Filter" or "Add Filter"
+        try:
+            add_filter_btn = self.wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//button[contains(., 'Add First Filter') or contains(., 'Add Filter')]")
+            ))
+        except:
+            add_filter_btn = self.wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/button")
+            ))
         add_filter_btn.click()
         time.sleep(1)
 
@@ -198,13 +347,12 @@ class SimpleAudienceAutomation:
         field_dropdown = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[2]/div/div/div/div/div")))
         field_dropdown.click()
         time.sleep(1)
-        
-        # Find and click "[Pixel] Event Timestamp" option
+
         try:
             timestamp_opt = self.driver.find_element(By.XPATH, "//div[contains(text(), '[Pixel] Event Timestamp')]")
             timestamp_opt.click()
         except:
-            pass 
+            pass
 
         # Operator: Select "Is Within Last"
         operator_btn_xpath = "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[2]/div/div/button[1]"
@@ -212,12 +360,12 @@ class SimpleAudienceAutomation:
             operator_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, operator_btn_xpath)))
             operator_btn.click()
             time.sleep(1)
-            
+
             try:
                 is_within_last_opt = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[4]/div/div[1]/div[11]")))
                 is_within_last_opt.click()
             except:
-                logging.warning("User provided operator option XPath failed, searching by text...")
+                logging.warning("Operator option XPath failed, searching by text...")
                 is_within_last_opt = self.driver.find_element(By.XPATH, "//div[contains(text(), 'Is Within Last')]")
                 is_within_last_opt.click()
 
@@ -229,7 +377,7 @@ class SimpleAudienceAutomation:
         unit_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[2]/div/div/div[2]/button")))
         self.driver.execute_script("arguments[0].click();", unit_btn)
         time.sleep(1)
-        
+
         try:
             days_opt = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[4]/div/div/div[3]")))
             days_opt.click()
@@ -245,29 +393,22 @@ class SimpleAudienceAutomation:
         for days in days_list:
             logging.info(f"Trying filter: Last {days} Days...")
             final_days = days
-            
-            # Value Input matches the one for "Is Within Last"
+
             value_input = self.wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[2]/div[2]/div/div[2]/div/div/div[2]/input")))
             value_input.clear()
             value_input.send_keys(str(days))
 
-            # Click "Select All Visible" (Wait for calculation)
+            # Click "Select All Visible"
             select_all_btn = self.wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[3]/div[2]/div[2]/button[1]")))
-            
-            # Scroll into view to avoid header/footer overlap
             self.driver.execute_script("arguments[0].scrollIntoView(true);", select_all_btn)
             time.sleep(1)
-            
-            # JS Click to force it through any overlay
             self.driver.execute_script("arguments[0].click();", select_all_btn)
             time.sleep(2)
 
-            # Check Count with a small retry buffer for "0 records"
-            # Sometimes the UI updates from "..." to "0" then to "123" quickly
+            # Check count
             count_elem = self.driver.find_element(By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[4]/div[2]/div[1]/div[2]/div[3]/p[1]")
             count_text = count_elem.text
-            
-            # Helper to parse count
+
             def parse_count(text):
                 try:
                     return int(re.sub(r'\D', '', text))
@@ -275,11 +416,10 @@ class SimpleAudienceAutomation:
                     return 0
 
             count_val = parse_count(count_text)
-            
+
             if count_val == 0:
                 logging.info(f"Count is 0, waiting 1s to double check...")
                 time.sleep(1)
-                # Re-fetch element text
                 count_elem = self.driver.find_element(By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[4]/div[2]/div[1]/div[2]/div[3]/p[1]")
                 count_text = count_elem.text
                 count_val = parse_count(count_text)
@@ -288,50 +428,40 @@ class SimpleAudienceAutomation:
 
             if count_val > 0:
                 break
-            
-            # If 0, loop continues to next day count
 
-        # Check if we actually found data
-        # We need to re-verify the last count_text to be sure, or rely on the break.
-        # Since we break on success, if we are here and days==4, we might have failed.
-        # Let's check the last count_val logic again or use a flag.
-        
-        # Simpler: If we finished the loop and count is still 0 (checking the element again is safest)
+        # Final check
         count_elem = self.driver.find_element(By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[4]/div[2]/div[1]/div[2]/div[3]/p[1]")
         count_text = count_elem.text
         if "0 records" in count_text or count_text.strip() == "0":
              logging.warning(f"No data found for {pixel_name} even after {final_days} days.")
              raise Exception(f"No data found for {pixel_name} even after {final_days} days.")
 
-        # 3. Save Segment
+        # 4. Save Segment
         logging.info("Saving Segment...")
         save_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[4]/div[1]/button")))
         save_btn.click()
         time.sleep(1)
-        
-        # Enter Name: Last {final_days} Days - {pixel_name}
+
         name_input = self.wait.until(EC.presence_of_element_located((By.XPATH, "/html/body/div[5]/form/div[1]/input")))
         name_input.clear()
         name_input.send_keys(f"Last {final_days} Days - {pixel_name}")
-        
-        # Click Save
+
         final_save_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[5]/form/div[3]/button[2]")))
         final_save_btn.click()
         self._wait_for_overlays()
         time.sleep(3)
 
+    # ── Download ────────────────────────────────────────────────────────
     def download_segment(self, pixel_name):
         """Downloads the export from the Segments page."""
         logging.info(f"Downloading segment for {pixel_name}...")
-        
-        # Use query param to speed up search
-        url = f"https://app.simpleaudience.io/home/accupoint-solutions/segment?query={pixel_name}"
+
+        url = f"{BASE_URL}{WORKSPACE_PATH}/segment?query={pixel_name}"
         self.driver.get(url)
         self._wait_for_overlays()
-        time.sleep(3) # Wait for table to filter
-        
+        time.sleep(3)
+
         # Click "View in Studio"
-        # User Provided XPath: /html/body/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/table/tbody/tr/td[6]/div/a
         try:
              view_studio_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "/html/body/div[2]/div/div[2]/div[2]/div[2]/div/div[2]/div/table/tbody/tr/td[6]/div/a")))
              view_studio_btn.click()
@@ -342,48 +472,40 @@ class SimpleAudienceAutomation:
 
         self._wait_for_overlays()
         time.sleep(3)
-        
-        # Scroll to bottom and click Download Export
-        # User Provided XPath: /html/body/div[2]/div/div[2]/div[2]/div[2]/div[6]/div[2]/div[2]/div[2]/button
-        
-        # Wait for button to be present (it might be off screen)
-        download_btn_xpath = "/html/body/div[2]/div/div[2]/div[2]/div[2]/div[6]/div[2]/div[2]/div[2]/button"
+
+        # Download Export button
         try:
-            download_btn = self.wait.until(EC.presence_of_element_located((By.XPATH, download_btn_xpath)))
-            
-            # Scroll it into view
-            self.driver.execute_script("arguments[0].scrollIntoView(true);", download_btn)
+            logging.info("Attempting to find 'Download Export' or 'Download' button...")
+            download_btn = self.wait.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'Download Export') or contains(., 'Download')]")))
+            self.driver.execute_script("arguments[0].scrollIntoView({block: 'center'});", download_btn)
             time.sleep(1)
-            
-            # Click it
+            logging.info("Clicking Download button...")
             self.driver.execute_script("arguments[0].click();", download_btn)
-        except:
-             logging.error("Exact download button XPath failed, searching by text...")
-             download_btn = self.driver.find_element(By.XPATH, "//button[contains(., 'Download Export')]")
-             self.driver.execute_script("arguments[0].scrollIntoView(true);", download_btn)
-             download_btn.click()
-        
-        # Wait for file
+        except Exception as e:
+             logging.error(f"Download button not found via text search: {e}")
+             self.save_screenshot(f"download_btn_fail_{pixel_name}.png")
+             raise e
+
         return self._wait_for_download(pixel_name)
 
+    # ── Main entry point ────────────────────────────────────────────────
     def download_pixel_data(self, pixel_name, days=1):
         """Downloads the pixel data for the given pixel name and days."""
-        # Check specifically for "Last X Days" if days > 4 (Historical/Custom)
         expected_pattern = None
         if days > 4:
             expected_pattern = f"Last {days} Days"
-            
+
         if self.check_exists_in_segments(pixel_name, expected_name_pattern=expected_pattern):
             return self.download_segment(pixel_name)
         else:
-            # Handle historical pull or normal daily loop
             if days > 4:
                 days_list = [days]
             else:
                 days_list = [2, 3, 4]
             self.create_segment(pixel_name, days_list=days_list)
             return self.download_segment(pixel_name)
-    
+
+    # ── Helpers ─────────────────────────────────────────────────────────
     def _wait_for_overlays(self):
         try:
             self.wait.until(EC.invisibility_of_element_located((By.CSS_SELECTOR, "div[class*='bg-black/80']")))
@@ -413,7 +535,6 @@ class SimpleAudienceAutomation:
 
     def close(self):
         self.driver.quit()
-        # Cleanup temp user data dir to save space
         try:
             import shutil
             shutil.rmtree(self.user_data_dir, ignore_errors=True)
