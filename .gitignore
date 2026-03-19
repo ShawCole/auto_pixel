@@ -139,3 +139,6 @@ pixel-bandaid/downloads/
 
 # Credentials (never commit)
 dry_run_credentials.json
+
+# Vendor dependencies
+vendor/
