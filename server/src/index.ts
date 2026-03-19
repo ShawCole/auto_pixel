@@ -8,6 +8,12 @@ import { ensureClientSchema } from "./lib/db.js";
 import { createPixel } from "./lib/audienceLab.js";
 import fs from "fs";
 import path from "path";
+import fetch from "node-fetch";
+
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Enable verbose logging
 const DEBUG = process.env.DEBUG === '*' || process.env.NODE_ENV === 'development';
@@ -631,8 +637,39 @@ app.post('/generate', async (req, res) => {
     }
 });
 
-// Admin endpoints
+// Proxy endpoint for Enrichment API to avoid CORS
+app.post('/enrich', async (req, res) => {
+    try {
+        log(`Create Enrichment Proxy Request`, { body: req.body });
 
+        // Use the API key provided in the prompt or from env
+        const API_KEY = process.env.AUDIENCELAB_API_KEY || 'sk_gOVt6e6Gz9Lt9HJ5elZGK8qRbjlHcJSFWmDM1kEaF4';
+
+        const response = await fetch('https://api.audiencelab.io/enrich', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Api-Key': API_KEY
+            },
+            body: JSON.stringify(req.body)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            log(`❌ Enrichment API failed:`, data);
+            return res.status(response.status).json(data);
+        }
+
+        log(`✅ Enrichment API success`, { found: data.found });
+        res.json(data);
+    } catch (error: any) {
+        log("💥 Error in enrichment proxy:", error);
+        res.status(500).json({ error: error.message || 'Proxy error' });
+    }
+});
+
+// Admin endpoints
 // Update website URLs for all pixels
 app.post("/admin/update-website-urls", async (req, res) => {
     try {

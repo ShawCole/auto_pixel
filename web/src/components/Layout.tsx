@@ -1,6 +1,6 @@
 import { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { Settings, LayoutGrid } from 'lucide-react'
+import { Settings, LayoutGrid, Database } from 'lucide-react'
 
 interface LayoutProps {
     children: ReactNode
@@ -32,6 +32,16 @@ export default function Layout({ children }: LayoutProps) {
                         >
                             <LayoutGrid className="w-5 h-5" />
                             <span className="font-medium">Pixel Generation</span>
+                        </Link>
+                        <Link
+                            to="/enrichment"
+                            className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive('/enrichment')
+                                ? 'bg-blue-50 text-blue-600'
+                                : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                        >
+                            <Database className="w-5 h-5" />
+                            <span className="font-medium">Enrichment</span>
                         </Link>
                     </nav>
 
